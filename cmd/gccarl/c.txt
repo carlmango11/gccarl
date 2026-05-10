@@ -1,0 +1,47 @@
+main:
+  main:include* func-dec*
+
+include:
+    include:"#include" include-iden
+
+include-iden:
+    std-iden:"<" IDEN ">"
+    custom-iden:"\"" IDEN "\""
+
+func-dec:
+    func-def:func-def
+
+func-def:
+    func-def:type IDEN "(" params ")" "{" statement-block "}"
+
+params:
+    params:param comma-param*
+    
+param:
+    param:type IDEN
+
+statement-block:
+    statements:statement semi-statement*
+
+semi-statement:
+    semi-statement:";" statement
+
+value:
+  int:NUM
+  variable:IDEN
+
+expr:
+  add:value "+" expr
+  sub:value "-" expr
+  parens:"(" expr ")"
+  value:value
+
+statement:
+  dec-assign:type IDEN "=" NUM ";"
+  assign:IDEN "=" expr ";"
+  func-call:
+
+type:
+    int:"int"
+    char:"char"
+    long:"long"
