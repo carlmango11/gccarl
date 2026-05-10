@@ -4,6 +4,7 @@ import (
 	"compiler/compiler"
 	"compiler/parser"
 	_ "embed"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -15,10 +16,12 @@ var grammar string
 
 func main() {
 	var outputName string
+	var debug bool
 	flag.StringVar(&outputName, "o", "", "output file name")
+	flag.BoolVar(&debug, "d", false, "enable debug logging")
 	flag.Parse()
 
-	p, err := parser.New(strings.NewReader(grammar), false)
+	p, err := parser.New(strings.NewReader(grammar), debug)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
@@ -37,6 +40,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
+
+	bs, err := json.MarshalIndent(ast, "", "  ")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+
+	fmt.Println(string(bs))
 
 	c, err := compiler.Compile(ast)
 	if err != nil {

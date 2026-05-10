@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParse(t *testing.T) {
@@ -19,7 +20,8 @@ func:
   c:"t1" "t3"
   d:"t2"`
 
-	rules := Parse(strings.NewReader(grammar))
+	rules, err := Parse(strings.NewReader(grammar))
+	require.NoError(t, err)
 
 	expected := map[RuleName]*Rule{
 		"main": {

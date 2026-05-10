@@ -8,11 +8,13 @@ import (
 type Register string
 
 const (
-	RegRAX Register = "rax"
-	RegRBX Register = "rbx"
+	RegEAX Register = "eax"
+	RegEBX Register = "ebx"
 )
 
 type Instr string
+
+const stackTop = 0x00004ffffffffeec
 
 func Compile(n *parser.Node) ([]byte, error) {
 	instrs, err := compile(n)
@@ -30,30 +32,77 @@ func Compile(n *parser.Node) ([]byte, error) {
 }
 
 func compile(n *parser.Node) ([]Instr, error) {
-	return compileStatements(n.Values)
+	return compileMain(n.Values)
 }
 
-func compileStatements(vs []*parser.Value) ([]Instr, error) {
-	var output []Instr
+func compileMain(vs []*parser.Value) ([]Instr, error) {
+	var instrs []Instr
+
+	instrs = addInstr(instrs, "section .text")
+	instrs = addInstr(instrs, "global _start")
+
+	instrs = addInstr(instrs, "_start:")
+	instrs = addInstr(instrs, "\tmov rbp, 0x%X", stackTop)
+	instrs = addInstr(instrs, "call main")
+
+	//locals := &LocalVars{}
+
+	for _, v := range vs {
+		switch v.Node.Name {
+		case "include":
+		case "func-def":
+			funcInstrs, err := compileFuncDef(v.Node)
+			if err != nil {
+				return nil, err
+			}
+
+			instrs = append(instrs, funcInstrs...)
+		}
+		//statement, err := compileStatement(v.Node, locals)
+		//if err != nil {
+		//	return nil, err
+		//}
+
+		//output = append(output, statement...)
+		return instrs, nil
+	}
+
+	return instrs, nil
+}
+
+func compileFuncDef(node *parser.Node) ([]Instr, error) {
+	//typ := node.Values[0]
+	id := node.Values[1].Identifier
+	//params := node.Values[3]
+	statements := node.Values[6 : len(node.Values)-1]
+
+	instrs := addInstr(nil, "%s:", id)
+	addInstr(instrs, "push rbp")
+	addInstr(instrs, "mov rbp, rsp")
 
 	locals := &LocalVars{}
 
-	for _, v := range vs {
-		statement, err := compileStatement(v.Node, locals)
+	for _, s := range statements {
+		statementNode := s.Node.Values[0].Node
+		statementInstrs, err := compileStatement(statementNode, locals)
 		if err != nil {
 			return nil, err
 		}
 
-		output = append(output, statement...)
+		for _, instr := range statementInstrs {
+			instrs = append(instrs, "\t"+instr)
+		}
 	}
 
-	return output, nil
+	addInstr(instrs, "pop rbp")
+
+	return instrs, nil
 }
 
 func compileStatement(n *parser.Node, locals *LocalVars) ([]Instr, error) {
 	switch n.Name {
 	case "dec-assign":
-		return compileDecAssign(n.Values, locals)
+		return compileDecAssign(n.Values[0].Node.Values, locals)
 	case "assign":
 		return assign(n.Values, locals)
 	}
@@ -67,12 +116,12 @@ func assign(vs []*parser.Value, locals *LocalVars) ([]Instr, error) {
 		return nil, fmt.Errorf("undefined variable: %s", vs[0].Identifier)
 	}
 
-	output, err := handleExpr(vs[2].Node, locals, RegRAX)
+	output, err := handleExpr(vs[2].Node, locals, RegEAX)
 	if err != nil {
 		return nil, err
 	}
 
-	return addInstr(output, `mov dword [rbp-%d], %s`, toOffset, RegRAX), nil
+	return addInstr(output, `mov dword [rbp-%d], %s`, toOffset, RegEAX), nil
 }
 
 func loadValue(n *parser.Node, locals *LocalVars, target Register) ([]Instr, error) {
@@ -118,14 +167,14 @@ func compileAdd(vs []*parser.Value, locals *LocalVars, target Register) ([]Instr
 
 	all = append(all, output...)
 
-	output, err = loadValue(vs[0].Node, locals, RegRBX)
+	output, err = loadValue(vs[0].Node, locals, RegEBX)
 	if err != nil {
 		return nil, err
 	}
 
 	all = append(all, output...)
 
-	return addInstr(all, "add %s, %s", target, RegRBX), nil
+	return addInstr(all, "add %s, %s", target, RegEBX), nil
 }
 
 func compileDecAssign(vs []*parser.Value, locals *LocalVars) ([]Instr, error) {

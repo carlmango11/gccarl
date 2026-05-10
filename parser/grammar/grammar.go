@@ -97,6 +97,10 @@ func Parse(input io.Reader) (map[RuleName]*Rule, error) {
 			label := bits[0]
 			tokenStrs := strings.Split(bits[1], " ")
 
+			if len(tokenStrs) == 1 && tokenStrs[0] == "" {
+				tokenStrs = nil
+			}
+
 			tokens := make([]*Token, len(tokenStrs))
 			for i, tokenStr := range tokenStrs {
 				tokens[i] = parseToken(tokenStr)

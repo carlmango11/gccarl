@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const grammar = `
@@ -51,15 +52,15 @@ func TestGenerator(t *testing.T) {
 		},
 	}
 
-	p := parser.New(strings.NewReader(grammar), true)
-	g := &Compiler{}
+	p, err := parser.New(strings.NewReader(grammar), true)
+	require.NoError(t, err)
 
 	for _, tc := range tcs {
 		t.Run(tc.text, func(t *testing.T) {
-			ast, err := p.Parse(tc.text)
+			ast, err := p.Parse(strings.NewReader(tc.text))
 			assert.NoError(t, err)
 
-			output, err := g.compile(ast)
+			output, err := compile(ast)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, output)
 		})

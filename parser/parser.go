@@ -22,10 +22,9 @@ type Value struct {
 }
 
 type Parser struct {
-	grammar   map[grammar.RuleName]*grammar.Rule
-	err       error
-	debug     bool
-	nodeDepth int
+	grammar map[grammar.RuleName]*grammar.Rule
+	debug   bool
+	nodes   []string
 }
 
 func New(r io.Reader, debug bool) (*Parser, error) {
@@ -55,17 +54,17 @@ func (p *Parser) Parse(r io.Reader) (*Node, error) {
 		return nil, err
 	}
 
-	if !sc.Finish() && p.err != nil && p.err != io.EOF {
-		return nil, fmt.Errorf("parser failed to finish: %v", p.err)
+	if !sc.Finish() {
+		return nil, fmt.Errorf("parser failed to finish")
 	}
 
 	return n, nil
 }
 
 func (p *Parser) parseNode(sc *Scanner, ruleName grammar.RuleName) (*Node, error) {
-	p.nodeDepth++
+	p.nodes = append(p.nodes, string(ruleName))
 	defer func() {
-		p.nodeDepth--
+		p.nodes = p.nodes[:len(p.nodes)-1]
 	}()
 
 	p.fullDebugf(sc, "parsing rule: %s", ruleName)
@@ -79,24 +78,35 @@ func (p *Parser) parseNode(sc *Scanner, ruleName grammar.RuleName) (*Node, error
 
 	var err error
 	for _, o := range rule.Options {
-		p.fullDebugf(sc, "parsing option: %s", o.Name)
-
-		var vals []*Value
-
-		vals, err = p.parseTokens(sc, o.Tokens)
+		node, err := p.parseOption(sc, o)
 		if err != nil {
 			sc.Reset(originalIndex)
 			continue
 		}
 
-		p.err = nil
-		return &Node{
-			Name:   string(o.Name),
-			Values: vals,
-		}, nil
+		return node, nil
 	}
 
-	return nil, err
+	return nil, fmt.Errorf("cannot parse %s: %w", ruleName, err)
+}
+
+func (p *Parser) parseOption(sc *Scanner, o *grammar.Option) (*Node, error) {
+	//p.nodes = append(p.nodes, string(o.Name))
+	//defer func() {
+	//	p.nodes = p.nodes[:len(p.nodes)-1]
+	//}()
+
+	p.fullDebugf(sc, "parsing option: %s", o.Name)
+
+	vals, err := p.parseTokens(sc, o.Tokens)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Node{
+		Name:   string(o.Name),
+		Values: vals,
+	}, nil
 }
 
 func (p *Parser) parseTokens(sc *Scanner, tokens []*grammar.Token) ([]*Value, error) {
@@ -132,7 +142,6 @@ func (p *Parser) parseToken(sc *Scanner, token *grammar.Token) ([]*Value, error)
 	for {
 		val, err := p.parseSingleToken(sc, token)
 		if err != nil {
-			p.err = err
 			return vals, nil
 		}
 
@@ -216,7 +225,7 @@ func (p *Parser) parseNumber(sc *Scanner) (*Value, error) {
 
 func (p *Parser) debugf(format string, args ...any) {
 	if p.debug {
-		fmt.Printf(strings.Repeat(" ", p.nodeDepth*2)+format+"\n", args...)
+		fmt.Printf(strings.Join(p.nodes, "/")+": "+format+"\n", args...)
 	}
 }
 

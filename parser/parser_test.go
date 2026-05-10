@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParse(t *testing.T) {
@@ -126,7 +127,8 @@ func:
 	}
 
 	for _, tc := range tcs {
-		p := New(strings.NewReader(tc.grammar), false)
+		p, err := New(strings.NewReader(tc.grammar), false)
+		require.NoError(t, err)
 
 		node, err := p.Parse(strings.NewReader(tc.text))
 		assert.NoError(t, err)
