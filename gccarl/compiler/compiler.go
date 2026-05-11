@@ -3,7 +3,7 @@ package compiler
 import (
 	"fmt"
 
-	"github.com/carlmango11/gccarl/gccarl/parser"
+	"github.com/carlmango11/gccarl/gccarl/ast"
 )
 
 type Register string
@@ -21,8 +21,8 @@ const (
 
 type Instr string
 
-func Compile(n *parser.Node) ([]byte, error) {
-	instrs, err := compile(n)
+func Compile(prog *ast.Program) ([]byte, error) {
+	instrs, err := compile(prog)
 	if err != nil {
 		return nil, err
 	}
@@ -36,11 +36,11 @@ func Compile(n *parser.Node) ([]byte, error) {
 	return output, nil
 }
 
-func compile(n *parser.Node) ([]Instr, error) {
-	return compileMain(n.Values)
+func compile(prog *ast.Program) ([]Instr, error) {
+	return compileMain(prog)
 }
 
-func compileMain(vs []*parser.Value) ([]Instr, error) {
+func compileMain(prog *ast.Program) ([]Instr, error) {
 	var instrs []Instr
 
 	instrs = addInstr(instrs, "section .text")
@@ -57,17 +57,13 @@ func compileMain(vs []*parser.Value) ([]Instr, error) {
 
 	//locals := &LocalVars{}
 
-	for _, v := range vs {
-		switch v.Node.Name {
-		case "include":
-		case "func-def":
-			funcInstrs, err := compileFuncDef(v.Node)
-			if err != nil {
-				return nil, err
-			}
-
-			instrs = append(instrs, funcInstrs...)
+	for _, fd := range prog.FuncDefs {
+		funcInstrs, err := compileFuncDef(fd)
+		if err != nil {
+			return nil, err
 		}
+
+		instrs = append(instrs, funcInstrs...)
 	}
 
 	instrs = append(instrs, data...)
@@ -75,26 +71,30 @@ func compileMain(vs []*parser.Value) ([]Instr, error) {
 	return instrs, nil
 }
 
-func compileStatement(n *parser.Node, locals *LocalVars) ([]Instr, error) {
-	switch n.Name {
-	case "dec-assign":
-		return compileDecAssign(n.Values[0].Node.Values, locals)
-	case "assign":
-		return assign(n.Values, locals)
-	case "func-call":
-		return functionCall(n.Values, locals)
+func compileStatement(s *ast.Statement, locals *LocalVars) ([]Instr, error) {
+	switch {
+	case s.VarDec != nil:
+		return compileDecAssign(s.VarDec, locals)
+	case s.Assign != nil:
+		return compileAssign(s.Assign, locals)
+	case s.FuncCall != nil:
+		return functionCall(s.FuncCall, locals)
 	}
 
-	return nil, fmt.Errorf("unknown node: %s", n.Name)
+	panic("missing statement type")
 }
 
-func assign(vs []*parser.Value, locals *LocalVars) ([]Instr, error) {
-	toOffset, ok := locals.Offset(vs[0].Identifier)
-	if !ok {
-		return nil, fmt.Errorf("undefined variable: %s", vs[0].Identifier)
+func compileAssign(a *ast.Assign, locals *LocalVars) ([]Instr, error) {
+	if a.Var.Index != nil {
+		panic("impl")
 	}
 
-	output, err := handleExpr(vs[2].Node, locals, RegEAX)
+	toOffset, ok := locals.Offset(a.Var.Name)
+	if !ok {
+		return nil, fmt.Errorf("undefined variable: %s", a.Var.Name)
+	}
+
+	output, err := compileExpr(a.Expr, locals, RegEAX)
 	if err != nil {
 		return nil, err
 	}
@@ -102,50 +102,45 @@ func assign(vs []*parser.Value, locals *LocalVars) ([]Instr, error) {
 	return addInstr(output, `mov dword [rbp-%d], %s`, toOffset, RegEAX), nil
 }
 
-func loadValue(n *parser.Node, locals *LocalVars, target Register) ([]Instr, error) {
-	if len(n.Values) != 1 {
-		return nil, fmt.Errorf("invalid number of values: %d", len(n.Values))
-	}
+func loadValue(v *ast.Value, locals *LocalVars, target Register) ([]Instr, error) {
+	if v.Var != nil {
+		if v.Var.Index != nil {
+			panic("impl")
+		}
 
-	val := n.Values[0]
-
-	switch n.Name {
-	case "int":
-		return addInstr(nil, "mov %s, %d", target, int(val.Number)), nil
-	case "variable":
-		offset, ok := locals.Offset(val.Identifier)
+		offset, ok := locals.Offset(v.Var.Name)
 		if !ok {
-			return nil, fmt.Errorf("undefined variable: %s", val.Identifier)
+			return nil, fmt.Errorf("undefined variable: %s", v.Var.Name)
 		}
 
 		return addInstr(nil, "mov %s, [rbp-%d]", target, offset), nil
+	}
+
+	return addInstr(nil, "mov %s, %d", target, v.Int), nil
+}
+
+func compileExpr(e *ast.Expr, locals *LocalVars, target Register) ([]Instr, error) {
+	switch {
+	case e.Add != nil:
+		return compileAdd(e.Add, locals, target)
+	case e.Val != nil:
+		return loadValue(e.Val, locals, target)
 	default:
-		return nil, fmt.Errorf("unknown variable: %s", n.Name)
+		return nil, fmt.Errorf("unknown expr type: %+v", e)
 	}
 }
 
-func handleExpr(n *parser.Node, locals *LocalVars, target Register) ([]Instr, error) {
-	switch n.Name {
-	case "add":
-		return compileAdd(n.Values, locals, target)
-	case "value":
-		return loadValue(n.Values[0].Node, locals, target)
-	default:
-		return nil, fmt.Errorf("unknown expr type: %s", n.Name)
-	}
-}
-
-func compileAdd(vs []*parser.Value, locals *LocalVars, target Register) ([]Instr, error) {
+func compileAdd(a *ast.AddExpr, locals *LocalVars, target Register) ([]Instr, error) {
 	var all []Instr
 
-	output, err := handleExpr(vs[2].Node, locals, target)
+	output, err := compileExpr(a.Expr, locals, target)
 	if err != nil {
 		return nil, err
 	}
 
 	all = append(all, output...)
 
-	output, err = loadValue(vs[0].Node, locals, RegEBX)
+	output, err = loadValue(a.Val, locals, RegEBX)
 	if err != nil {
 		return nil, err
 	}
@@ -155,27 +150,28 @@ func compileAdd(vs []*parser.Value, locals *LocalVars, target Register) ([]Instr
 	return addInstr(all, "add %s, %s", target, RegEBX), nil
 }
 
-func compileDecAssign(vs []*parser.Value, locals *LocalVars) ([]Instr, error) {
-	typ, err := toType(vs[0])
+func compileDecAssign(vd *ast.VarDec, locals *LocalVars) ([]Instr, error) {
+	switch vd.Type {
+	case ast.TypeInt:
+		return compileIntAssignment(vd.Var, vd.Expr, locals)
+	default:
+		panic(fmt.Sprintf("unhandled assignment type: %s", vd.Type))
+	}
+}
+
+func compileIntAssignment(v *ast.Var, e *ast.Expr, locals *LocalVars) ([]Instr, error) {
+	if v.Index != nil {
+		panic("unhandled index")
+	}
+
+	instrs, err := compileExpr(e, locals, RegEAX)
 	if err != nil {
 		return nil, err
 	}
 
-	switch typ {
-	case TypeInt:
-		return compileIntAssignment(vs, locals)
-	default:
-		return nil, fmt.Errorf("unknown type: %v", typ)
-	}
-}
+	offset := locals.Add(v.Name, ast.TypeInt)
 
-func compileIntAssignment(vs []*parser.Value, locals *LocalVars) ([]Instr, error) {
-	name := vs[1].Identifier
-	val := vs[3].Number
-
-	offset := locals.Add(name, TypeInt)
-
-	return addInstr(nil, "mov dword [rbp-%d], %d", offset, int(val)), nil
+	return addInstr(instrs, "mov dword [rbp-%d], %s", offset, RegEAX), nil
 }
 
 func addInstr(instrs []Instr, format string, args ...any) []Instr {
@@ -183,15 +179,11 @@ func addInstr(instrs []Instr, format string, args ...any) []Instr {
 	return append(instrs, Instr(i))
 }
 
-func toType(v *parser.Value) (Type, error) {
-	if v.Node == nil {
-		return TypeVoid, fmt.Errorf("expected type, got %+v", v)
-	}
-
-	switch v.Node.Values[0].Literal {
-	case "int":
-		return TypeInt, nil
+func typeSize(t ast.Type) int {
+	switch t {
+	case ast.TypeInt:
+		return 4
 	default:
-		return TypeVoid, fmt.Errorf("unknown type: %s", v.Node.Values[0].Literal)
+		panic(fmt.Sprintf("unknown type %d", t))
 	}
 }

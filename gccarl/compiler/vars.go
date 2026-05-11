@@ -1,32 +1,15 @@
 package compiler
 
 import (
-	"fmt"
-
+	"github.com/carlmango11/gccarl/gccarl/ast"
 	"github.com/carlmango11/gccarl/gccarl/parser"
 )
-
-type Type int
-
-const (
-	TypeVoid Type = iota
-	TypeInt
-)
-
-func (t Type) Size() int {
-	switch t {
-	case TypeInt:
-		return 4
-	default:
-		panic(fmt.Sprintf("unknown type %d", t))
-	}
-}
 
 type Offset int
 
 type Var struct {
 	name   parser.Identifier
-	typ    Type
+	typ    ast.Type
 	offset Offset
 }
 
@@ -34,14 +17,14 @@ type LocalVars struct {
 	vars []*Var
 }
 
-func (lv *LocalVars) Add(name parser.Identifier, t Type) Offset {
+func (lv *LocalVars) Add(name parser.Identifier, t ast.Type) Offset {
 	var current Offset
 
 	if len(lv.vars) > 0 {
 		current = lv.vars[len(lv.vars)-1].offset
 	}
 
-	offset := current + Offset(t.Size())
+	offset := current + Offset(typeSize(t))
 
 	lv.vars = append(lv.vars, &Var{
 		name:   name,
@@ -65,7 +48,7 @@ func (lv *LocalVars) Offset(i parser.Identifier) (Offset, bool) {
 func (lv *LocalVars) Size() int {
 	var total int
 	for _, v := range lv.vars {
-		total += v.typ.Size()
+		total += typeSize(v.typ)
 	}
 
 	return total

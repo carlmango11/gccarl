@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/carlmango11/gccarl/gccarl/ast"
 	"github.com/carlmango11/gccarl/gccarl/compiler"
 	"github.com/carlmango11/gccarl/gccarl/parser"
 )
@@ -35,13 +36,19 @@ func main() {
 
 	defer input.Close()
 
-	ast, err := p.Parse(input)
+	parsed, err := p.Parse(input)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
-	c, err := compiler.Compile(ast)
+	astProg, err := ast.Build(parsed)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+
+	c, err := compiler.Compile(astProg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

@@ -53,7 +53,7 @@ func (s *Scanner) Index() int {
 	return s.i
 }
 
-func (s *Scanner) ParseNumber() (float64, error) {
+func (s *Scanner) ParseNumber() (int64, error) {
 	s.skipWhitespace()
 
 	startCh, err := s.next()
@@ -94,7 +94,7 @@ func (s *Scanner) ParseNumber() (float64, error) {
 	all[0] = startCh
 	all = append(all, chs...)
 
-	return strconv.ParseFloat(string(all), 64)
+	return strconv.ParseInt(string(all), 10, 64)
 }
 
 func (s *Scanner) ParseIdentifier() (Identifier, error) {

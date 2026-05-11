@@ -29,7 +29,13 @@ param-def:
 
 value:
     int:NUM
-    variable:IDEN
+    variable:variable
+
+variable:
+    variable:IDEN array-index?
+
+array-index:
+    array-index:"[" NUM "]"
 
 expr:
     add:value "+" expr
@@ -39,11 +45,11 @@ expr:
 
 statement:
     dec-assign:dec-assign
-    assign:IDEN "=" expr
+    assign:variable "=" expr
     func-call:IDEN "(" params? ")"
 
 dec-assign:
-    assign:type IDEN "=" NUM
+    assign:type variable "=" expr
 
 params:
     params:expr comma-expr*

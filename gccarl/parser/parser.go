@@ -19,7 +19,7 @@ type Value struct {
 	Node       *Node
 	Literal    string
 	Identifier Identifier
-	Number     float64
+	Number     int
 }
 
 type Parser struct {
@@ -246,7 +246,7 @@ func (p *Parser) parseNumber(sc *Scanner) (*Value, error) {
 	}
 
 	return &Value{
-		Number: num,
+		Number: int(num),
 	}, nil
 }
 
