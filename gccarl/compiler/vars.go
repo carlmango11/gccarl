@@ -3,7 +3,7 @@ package compiler
 import (
 	"fmt"
 
-	"github.com/carlmango11/gccarl/parser"
+	"github.com/carlmango11/gccarl/gccarl/parser"
 )
 
 type Type int

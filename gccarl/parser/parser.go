@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/carlmango11/gccarl/parser/grammar"
+	"github.com/carlmango11/gccarl/gccarl/parser/grammar"
 )
 
 type Node struct {

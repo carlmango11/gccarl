@@ -1,4 +1,4 @@
-module github.com/carlmango11/gccarl/
+module github.com/carlmango11/gccarl/gccarl
 
 go 1.25
 

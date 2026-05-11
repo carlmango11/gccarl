@@ -3,8 +3,41 @@ package compiler
 import (
 	"fmt"
 
-	"github.com/carlmango11/gccarl/parser"
+	"github.com/carlmango11/gccarl/gccarl/parser"
 )
+
+var exitRoutine = []Instr{
+	"exit:",
+	"push rbp",
+	"mov rbp, rsp",
+	"mov rax, 60",
+	"syscall",
+	"pop rbp",
+	"ret",
+}
+
+var callPrint = []Instr{
+	"mov rdi, 1",
+	"lea rsi, [rel msg]",
+	"mov rdx, msg_size",
+	"call print",
+}
+
+var printRoutine = []Instr{
+	"print:",
+	"push rbp",
+	"mov rbp, rsp",
+	"mov rax, 1",
+	"syscall",
+	"pop rbp",
+	"ret",
+}
+
+var data = []Instr{
+	"section .data",
+	`msg db "Hello, world!", 0xA`,
+	"msg_size equ $ - msg",
+}
 
 type ParamDef struct {
 	Type Type

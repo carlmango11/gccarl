@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/carlmango11/gccarl/compiler"
-	"github.com/carlmango11/gccarl/parser"
+	"github.com/carlmango11/gccarl/gccarl/compiler"
+	"github.com/carlmango11/gccarl/gccarl/parser"
 )
 
 //go:embed c.txt

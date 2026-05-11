@@ -3,7 +3,7 @@ package compiler
 import (
 	"fmt"
 
-	"github.com/carlmango11/gccarl/parser"
+	"github.com/carlmango11/gccarl/gccarl/parser"
 )
 
 type Register string
@@ -46,8 +46,14 @@ func compileMain(vs []*parser.Value) ([]Instr, error) {
 	instrs = addInstr(instrs, "section .text")
 	instrs = addInstr(instrs, "global _start")
 
-	instrs = addInstr(instrs, "_main:")
+	instrs = addInstr(instrs, "_start:")
+
+	instrs = append(instrs, callPrint...)
+
 	instrs = addInstr(instrs, "\tcall main")
+	instrs = addInstr(instrs, "\tcall exit")
+	instrs = append(instrs, exitRoutine...)
+	instrs = append(instrs, printRoutine...)
 
 	//locals := &LocalVars{}
 
@@ -63,6 +69,8 @@ func compileMain(vs []*parser.Value) ([]Instr, error) {
 			instrs = append(instrs, funcInstrs...)
 		}
 	}
+
+	instrs = append(instrs, data...)
 
 	return instrs, nil
 }
