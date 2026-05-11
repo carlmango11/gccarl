@@ -1,9 +1,10 @@
 package compiler
 
 import (
-	"compiler/parser"
 	"strings"
 	"testing"
+
+	"github.com/carlmango11/compiler/parser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

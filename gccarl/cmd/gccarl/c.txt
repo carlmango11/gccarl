@@ -9,15 +9,20 @@ include-iden:
     custom-iden:"\"" IDEN "\""
 
 dec-def:
-    func-def:type IDEN "(" params-def ")" "{" statement-comma* "}"
+    func-def:type IDEN "(" params-def? ")" "{" statement-comma* return? "}"
     dec-assign:dec-assign
+
+return:
+    return:"return" expr ";"
 
 statement-comma:
     statement:statement ";"
 
 params-def:
-    none:
     params:param-def comma-param-def*
+
+comma-param-def:
+    param:"," param-def
     
 param-def:
     param:type IDEN
@@ -35,17 +40,16 @@ expr:
 statement:
     dec-assign:dec-assign
     assign:IDEN "=" expr
-    func-call:IDEN "(" params ")"
+    func-call:IDEN "(" params? ")"
 
 dec-assign:
     assign:type IDEN "=" NUM
 
 params:
-    none:
-    params:IDEN comma-iden*
+    params:expr comma-expr*
 
-comma-iden:
-    comma-iden:"," IDEN
+comma-expr:
+    comma-expr:"," expr
 
 type:
     int:"int"

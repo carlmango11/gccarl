@@ -17,7 +17,7 @@ imports:
   b:"#include" IDEN NUM
 
 func:
-  c:"t1" "t3"
+  c:"t1" "t3"?
   d:"t2"`
 
 	rules, err := Parse(strings.NewReader(grammar))
@@ -30,14 +30,14 @@ func:
 					Name: "a",
 					Tokens: []*Token{
 						{
-							Type:  TTRule,
-							Rule:  "imports",
-							Multi: true,
+							Type:        TTRule,
+							Rule:        "imports",
+							Cardinality: CardMultiple,
 						},
 						{
-							Type:  TTRule,
-							Rule:  "func",
-							Multi: true,
+							Type:        TTRule,
+							Rule:        "func",
+							Cardinality: CardMultiple,
 						},
 					},
 				},
@@ -72,8 +72,9 @@ func:
 							Literal: "t1",
 						},
 						{
-							Type:    TTLiteral,
-							Literal: "t3",
+							Type:        TTLiteral,
+							Literal:     "t3",
+							Cardinality: CardOptional,
 						},
 					},
 				},

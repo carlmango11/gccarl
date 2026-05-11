@@ -1,8 +1,9 @@
 package compiler
 
 import (
-	"compiler/parser"
 	"fmt"
+
+	"github.com/carlmango11/gccarl/parser"
 )
 
 type Register string
@@ -10,11 +11,15 @@ type Register string
 const (
 	RegEAX Register = "eax"
 	RegEBX Register = "ebx"
+	RegEDI Register = "edi"
+	RegESI Register = "esi"
+	RegEDX Register = "edx"
+	RegRDI Register = "rdi"
+	RegRSI Register = "rsi"
+	RegRDX Register = "rdx"
 )
 
 type Instr string
-
-const stackTop = 0x00004ffffffffeec
 
 func Compile(n *parser.Node) ([]byte, error) {
 	instrs, err := compile(n)
@@ -41,9 +46,8 @@ func compileMain(vs []*parser.Value) ([]Instr, error) {
 	instrs = addInstr(instrs, "section .text")
 	instrs = addInstr(instrs, "global _start")
 
-	instrs = addInstr(instrs, "_start:")
-	instrs = addInstr(instrs, "\tmov rbp, 0x%X", stackTop)
-	instrs = addInstr(instrs, "call main")
+	instrs = addInstr(instrs, "_main:")
+	instrs = addInstr(instrs, "\tcall main")
 
 	//locals := &LocalVars{}
 
@@ -58,43 +62,7 @@ func compileMain(vs []*parser.Value) ([]Instr, error) {
 
 			instrs = append(instrs, funcInstrs...)
 		}
-		//statement, err := compileStatement(v.Node, locals)
-		//if err != nil {
-		//	return nil, err
-		//}
-
-		//output = append(output, statement...)
-		return instrs, nil
 	}
-
-	return instrs, nil
-}
-
-func compileFuncDef(node *parser.Node) ([]Instr, error) {
-	//typ := node.Values[0]
-	id := node.Values[1].Identifier
-	//params := node.Values[3]
-	statements := node.Values[6 : len(node.Values)-1]
-
-	instrs := addInstr(nil, "%s:", id)
-	addInstr(instrs, "push rbp")
-	addInstr(instrs, "mov rbp, rsp")
-
-	locals := &LocalVars{}
-
-	for _, s := range statements {
-		statementNode := s.Node.Values[0].Node
-		statementInstrs, err := compileStatement(statementNode, locals)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, instr := range statementInstrs {
-			instrs = append(instrs, "\t"+instr)
-		}
-	}
-
-	addInstr(instrs, "pop rbp")
 
 	return instrs, nil
 }
@@ -105,6 +73,8 @@ func compileStatement(n *parser.Node, locals *LocalVars) ([]Instr, error) {
 		return compileDecAssign(n.Values[0].Node.Values, locals)
 	case "assign":
 		return assign(n.Values, locals)
+	case "func-call":
+		return functionCall(n.Values, locals)
 	}
 
 	return nil, fmt.Errorf("unknown node: %s", n.Name)
@@ -207,13 +177,13 @@ func addInstr(instrs []Instr, format string, args ...any) []Instr {
 
 func toType(v *parser.Value) (Type, error) {
 	if v.Node == nil {
-		return TypeUnset, fmt.Errorf("expected type, got %+v", v)
+		return TypeVoid, fmt.Errorf("expected type, got %+v", v)
 	}
 
 	switch v.Node.Values[0].Literal {
 	case "int":
 		return TypeInt, nil
 	default:
-		return TypeUnset, fmt.Errorf("unknown type: %s", v.Node.Values[0].Literal)
+		return TypeVoid, fmt.Errorf("unknown type: %s", v.Node.Values[0].Literal)
 	}
 }

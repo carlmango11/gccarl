@@ -35,19 +35,35 @@ func (t TokenType) String() string {
 	}
 }
 
+type Cardinality int
+
+const (
+	CardSingle Cardinality = iota
+	CardOptional
+	CardMultiple
+)
+
+func (c Cardinality) String() string {
+	switch c {
+	case CardOptional:
+		return "?"
+	case CardMultiple:
+		return "*"
+	default:
+		return ""
+	}
+}
+
 type Token struct {
-	Type  TokenType
-	Multi bool
+	Type        TokenType
+	Cardinality Cardinality
 
 	Literal string
 	Rule    RuleName
 }
 
 func (t Token) String() string {
-	s := t.Type.String()
-	if t.Multi {
-		s += "*"
-	}
+	s := t.Type.String() + t.Cardinality.String()
 
 	if t.Literal != "" {
 		s += ":" + t.Literal
@@ -118,18 +134,54 @@ func Parse(input io.Reader) (map[RuleName]*Rule, error) {
 		}
 	}
 
+	err := validate(rules)
+	if err != nil {
+		return nil, err
+	}
+
 	return rules, nil
 }
 
+func validate(rules map[RuleName]*Rule) error {
+	for ruleName, rule := range rules {
+		if len(rule.Options) == 0 {
+			return fmt.Errorf("no options for rule %q", ruleName)
+		}
+
+		for _, option := range rule.Options {
+			if len(option.Tokens) == 0 {
+				return fmt.Errorf("no tokens for rule %q, option %q", ruleName, option.Name)
+			}
+
+			for _, token := range option.Tokens {
+				if token.Type != TTRule {
+					continue
+				}
+
+				_, ok := rules[token.Rule]
+				if !ok {
+					return fmt.Errorf("rule %q not found", token.Rule)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func parseToken(s string) *Token {
-	var multi bool
+	var card Cardinality
+
 	if strings.HasSuffix(s, "*") {
-		multi = true
+		card = CardMultiple
+		s = s[:len(s)-1]
+	} else if strings.HasSuffix(s, "?") {
+		card = CardOptional
 		s = s[:len(s)-1]
 	}
 
 	t := &Token{
-		Multi: multi,
+		Cardinality: card,
 	}
 
 	switch {

@@ -1,14 +1,14 @@
 package main
 
 import (
-	"compiler/compiler"
-	"compiler/parser"
 	_ "embed"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/carlmango11/gccarl/compiler"
+	"github.com/carlmango11/gccarl/parser"
 )
 
 //go:embed c.txt
@@ -40,14 +40,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-
-	bs, err := json.MarshalIndent(ast, "", "  ")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	fmt.Println(string(bs))
 
 	c, err := compiler.Compile(ast)
 	if err != nil {

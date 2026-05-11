@@ -1,10 +1,11 @@
 package parser
 
 import (
-	"compiler/parser/grammar"
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/carlmango11/gccarl/parser/grammar"
 )
 
 type Node struct {
@@ -77,8 +78,9 @@ func (p *Parser) parseNode(sc *Scanner, ruleName grammar.RuleName) (*Node, error
 	originalIndex := sc.Index()
 
 	var err error
+	var node *Node
 	for _, o := range rule.Options {
-		node, err := p.parseOption(sc, o)
+		node, err = p.parseOption(sc, o)
 		if err != nil {
 			sc.Reset(originalIndex)
 			continue
@@ -91,12 +93,14 @@ func (p *Parser) parseNode(sc *Scanner, ruleName grammar.RuleName) (*Node, error
 }
 
 func (p *Parser) parseOption(sc *Scanner, o *grammar.Option) (*Node, error) {
-	//p.nodes = append(p.nodes, string(o.Name))
-	//defer func() {
-	//	p.nodes = p.nodes[:len(p.nodes)-1]
-	//}()
+	p.nodes = append(p.nodes, string(o.Name))
+	defer func() {
+		p.nodes = p.nodes[:len(p.nodes)-1]
+	}()
 
 	p.fullDebugf(sc, "parsing option: %s", o.Name)
+
+	// TODO: there's a bug here. "x"* "z"? "x" wont' work because the first x* eats everything
 
 	vals, err := p.parseTokens(sc, o.Tokens)
 	if err != nil {
@@ -127,25 +131,48 @@ func (p *Parser) parseTokens(sc *Scanner, tokens []*grammar.Token) ([]*Value, er
 }
 
 func (p *Parser) parseToken(sc *Scanner, token *grammar.Token) ([]*Value, error) {
-	if !token.Multi {
+	switch token.Cardinality {
+	case grammar.CardSingle:
 		val, err := p.parseSingleToken(sc, token)
 		if err != nil {
 			return nil, err
 		}
 
 		return []*Value{val}, nil
-	}
+	case grammar.CardOptional:
+		p.fullDebugf(sc, "parsing optional token: %v", token)
 
-	p.fullDebugf(sc, "parsing multi token: %v", token)
+		index := sc.Index()
 
-	var vals []*Value
-	for {
 		val, err := p.parseSingleToken(sc, token)
 		if err != nil {
-			return vals, nil
+			sc.Reset(index)
+			p.fullDebugf(sc, "did not find single token, reverted: %v", token)
+			return nil, nil
 		}
 
-		vals = append(vals, val)
+		p.fullDebugf(sc, "found single token: %v", token)
+		return []*Value{val}, nil
+	case grammar.CardMultiple:
+		p.fullDebugf(sc, "parsing multi token: %v", token)
+
+		index := sc.Index()
+
+		var vals []*Value
+		for {
+			val, err := p.parseSingleToken(sc, token)
+			if err != nil {
+				sc.Reset(index)
+				p.fullDebugf(sc, "did not find single token in multi, reverted: %v", token)
+				return vals, nil
+			}
+
+			index = sc.Index()
+			p.fullDebugf(sc, "found single token in multi: %v", token)
+			vals = append(vals, val)
+		}
+	default:
+		return nil, fmt.Errorf("unexpected token cardinality: %d", token.Cardinality)
 	}
 }
 

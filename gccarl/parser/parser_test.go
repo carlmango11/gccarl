@@ -124,14 +124,61 @@ func:
 				},
 			},
 		},
+		{
+			grammar: `
+main:
+  a:"x"* "y" "z"?
+`,
+			text: `xxyz`,
+			expected: &Node{
+				Name: "a",
+				Values: []*Value{
+					{
+						Literal: "x",
+					},
+					{
+						Literal: "x",
+					},
+					{
+						Literal: "y",
+					},
+					{
+						Literal: "z",
+					},
+				},
+			},
+		},
+		{
+			grammar: `
+main:
+  a:"x"* "z"? "p"
+`,
+			text: `xxp`,
+			expected: &Node{
+				Name: "a",
+				Values: []*Value{
+					{
+						Literal: "x",
+					},
+					{
+						Literal: "x",
+					},
+					{
+						Literal: "p",
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tcs {
-		p, err := New(strings.NewReader(tc.grammar), false)
-		require.NoError(t, err)
+		t.Run(tc.grammar, func(t *testing.T) {
+			p, err := New(strings.NewReader(tc.grammar), true)
+			require.NoError(t, err)
 
-		node, err := p.Parse(strings.NewReader(tc.text))
-		assert.NoError(t, err)
-		assert.Equal(t, tc.expected, node)
+			node, err := p.Parse(strings.NewReader(tc.text))
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, node)
+		})
 	}
 }

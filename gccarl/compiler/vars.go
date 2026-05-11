@@ -1,14 +1,15 @@
 package compiler
 
 import (
-	"compiler/parser"
 	"fmt"
+
+	"github.com/carlmango11/gccarl/parser"
 )
 
 type Type int
 
 const (
-	TypeUnset Type = iota
+	TypeVoid Type = iota
 	TypeInt
 )
 
@@ -59,4 +60,13 @@ func (lv *LocalVars) Offset(i parser.Identifier) (Offset, bool) {
 	}
 
 	return 0, false
+}
+
+func (lv *LocalVars) Size() int {
+	var total int
+	for _, v := range lv.vars {
+		total += v.typ.Size()
+	}
+
+	return total
 }
