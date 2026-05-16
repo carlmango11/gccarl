@@ -1,0 +1,234 @@
+package program
+
+import (
+	"fmt"
+
+	"github.com/carlmango11/gccarl/gccarl/ast"
+	"github.com/carlmango11/gccarl/gccarl/parser"
+)
+
+type builder struct {
+	vars map[parser.Identifier]PrimitiveType
+}
+
+func Build(ast *ast.Program) (*Program, error) {
+	b := &builder{
+		vars: make(map[parser.Identifier]PrimitiveType),
+	}
+
+	return b.build(ast)
+}
+
+func (b *builder) build(p *ast.Program) (*Program, error) {
+	var funcDecs []*FuncDef
+	for _, astF := range p.FuncDefs {
+		f, err := b.toFuncDef(astF)
+		if err != nil {
+			return nil, err
+		}
+
+		funcDecs = append(funcDecs, f)
+	}
+
+	return &Program{
+		Imports: p.Imports,
+	}, nil
+}
+
+func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
+	// TODO func scoped types
+
+	returnType, err := b.toType(f.ReturnType)
+	if err != nil {
+		return nil, err
+	}
+
+	locals := map[parser.Identifier]Type{}
+
+	for _, s := range f.Statements {
+		dec := s.Dec
+		if s.DecAssign != nil {
+			dec = s.DecAssign.Dec
+		}
+
+		if s.Dec == nil {
+			continue
+		}
+
+		err := b.declareVar(locals, dec)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var paramDefs []*ParamDef
+	for _, astParam := range f.Params {
+		pd, err := b.toParamDec(astParam)
+		if err != nil {
+			return nil, err
+		}
+
+		paramDefs = append(paramDefs, pd)
+	}
+
+	var statements []*Statement
+	for _, astStatement := range f.Statements {
+		s, err := b.toStatement(locals, astStatement)
+		if err != nil {
+			return nil, err
+		}
+
+		statements = append(statements, s)
+	}
+
+	returnExpr, err := b.toExpr(f.ReturnExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &FuncDef{
+		ReturnType: returnType,
+		Name:       FuncName(f.Name),
+		Params:     paramDefs,
+		Statements: statements,
+		ReturnExpr: returnExpr,
+	}, nil
+}
+
+func (b *builder) declareVar(vars map[parser.Identifier]Type, dec *ast.Dec) error {
+	_, ok := vars[dec.Name]
+	if ok {
+		return fmt.Errorf("variable %s already declared", dec.Name)
+	}
+
+	typ, err := b.toType(dec.Type)
+	if err != nil {
+		return err
+	}
+
+	vars[dec.Name] = typ
+	return nil
+}
+
+func (b *builder) toType(i *ast.TypeDef) (Type, error) {
+	switch i.Type.Type {
+	case "int":
+		return Type{
+			Kind: KindPrimitive,
+			Prim: PrimInt32,
+		}, nil
+	default:
+		// custom
+		panic("impl")
+	}
+}
+
+func (b *builder) toParamDec(p *ast.ParamDef) (*ParamDef, error) {
+	typ, err := b.toType(p.Type)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ParamDef{
+		Type: typ,
+		Name: VarName(p.Name),
+	}, nil
+}
+
+func (b *builder) toStatement(vars map[parser.Identifier]Type, s *ast.Statement) (*Statement, error) {
+	switch {
+	case s.DecAssign != nil:
+		a, err := b.toAssign(vars, s.DecAssign.Assign)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Statement{
+			Assign: a,
+		}, nil
+	case s.Assign != nil:
+		a, err := b.toAssign(vars, s.Assign)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Statement{
+			Assign: a,
+		}, nil
+	case s.Expr != nil:
+		expr, err := b.toExpr(s.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Statement{
+			Expr: expr,
+		}, nil
+	}
+
+	panic("invalid statement")
+}
+
+func (b *builder) toAssign(vars map[parser.Identifier]Type, a *ast.Assign) (*Assign, error) {
+	v, ok := vars[a.Var.Name]
+	if !ok {
+		v, ok = vars[a.Var.Name]
+		if !ok {
+			return nil, fmt.Errorf("variable %s not declared", a.Var.Name)
+		}
+	}
+
+	indexable := v.Kind == KindArray || v.Kind == KindPointer
+	if a.Var.Indexed && !indexable {
+		return nil, fmt.Errorf("variable %s is not indexable", a.Var.Name)
+	}
+
+	expr, err := b.toExpr(a.Expr)
+	if err != nil {
+		return nil, err
+	}
+
+	if !v.Equals(expr.Type) {
+		if compatibleTypes(v, expr.Type) {
+			expr = &Expr{
+				Cast: &Cast{
+					To:   v,
+					Expr: expr,
+				},
+			}
+		}
+	}
+
+	return &Assign{
+		Name:  VarName(a.Var.Name),
+		Index: a.Var.Index,
+		Expr:  expr,
+	}, nil
+}
+
+func (b *builder) toExpr(expr *ast.Expr) (*Expr, error) {
+	switch {
+	case expr.Val != nil:
+		v := expr.Val
+		switch {
+		case v.Int != nil:
+			// TODO other sizes
+			return &Expr{
+				Type: int32Type(),
+				Literal: Literal{
+					Int32: int32(*v.Int),
+				},
+			}, nil
+		}
+	}
+
+	panic("invalid expression")
+}
+
+func int32Type() Type {
+	return Type{Kind: KindPrimitive, Prim: PrimInt32}
+}
+
+func compatibleTypes(t1, t2 Type) bool {
+	panic("implement me")
+}
