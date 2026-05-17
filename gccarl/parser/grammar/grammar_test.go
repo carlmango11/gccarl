@@ -28,7 +28,7 @@ func:
 			Options: []*Option{
 				{
 					Name: "a",
-					Tokens: []*Token{
+					Parts: []*Part{
 						{
 							Type:        TTRule,
 							Rule:        "imports",
@@ -47,10 +47,10 @@ func:
 			Options: []*Option{
 				{
 					Name: "b",
-					Tokens: []*Token{
+					Parts: []*Part{
 						{
-							Type:    TTLiteral,
-							Literal: "#include",
+							Type:  TTLiteral,
+							Token: "#include",
 						},
 						{
 							Type: TTIdentifier,
@@ -66,24 +66,24 @@ func:
 			Options: []*Option{
 				{
 					Name: "c",
-					Tokens: []*Token{
+					Parts: []*Part{
 						{
-							Type:    TTLiteral,
-							Literal: "t1",
+							Type:  TTLiteral,
+							Token: "t1",
 						},
 						{
 							Type:        TTLiteral,
-							Literal:     "t3",
+							Token:       "t3",
 							Cardinality: CardOptional,
 						},
 					},
 				},
 				{
 					Name: "d",
-					Tokens: []*Token{
+					Parts: []*Part{
 						{
-							Type:    TTLiteral,
-							Literal: "t2",
+							Type:  TTLiteral,
+							Token: "t2",
 						},
 					},
 				},

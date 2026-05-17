@@ -5,41 +5,13 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/carlmango11/gccarl/gccarl/tokens"
 )
 
 type RuleName string
 type OptionName string
 type Identifier string
-
-type TokenType int
-
-const (
-	TTLiteral TokenType = iota + 1
-	TTRule
-	TTIdentifier
-	TTNumber
-	TTString
-	TTChar
-)
-
-func (t TokenType) String() string {
-	switch t {
-	case TTLiteral:
-		return "lit"
-	case TTRule:
-		return "rule"
-	case TTIdentifier:
-		return "id"
-	case TTNumber:
-		return "num"
-	case TTString:
-		return "str"
-	case TTChar:
-		return "char"
-	default:
-		return "?"
-	}
-}
 
 type Cardinality int
 
@@ -60,31 +32,34 @@ func (c Cardinality) String() string {
 	}
 }
 
-type Token struct {
-	Type        TokenType
+type Part struct {
 	Cardinality Cardinality
-
-	Literal string
-	Rule    RuleName
+	Token       tokens.Name
+	Rule        RuleName
 }
 
-func (t Token) String() string {
-	s := t.Type.String() + t.Cardinality.String()
-
-	if t.Literal != "" {
-		s += ":" + t.Literal
-	}
-
-	if t.Rule != "" {
-		s += ":" + string(t.Rule)
-	}
-
-	return s
+func (t Part) IsRule() bool {
+	return t.Rule != ""
 }
+
+//func (t Token) String() string {
+//	if
+//	s := t.Type.String() + t.Cardinality.String()
+//
+//	if t.Literal != "" {
+//		s += ":" + t.Literal
+//	}
+//
+//	if t.Rule != "" {
+//		s += ":" + string(t.Rule)
+//	}
+//
+//	return s
+//}
 
 type Option struct {
-	Name   OptionName
-	Tokens []*Token
+	Name  OptionName
+	Parts []*Part
 }
 
 type Rule struct {
@@ -123,14 +98,14 @@ func Parse(input io.Reader) (map[RuleName]*Rule, error) {
 				tokenStrs = nil
 			}
 
-			tokens := make([]*Token, len(tokenStrs))
+			tokens := make([]*Part, len(tokenStrs))
 			for i, tokenStr := range tokenStrs {
 				tokens[i] = parseToken(tokenStr)
 			}
 
 			option := &Option{
-				Name:   OptionName(label),
-				Tokens: tokens,
+				Name:  OptionName(label),
+				Parts: tokens,
 			}
 
 			rules[ruleName].Options = append(rules[ruleName].Options, option)
@@ -155,12 +130,12 @@ func validate(rules map[RuleName]*Rule) error {
 		}
 
 		for _, option := range rule.Options {
-			if len(option.Tokens) == 0 {
+			if len(option.Parts) == 0 {
 				return fmt.Errorf("no tokens for rule %q, option %q", ruleName, option.Name)
 			}
 
-			for _, token := range option.Tokens {
-				if token.Type != TTRule {
+			for _, token := range option.Parts {
+				if !token.IsRule() {
 					continue
 				}
 
@@ -175,7 +150,7 @@ func validate(rules map[RuleName]*Rule) error {
 	return nil
 }
 
-func parseToken(s string) *Token {
+func parseToken(s string) *Part {
 	var card Cardinality
 
 	if strings.HasSuffix(s, "*") {
@@ -186,30 +161,15 @@ func parseToken(s string) *Token {
 		s = s[:len(s)-1]
 	}
 
-	t := &Token{
+	t := &Part{
 		Cardinality: card,
 	}
 
-	switch {
-	case s == "IDEN":
-		t.Type = TTIdentifier
-	case s == "NUM":
-		t.Type = TTNumber
-	case s == "CHAR":
-		t.Type = TTChar
-	case s == "STR":
-		t.Type = TTString
-	case isLiteral(s):
-		t.Type = TTLiteral
-		t.Literal = s[1 : len(s)-1]
-	default:
-		t.Type = TTRule
+	if strings.ToUpper(s) == s {
+		t.Token = tokens.Name(s)
+	} else {
 		t.Rule = RuleName(s)
 	}
 
 	return t
-}
-
-func isLiteral(s string) bool {
-	return strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"")
 }

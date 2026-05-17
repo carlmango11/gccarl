@@ -1,4 +1,4 @@
-package tokeniser
+package tokens
 
 import (
 	"bufio"
@@ -17,25 +17,27 @@ type TokenDef struct {
 	Regex   *regexp.Regexp
 }
 
+type Name string
+
 type Token struct {
-	Name    string
+	Name    Name
 	Val     string
 	Literal bool
 }
 
-type Tokeniser struct {
+type Reader struct {
 	tokens []*TokenDef
 	text   string
 	i      int
 }
 
-func New(tokenDefText, text string) (*Tokeniser, error) {
+func New(tokenDefText, text string) (*Reader, error) {
 	tokenDefs, err := parseTokenDefs(tokenDefText)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Tokeniser{tokens: tokenDefs, text: text}, nil
+	return &Reader{tokens: tokenDefs, text: text}, nil
 }
 
 func parseTokenDefs(r string) ([]*TokenDef, error) {
@@ -72,17 +74,17 @@ func parseTokenDefs(r string) ([]*TokenDef, error) {
 	return defs, nil
 }
 
-func (s *Tokeniser) Next() (*Token, error) {
-	s.skipWhitespace()
+func (tk *Reader) Next() (*Token, error) {
+	tk.skipWhitespace()
 
-	if s.i == len(s.text) {
+	if tk.i == len(tk.text) {
 		return nil, io.EOF
 	}
 
 	var matches []*Token
 
-	for _, t := range s.tokens {
-		match, ok := s.match(t)
+	for _, t := range tk.tokens {
+		match, ok := tk.match(t)
 		if !ok {
 			continue
 		}
@@ -91,7 +93,7 @@ func (s *Tokeniser) Next() (*Token, error) {
 	}
 
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("expected at least one match")
+		return nil, fmt.Errorf("tokeniser: no matches found for token: %s", tk.text[tk.i])
 	}
 
 	sort.Slice(matches, func(i, j int) bool {
@@ -106,21 +108,21 @@ func (s *Tokeniser) Next() (*Token, error) {
 	})
 
 	longest := matches[0]
-	s.i += len(longest.Val)
+	tk.i += len(longest.Val)
 
 	return matches[0], nil
 }
 
-func (s *Tokeniser) match(t *TokenDef) (*Token, bool) {
+func (tk *Reader) match(t *TokenDef) (*Token, bool) {
 	if t.Literal != "" {
-		end := s.i + len(t.Literal)
-		if end > len(s.text) {
+		end := tk.i + len(t.Literal)
+		if end > len(tk.text) {
 			return nil, false
 		}
 
-		if s.text[s.i:end] == t.Literal {
+		if tk.text[tk.i:end] == t.Literal {
 			return &Token{
-				Name:    t.Name,
+				Name:    Name(t.Name),
 				Val:     t.Literal,
 				Literal: true,
 			}, true
@@ -129,10 +131,10 @@ func (s *Tokeniser) match(t *TokenDef) (*Token, bool) {
 		return nil, false
 	}
 
-	v := t.Regex.FindString(s.text[s.i:])
+	v := t.Regex.FindString(tk.text[tk.i:])
 	if v != "" {
 		return &Token{
-			Name: t.Name,
+			Name: Name(t.Name),
 			Val:  v,
 		}, true
 	}
@@ -140,7 +142,7 @@ func (s *Tokeniser) match(t *TokenDef) (*Token, bool) {
 	return nil, false
 }
 
-func (s *Tokeniser) skipWhitespace() {
-	v := whitespace.FindString(s.text[s.i:])
-	s.i += len(v)
+func (tk *Reader) skipWhitespace() {
+	v := whitespace.FindString(tk.text[tk.i:])
+	tk.i += len(v)
 }

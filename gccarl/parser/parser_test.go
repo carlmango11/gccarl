@@ -4,169 +4,71 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/carlmango11/gccarl/gccarl/tokens"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const tokenDef = `
+IDEN: [a-zA-Z_][a-zA-Z0-9_]*
+NUM: [0-9]+
+
+INT: 'int'
+CHAR: 'char'
+
+ASTERISKS: '*'
+HASH: '#'
+LESS_THAN: '<'
+GREATER_THAN: '>'
+EQUALS: '='
+QUOTE: '''
+LPAREN: '('
+RPAREN: ')'
+LBRACE: '{'
+RBRACE: '}'
+COMMA: ','
+SEMI: ';'
+LSQUARE: '['
+RSQUARE: ']'
+PLUS: '+'
+MINUS: '-'
+
+INCLUDE: 'include'
+RETURN: 'return'
+`
 
 func TestParse(t *testing.T) {
 	tcs := []struct {
 		grammar  string
 		text     string
-		expected *Node
+		expected []RuleKey
 	}{
 		{
 			grammar: `
 main:
-  dec:type IDEN "=" NUM
+	main:expr
 
-type:
-  int:"int"
-  float:"float"
+expr:
+	add:NUM PLUS NUM
+	sub:NUM MINUS NUM
 `,
-			text: `int hello = 4`,
-			expected: &Node{
-				Name: "dec",
-				Values: []*Value{
-					{
-						Node: &Node{
-							Name: "int",
-							Values: []*Value{
-								{
-									Literal: "int",
-								},
-							},
-						},
-					},
-					{
-						Identifier: "hello",
-					},
-					{
-						Literal: "=",
-					},
-					{
-						Number: 4,
-					},
-				},
+			text: `5 + 4`,
+			expected: []RuleKey{
+				{"expr", "add"},
 			},
 		},
 		{
 			grammar: `
 main:
-  l:"var" "wrong"
-  a:"var" func*
+	main:expr
 
-func:
-  b:"f"
-  c:"g"
+expr:
+	add:NUM PLUS NUM
+	sub:NUM MINUS NUM
 `,
-			text: `var g f`,
-			expected: &Node{
-				Name: "a",
-				Values: []*Value{
-					{
-						Literal: "var",
-					},
-					{
-						Node: &Node{
-							Name: "c",
-							Values: []*Value{
-								{
-									Literal: "g",
-								},
-							},
-						},
-					},
-					{
-						Node: &Node{
-							Name: "b",
-							Values: []*Value{
-								{
-									Literal: "f",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			grammar: `
-main:
-  funcs:func*
-
-func:
-  f:"f"
-`,
-			text: `f f`,
-			expected: &Node{
-				Name: "funcs",
-				Values: []*Value{
-					{
-						Node: &Node{
-							Name: "f",
-							Values: []*Value{
-								{
-									Literal: "f",
-								},
-							},
-						},
-					},
-					{
-						Node: &Node{
-							Name: "f",
-							Values: []*Value{
-								{
-									Literal: "f",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			grammar: `
-main:
-  a:"x"* "y" "z"?
-`,
-			text: `xxyz`,
-			expected: &Node{
-				Name: "a",
-				Values: []*Value{
-					{
-						Literal: "x",
-					},
-					{
-						Literal: "x",
-					},
-					{
-						Literal: "y",
-					},
-					{
-						Literal: "z",
-					},
-				},
-			},
-		},
-		{
-			grammar: `
-main:
-  a:"x"* "z"? "p"
-`,
-			text: `xxp`,
-			expected: &Node{
-				Name: "a",
-				Values: []*Value{
-					{
-						Literal: "x",
-					},
-					{
-						Literal: "x",
-					},
-					{
-						Literal: "p",
-					},
-				},
+			text: `5 + 4`,
+			expected: []RuleKey{
+				{"expr", "add"},
 			},
 		},
 	}
@@ -176,7 +78,10 @@ main:
 			p, err := New(strings.NewReader(tc.grammar), true)
 			require.NoError(t, err)
 
-			node, err := p.Parse(strings.NewReader(tc.text))
+			tk, err := tokens.New(tokenDef, tc.text)
+			require.NoError(t, err)
+
+			node, err := p.Parse(tk)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, node)
 		})
