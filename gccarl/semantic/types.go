@@ -4,10 +4,9 @@ import (
 	"fmt"
 
 	"github.com/carlmango11/gccarl/gccarl/ast"
-	"github.com/carlmango11/gccarl/gccarl/parser"
 )
 
-type VarName parser.Identifier
+type VarName ast.Identifier
 
 type TypeName string
 type FuncName string

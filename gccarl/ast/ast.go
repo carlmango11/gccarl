@@ -1,9 +1,5 @@
 package ast
 
-import (
-	"github.com/carlmango11/gccarl/gccarl/parser"
-)
-
 type Program struct {
 	Imports  []*Import
 	FuncDefs []*FuncDef
@@ -11,17 +7,17 @@ type Program struct {
 }
 
 type Import struct {
-	Name parser.Identifier
+	Name Identifier
 }
 
 type RawType struct {
-	Type    parser.Identifier
+	Type    Identifier
 	Pointer *RawType
 }
 
 type ParamDef struct {
 	Type *TypeDef
-	Name parser.Identifier
+	Name Identifier
 }
 
 type Expr struct {
@@ -32,7 +28,7 @@ type Expr struct {
 }
 
 type Cast struct {
-	To   parser.Identifier
+	To   Identifier
 	Expr *Expr
 }
 
@@ -54,13 +50,13 @@ type Array struct {
 }
 
 type Var struct {
-	Name    parser.Identifier
+	Name    Identifier
 	Indexed bool
 	Index   int
 }
 
 type VarAccess struct {
-	Name  parser.Identifier
+	Name  Identifier
 	Index *int
 	Deref bool // todo
 }
@@ -72,7 +68,7 @@ type TypeDef struct {
 
 type FuncDef struct {
 	ReturnType *TypeDef
-	Name       parser.Identifier
+	Name       Identifier
 	Params     []*ParamDef
 	Statements []*Statement
 	ReturnExpr *Expr
@@ -81,7 +77,7 @@ type FuncDef struct {
 type Dec struct {
 	Type *TypeDef
 	Size int
-	Name parser.Identifier
+	Name Identifier
 }
 
 type Statement struct {
@@ -101,7 +97,9 @@ type Assign struct {
 	Expr *Expr
 }
 
+type Identifier string
+
 type FuncCall struct {
-	Name   parser.Identifier
+	Name   Identifier
 	Params []*Expr
 }

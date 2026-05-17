@@ -2,6 +2,7 @@ package ast
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/carlmango11/gccarl/gccarl/parser"
 )
@@ -10,7 +11,7 @@ func Build(n *parser.Node) (*Program, error) {
 	a := &Program{}
 
 	for _, v := range n.Values {
-		switch v.Node.Name {
+		switch v.Node.Key.Option {
 		case "include":
 		case "func-def":
 			f, err := toFuncDef(v.Node)
@@ -33,16 +34,16 @@ func toFuncDef(node *parser.Node) (*FuncDef, error) {
 		return nil, err
 	}
 
-	funcName := node.Values[1].Identifier
+	funcName := node.Values[1].Token.Val
 
 	f := &FuncDef{
-		Name: funcName,
+		Name: Identifier(funcName),
 		ReturnType: &TypeDef{
 			Type: retType,
 		},
 	}
 
-	if node.Values[3].Node != nil && node.Values[3].Node.Name == "params" {
+	if node.Values[3].Node != nil && node.Values[3].Node.Key.Option == "params" {
 		for i, v := range node.Values[3].Node.Values {
 			paramNode := v.Node
 			if i > 0 {
@@ -64,7 +65,7 @@ func toFuncDef(node *parser.Node) (*FuncDef, error) {
 			continue
 		}
 
-		switch n.Name {
+		switch n.Key.Option {
 		case "return":
 			expr, err := toExpr(n.Values[1].Node)
 			if err != nil {
@@ -108,7 +109,7 @@ func toParamDef(n *parser.Node) (*ParamDef, error) {
 }
 
 func toStatement(n *parser.Node) (*Statement, error) {
-	switch n.Name {
+	switch n.Key.Option {
 	case "var-dec":
 		panic("impl")
 	case "dec-assign":
@@ -131,12 +132,12 @@ func toStatement(n *parser.Node) (*Statement, error) {
 		}, nil
 	}
 
-	return nil, fmt.Errorf("unknown node: %s", n.Name)
+	return nil, fmt.Errorf("unknown node: %s", n.Key.Option)
 }
 
 func toFuncCall(vs []*parser.Value) (*FuncCall, error) {
 	fc := &FuncCall{
-		Name: vs[0].Identifier,
+		Name: Identifier(vs[0].Token.Val),
 	}
 
 	for i, p := range vs[2].Node.Values {
@@ -176,10 +177,15 @@ func toAssign(vs []*parser.Value) (*Assign, error) {
 func toValue(n *parser.Node) (*Value, error) {
 	val := n.Values[0]
 
-	switch n.Name {
+	switch n.Key.Option {
 	case "int":
+		num, err := strconv.Atoi(val.Token.Val)
+		if err != nil {
+			return nil, err
+		}
+
 		return &Value{
-			Int: &val.Number,
+			Int: &num,
 		}, nil
 	case "variable":
 		v, err := toVariable(n.Values[0].Node)
@@ -200,8 +206,10 @@ func toValue(n *parser.Node) (*Value, error) {
 	//		Str: s,
 	//	}, nil
 	case "char":
+		ch := n.Values[1].Token.Val[0]
+
 		return &Value{
-			Char: &n.Values[1].Char,
+			Char: &ch,
 		}, nil
 	case "array":
 		a, err := toArray(n.Values[0].Node)
@@ -213,7 +221,7 @@ func toValue(n *parser.Node) (*Value, error) {
 			Array: a,
 		}, nil
 	default:
-		panic(fmt.Sprintf("unknown node: %s", n.Name))
+		panic(fmt.Sprintf("unknown node: %s", n.Key.Option))
 	}
 }
 
@@ -225,12 +233,17 @@ func toVariable(n *parser.Node) (*Var, error) {
 
 		arrayIndexNode := n.Values[1].Node
 		if len(arrayIndexNode.Values) == 3 {
-			index = arrayIndexNode.Values[2].Number
+			num, err := strconv.Atoi(arrayIndexNode.Values[2].Token.Val)
+			if err != nil {
+				return nil, err
+			}
+
+			index = num
 		}
 	}
 
 	return &Var{
-		Name:    n.Values[0].Identifier,
+		Name:    Identifier(n.Values[0].Token.Val),
 		Indexed: array,
 		Index:   index,
 	}, nil
@@ -261,18 +274,18 @@ func toArray(n *parser.Node) (*Array, error) {
 }
 
 func toExpr(n *parser.Node) (*Expr, error) {
-	switch n.Name {
+	switch n.Key.Option {
 	case "comp":
 		return handleCompExpr(n.Values[0].Node)
 	case "sub-expr":
 		return handleSubExpr(n.Values[0].Node)
 	default:
-		return nil, fmt.Errorf("unknown expr type: %s", n.Name)
+		return nil, fmt.Errorf("unknown expr type: %s", n.Key.Option)
 	}
 }
 
 func handleCompExpr(n *parser.Node) (*Expr, error) {
-	switch n.Name {
+	switch n.Key.Option {
 	case "value":
 		v, err := toValue(n.Values[0].Node)
 		if err != nil {
@@ -292,12 +305,12 @@ func handleCompExpr(n *parser.Node) (*Expr, error) {
 			FuncCall: fc,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unknown expr type: %s", n.Name)
+		return nil, fmt.Errorf("unknown expr type: %s", n.Key.Option)
 	}
 }
 
 func handleSubExpr(n *parser.Node) (*Expr, error) {
-	switch n.Name {
+	switch n.Key.Option {
 	case "value":
 		v, err := toValue(n.Values[0].Node)
 		if err != nil {
@@ -317,7 +330,7 @@ func handleSubExpr(n *parser.Node) (*Expr, error) {
 			FuncCall: fc,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unknown expr type: %s", n.Name)
+		return nil, fmt.Errorf("unknown expr type: %s", n.Key.Option)
 	}
 }
 
@@ -378,15 +391,15 @@ func toType(v *parser.Value) (*RawType, error) {
 		return nil, fmt.Errorf("expected type, got %+v", v)
 	}
 
-	if v.Node.Name == "custom" {
+	if v.Node.Key.Option == "custom" {
 		return &RawType{
-			Type: v.Node.Values[0].Identifier,
+			Type: Identifier(v.Node.Values[0].Token.Val),
 		}, nil
 	}
 
 	// tood pointer
 
 	return &RawType{
-		Type: parser.Identifier(v.Node.Values[0].Literal),
+		Type: Identifier(v.Node.Values[0].Token.Val),
 	}, nil
 }

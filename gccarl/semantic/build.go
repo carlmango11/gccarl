@@ -4,19 +4,18 @@ import (
 	"fmt"
 
 	"github.com/carlmango11/gccarl/gccarl/ast"
-	"github.com/carlmango11/gccarl/gccarl/parser"
 )
 
 type builder struct {
-	vars map[parser.Identifier]PrimitiveType
+	vars map[ast.Identifier]PrimitiveType
 }
 
-func Build(ast *ast.Program) (*Program, error) {
+func Build(program *ast.Program) (*Program, error) {
 	b := &builder{
-		vars: make(map[parser.Identifier]PrimitiveType),
+		vars: make(map[ast.Identifier]PrimitiveType),
 	}
 
-	return b.build(ast)
+	return b.build(program)
 }
 
 func (b *builder) build(p *ast.Program) (*Program, error) {
@@ -44,7 +43,7 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 		return nil, err
 	}
 
-	locals := map[parser.Identifier]Type{}
+	locals := map[ast.Identifier]Type{}
 
 	for _, s := range f.Statements {
 		dec := s.Dec
@@ -105,7 +104,7 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 	}, nil
 }
 
-func (b *builder) declareVar(vars map[parser.Identifier]Type, dec *ast.Dec) error {
+func (b *builder) declareVar(vars map[ast.Identifier]Type, dec *ast.Dec) error {
 	_, ok := vars[dec.Name]
 	if ok {
 		return fmt.Errorf("variable %s already declared", dec.Name)
@@ -155,7 +154,7 @@ func (b *builder) toParamDec(p *ast.ParamDef) (*ParamDef, error) {
 	}, nil
 }
 
-func (b *builder) toStatement(vars map[parser.Identifier]Type, s *ast.Statement) (*Statement, error) {
+func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*Statement, error) {
 	switch {
 	case s.DecAssign != nil:
 		a, err := b.toAssign(vars, s.DecAssign.Assign)
@@ -189,7 +188,7 @@ func (b *builder) toStatement(vars map[parser.Identifier]Type, s *ast.Statement)
 	panic("invalid statement")
 }
 
-func (b *builder) toAssign(vars map[parser.Identifier]Type, a *ast.Assign) (*Assign, error) {
+func (b *builder) toAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*Assign, error) {
 	v, ok := vars[a.Var.Name]
 	if !ok {
 		v, ok = vars[a.Var.Name]
