@@ -1,55 +1,62 @@
 package compiler
 
 import (
-	"github.com/carlmango11/gccarl/gccarl/ast"
-	"github.com/carlmango11/gccarl/gccarl/parser"
+	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
 type Offset int
 
 type Var struct {
-	name   parser.Identifier
-	typ    ast.Type
+	name   semantic.VarName
 	offset Offset
 }
 
-type LocalVars struct {
-	vars []*Var
+type Vars struct {
+	vars map[semantic.VarName]*Var
+	size int
 }
 
-func (lv *LocalVars) Add(name parser.Identifier, t ast.Type) Offset {
-	var current Offset
+func NewVars() *Vars {
+	return &Vars{
+		vars: make(map[semantic.VarName]*Var),
+	}
+}
 
-	if len(lv.vars) > 0 {
-		current = lv.vars[len(lv.vars)-1].offset
+func (lv *Vars) Add(name semantic.VarName, size int) Offset {
+	offset := Offset(lv.size + size)
+
+	lv.vars[name] = &Var{
+		name:   name,
+		offset: offset,
 	}
 
-	offset := current + Offset(typeSize(t))
-
-	lv.vars = append(lv.vars, &Var{
-		name:   name,
-		typ:    t,
-		offset: offset,
-	})
+	lv.size += size
 
 	return offset
 }
 
-func (lv *LocalVars) Offset(i parser.Identifier) (Offset, bool) {
-	for _, v := range lv.vars {
-		if v.name == i {
-			return v.offset, true
-		}
+func (lv *Vars) Offset(id semantic.VarName) (Offset, bool) {
+	v, ok := lv.vars[id]
+	if !ok {
+		return 0, false
 	}
 
-	return 0, false
+	return v.offset, true
 }
 
-func (lv *LocalVars) Size() int {
-	var total int
-	for _, v := range lv.vars {
-		total += typeSize(v.typ)
-	}
+//func (lv *Vars) ArrayOffset(id semantic.VarName, idx int) (Offset, bool) {
+//	v, ok := lv.vars[id]
+//	if !ok {
+//		return 0, false
+//	}
+//
+//	size := typeSize(v.typ)
+//	arrayOffset := size * idx
+//	offset := v.offset + Offset(arrayOffset)
+//
+//	return offset, true
+//}
 
-	return total
+func (lv *Vars) Size() int {
+	return lv.size
 }

@@ -3,35 +3,34 @@ package compiler
 import (
 	"fmt"
 
-	"github.com/carlmango11/gccarl/gccarl/ast"
-	"github.com/carlmango11/gccarl/gccarl/parser"
+	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
 var exitRoutine = []Instr{
 	"exit:",
-	"push rbp",
-	"mov rbp, rsp",
-	"mov rax, 60",
-	"syscall",
-	"pop rbp",
-	"ret",
+	"\tpush rbp",
+	"\tmov rbp, rsp",
+	"\tmov rax, 60",
+	"\tsyscall",
+	"\tpop rbp",
+	"\tret",
 }
 
 var callPrint = []Instr{
-	"mov rdi, 1",
-	"lea rsi, [rel msg]",
-	"mov rdx, msg_size",
-	"call print",
+	"\tmov rdi, 1",
+	"\tlea rsi, [rel msg]",
+	"\tmov rdx, msg_size",
+	"\tcall print",
 }
 
 var printRoutine = []Instr{
 	"print:",
-	"push rbp",
-	"mov rbp, rsp",
-	"mov rax, 1",
-	"syscall",
-	"pop rbp",
-	"ret",
+	"\tpush rbp",
+	"\tmov rbp, rsp",
+	"\tmov rax, 1",
+	"\tsyscall",
+	"\tpop rbp",
+	"\tret",
 }
 
 var data = []Instr{
@@ -40,64 +39,70 @@ var data = []Instr{
 	"msg_size equ $ - msg",
 }
 
-func compileFuncDef(f *ast.FuncDef) ([]Instr, error) {
-	funcInstrs := addInstr(nil, "%s:", f.Name)
+func (c *Compiler) compileFuncDef(f *semantic.FuncDef) error {
+	c.addInstr("%s:", f.Name)
 
-	bodyInstrs := addInstr(nil, "push rbp")
-	bodyInstrs = addInstr(bodyInstrs, "mov rbp, rsp")
+	c.inFunc = true
+	defer func() {
+		c.inFunc = false
+	}()
 
-	var paramsSize int
+	c.addInstr("push rbp")
+	c.addInstr("mov rbp, rsp")
+
+	var stackSize int
 	for _, p := range f.Params {
-		paramsSize += typeSize(p.Type)
+		switch p.Type.Kind {
+		case semantic.KindPrimitive:
+			stackSize += p.Type.Prim.Size()
+		default:
+			panic(fmt.Sprintf("unknown type %v", p.Type))
+		}
 	}
 
-	if paramsSize > 0 {
-		bodyInstrs = addInstr(bodyInstrs, "sub rsp, %d", paramsSize)
+	locals := NewVars()
+
+	for name, typ := range f.Locals {
+		switch typ.Kind {
+		case semantic.KindPrimitive:
+			locals.Add(name, typ.Prim.Size())
+			stackSize += typ.Prim.Size()
+		case semantic.KindArray:
+			locals.Add(name, typ.Prim.Size())
+			stackSize += typ.Prim.Size() // TODO wrong
+		default:
+			panic(fmt.Sprintf("unknown type %v", typ))
+		}
 	}
 
-	locals := &LocalVars{}
+	if stackSize > 0 {
+		c.addInstr("sub rsp, %d", stackSize)
+	}
 
-	paramsInstrs, err := handleParamsDef(f.Params, locals)
+	err := c.handleParamsDef(f.Params, locals)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	bodyInstrs = append(bodyInstrs, paramsInstrs...)
-
-	var allStatementInstrs []Instr
 	for _, s := range f.Statements {
-		statementInstrs, err := compileStatement(s, locals)
+		err := c.compileStatement(s, locals)
 		if err != nil {
-			return nil, err
-		}
-
-		for _, instr := range statementInstrs {
-			allStatementInstrs = append(allStatementInstrs, instr)
+			return err
 		}
 	}
-
-	bodyInstrs = addInstr(bodyInstrs, "sub rsp, %d", locals.Size())
-
-	bodyInstrs = append(bodyInstrs, allStatementInstrs...)
 
 	if f.ReturnExpr != nil {
-		returnInstrs, err := compileExpr(f.ReturnExpr, locals, RegEAX)
+		_, _, err := c.compileExpr(f.ReturnExpr, locals)
 		if err != nil {
-			return nil, err
+			return err
 		}
-
-		bodyInstrs = append(bodyInstrs, returnInstrs...)
 	}
 
-	bodyInstrs = addInstr(bodyInstrs, "mov rsp, rbp")
-	bodyInstrs = addInstr(bodyInstrs, "pop rbp")
-	bodyInstrs = addInstr(bodyInstrs, "ret")
+	c.addInstr("mov rsp, rbp")
+	c.addInstr("pop rbp")
+	c.addInstr("ret")
 
-	for _, instr := range bodyInstrs {
-		funcInstrs = append(funcInstrs, "\t"+instr)
-	}
-
-	return funcInstrs, nil
+	return nil
 }
 
 var paramRegisters = []Register{
@@ -108,8 +113,8 @@ var intParamRegisters = []Register{
 	RegEDI, RegESI, RegEDX,
 }
 
-func handleIntParam(instrs []Instr, n int, name parser.Identifier, locals *LocalVars) ([]Instr, error) {
-	offset := locals.Add(name, ast.TypeInt)
+func (c *Compiler) handleIntParam(n int, name semantic.VarName, locals *Vars) {
+	offset := locals.Add(name, Size64)
 
 	if n >= len(intParamRegisters) {
 		panic("not implemented")
@@ -117,50 +122,38 @@ func handleIntParam(instrs []Instr, n int, name parser.Identifier, locals *Local
 
 	reg := intParamRegisters[n]
 
-	return addInstr(instrs, "mov dword [rbp-%d], %s", offset, reg), nil
+	c.addInstr("mov qword [rbp-%d], %s", offset, reg)
 }
 
-func handleParamsDef(ps []*ast.ParamDef, locals *LocalVars) ([]Instr, error) {
-	var instrs []Instr
-
+func (c *Compiler) handleParamsDef(ps []*semantic.ParamDef, locals *Vars) error {
 	var standardC int
-	var err error
 
 	for _, p := range ps {
-		switch p.Type {
-		case ast.TypeInt:
-			instrs, err = handleIntParam(instrs, standardC, p.Name, locals)
-			if err != nil {
-				return nil, err
-			}
-
+		if p.Type.IsIntParamType() {
+			c.handleIntParam(standardC, p.Name, locals)
 			standardC++
-		default:
-			return nil, fmt.Errorf("unknown type: %v", p.Type)
 		}
 	}
 
-	return instrs, nil
+	return nil
 }
 
-func functionCall(fc *ast.FuncCall, locals *LocalVars) ([]Instr, error) {
-	var instrs []Instr
+func (c *Compiler) functionCall(fc *semantic.FuncCall, locals *Vars) error {
+	for i, expr := range fc.Args {
+		resultReg, _, err := c.compileExpr(expr, locals)
+		if err != nil {
+			return err
+		}
 
-	for i, expr := range fc.Params {
-		if i >= len(intParamRegisters) {
+		if i >= len(paramRegisters) {
 			panic("not implemented")
 		}
 
-		reg := intParamRegisters[i]
+		argReg := paramRegisters[i]
 
-		exprInstrs, err := compileExpr(expr, locals, reg)
-		if err != nil {
-			return nil, err
-		}
-
-		instrs = append(instrs, exprInstrs...)
+		c.addInstr("mov %s, %s", argReg, resultReg)
 	}
 
-	instrs = addInstr(instrs, "call %s", fc.Name)
-	return instrs, nil
+	c.addInstr("call %s", fc.Func)
+	return nil
 }

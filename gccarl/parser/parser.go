@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -20,6 +21,7 @@ type Value struct {
 	Literal    string
 	Identifier Identifier
 	Number     int
+	Char       byte
 }
 
 type Parser struct {
@@ -188,6 +190,10 @@ func (p *Parser) parseSingleToken(sc *Scanner, token *grammar.Token) (*Value, er
 		return p.parseIdentifier(sc)
 	case grammar.TTNumber:
 		return p.parseNumber(sc)
+	case grammar.TTChar:
+		return p.parseChar(sc)
+	case grammar.TTString:
+		return nil, errors.New("impl")
 	}
 
 	panic("invalid token type")
@@ -236,6 +242,17 @@ func (p *Parser) parseIdentifier(sc *Scanner) (*Value, error) {
 
 	return &Value{
 		Identifier: iden,
+	}, nil
+}
+
+func (p *Parser) parseChar(sc *Scanner) (*Value, error) {
+	ch, err := sc.ParseChar()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Value{
+		Char: ch,
 	}, nil
 }
 

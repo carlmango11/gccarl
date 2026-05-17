@@ -7,66 +7,93 @@ import (
 type Program struct {
 	Imports  []*Import
 	FuncDefs []*FuncDef
-	Dec      []*Declaration
+	Dec      []*Dec
 }
 
 type Import struct {
 	Name parser.Identifier
 }
 
-type Declaration struct {
+type RawType struct {
+	Type    parser.Identifier
+	Pointer *RawType
 }
 
-type Type int
-
-const (
-	TypeVoid Type = iota
-	TypeInt
-)
-
 type ParamDef struct {
-	Type Type
+	Type *TypeDef
 	Name parser.Identifier
 }
 
 type Expr struct {
-	Add *AddExpr
-	Val *Value
-}
-
-type AddExpr struct {
-	Val  *Value
-	Expr *Expr
-}
-
-type Value struct {
-	Int int
-	Var *Var
-}
-
-type Var struct {
-	Name  parser.Identifier
-	Index *int
-}
-
-type FuncDef struct {
-	Name       parser.Identifier
-	Params     []*ParamDef
-	Statements []*Statement
-	ReturnType Type
-	ReturnExpr *Expr
-}
-
-type Statement struct {
-	VarDec   *VarDec
-	Assign   *Assign
+	Add      *AddExpr
+	Val      *Value
+	Cast     *Cast
 	FuncCall *FuncCall
 }
 
-type VarDec struct {
-	Type Type
-	Var  *Var
+type Cast struct {
+	To   parser.Identifier
 	Expr *Expr
+}
+
+type AddExpr struct {
+	Expr1 *Expr
+	Expr2 *Expr
+}
+
+type Value struct {
+	Int   *int
+	Var   *Var
+	Str   *string
+	Char  *byte
+	Array *Array
+}
+
+type Array struct {
+	Entries []*Expr
+}
+
+type Var struct {
+	Name    parser.Identifier
+	Indexed bool
+	Index   int
+}
+
+type VarAccess struct {
+	Name  parser.Identifier
+	Index *int
+	Deref bool // todo
+}
+
+type TypeDef struct {
+	Type  *RawType
+	Array bool
+}
+
+type FuncDef struct {
+	ReturnType *TypeDef
+	Name       parser.Identifier
+	Params     []*ParamDef
+	Statements []*Statement
+	ReturnExpr *Expr
+}
+
+type Dec struct {
+	Type *TypeDef
+	Size int
+	Name parser.Identifier
+}
+
+type Statement struct {
+	Dec       *Dec
+	DecAssign *DecAssign
+	Assign    *Assign
+	Expr      *Expr
+}
+
+type DecAssign struct {
+	Dec    *Dec
+	Assign *Assign
 }
 
 type Assign struct {

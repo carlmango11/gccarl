@@ -1,4 +1,4 @@
-package program
+package semantic
 
 import (
 	"fmt"
@@ -31,7 +31,8 @@ func (b *builder) build(p *ast.Program) (*Program, error) {
 	}
 
 	return &Program{
-		Imports: p.Imports,
+		Imports:  p.Imports,
+		FuncDefs: funcDecs,
 	}, nil
 }
 
@@ -51,7 +52,7 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 			dec = s.DecAssign.Dec
 		}
 
-		if s.Dec == nil {
+		if dec == nil {
 			continue
 		}
 
@@ -81,14 +82,23 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 		statements = append(statements, s)
 	}
 
-	returnExpr, err := b.toExpr(f.ReturnExpr)
-	if err != nil {
-		return nil, err
+	var returnExpr *Expr
+	if f.ReturnExpr != nil {
+		returnExpr, err = b.toExpr(f.ReturnExpr)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	localsCast := map[VarName]Type{}
+	for k, v := range locals {
+		localsCast[VarName(k)] = v
 	}
 
 	return &FuncDef{
 		ReturnType: returnType,
 		Name:       FuncName(f.Name),
+		Locals:     localsCast,
 		Params:     paramDefs,
 		Statements: statements,
 		ReturnExpr: returnExpr,
@@ -111,16 +121,26 @@ func (b *builder) declareVar(vars map[parser.Identifier]Type, dec *ast.Dec) erro
 }
 
 func (b *builder) toType(i *ast.TypeDef) (Type, error) {
+	kind := KindPrimitive
+	if i.Array {
+		kind = KindArray
+	}
+
+	var prim PrimitiveType
 	switch i.Type.Type {
 	case "int":
-		return Type{
-			Kind: KindPrimitive,
-			Prim: PrimInt32,
-		}, nil
+		prim = PrimInt32
+	case "char":
+		prim = PrimChar
 	default:
 		// custom
 		panic("impl")
 	}
+
+	return Type{
+		Kind: kind,
+		Prim: prim,
+	}, nil
 }
 
 func (b *builder) toParamDec(p *ast.ParamDef) (*ParamDef, error) {
@@ -219,14 +239,51 @@ func (b *builder) toExpr(expr *ast.Expr) (*Expr, error) {
 					Int32: int32(*v.Int),
 				},
 			}, nil
+		case v.Char != nil:
+			return &Expr{
+				Type: charType(),
+				Literal: Literal{
+					Char: *v.Char,
+				},
+			}, nil
+		case v.Array != nil:
+			return b.toArrayExpr(v.Array)
 		}
 	}
 
 	panic("invalid expression")
 }
 
+func (b *builder) toArrayExpr(array *ast.Array) (*Expr, error) {
+	var typ Type
+
+	var vals []*Expr
+	for _, v := range array.Entries {
+		val, err := b.toExpr(v)
+		if err != nil {
+			return nil, err
+		}
+
+		typ = val.Type
+		// TODO: check
+
+		vals = append(vals, val)
+	}
+
+	return &Expr{
+		Type: Type{Kind: KindArray, Prim: typ.Prim},
+		Array: &Array{
+			Vals: vals,
+		},
+	}, nil
+}
+
 func int32Type() Type {
 	return Type{Kind: KindPrimitive, Prim: PrimInt32}
+}
+
+func charType() Type {
+	return Type{Kind: KindPrimitive, Prim: PrimChar}
 }
 
 func compatibleTypes(t1, t2 Type) bool {

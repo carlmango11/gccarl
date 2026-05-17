@@ -26,14 +26,20 @@ func Build(n *parser.Node) (*Program, error) {
 }
 
 func toFuncDef(node *parser.Node) (*FuncDef, error) {
-	retType, err := toType(node.Values[0])
+	typeNode := node.Values[0]
+
+	retType, err := toType(typeNode)
 	if err != nil {
 		return nil, err
 	}
 
+	funcName := node.Values[1].Identifier
+
 	f := &FuncDef{
-		Name:       node.Values[1].Identifier,
-		ReturnType: retType,
+		Name: funcName,
+		ReturnType: &TypeDef{
+			Type: retType,
+		},
 	}
 
 	if node.Values[3].Node != nil && node.Values[3].Node.Name == "params" {
@@ -80,27 +86,39 @@ func toFuncDef(node *parser.Node) (*FuncDef, error) {
 }
 
 func toParamDef(n *parser.Node) (*ParamDef, error) {
-	paramType, err := toType(n.Values[0])
+	typ, err := toType(n.Values[0])
 	if err != nil {
 		return nil, err
 	}
 
+	v, err := toVariable(n.Values[1].Node)
+	if err != nil {
+		return nil, err
+	}
+
+	typeDef := &TypeDef{
+		Type:  typ,
+		Array: v.Indexed,
+	}
+
 	return &ParamDef{
-		Type: paramType,
-		Name: n.Values[1].Identifier,
+		Type: typeDef,
+		Name: v.Name,
 	}, nil
 }
 
 func toStatement(n *parser.Node) (*Statement, error) {
 	switch n.Name {
+	case "var-dec":
+		panic("impl")
 	case "dec-assign":
-		vd, err := toVarDec(n.Values[0].Node.Values)
+		vd, err := toDecAssign(n.Values[0].Node.Values)
 		if err != nil {
 			return nil, err
 		}
 
 		return &Statement{
-			VarDec: vd,
+			DecAssign: vd,
 		}, nil
 	case "assign":
 		a, err := toAssign(n.Values)
@@ -110,15 +128,6 @@ func toStatement(n *parser.Node) (*Statement, error) {
 
 		return &Statement{
 			Assign: a,
-		}, nil
-	case "func-call":
-		fc, err := toFuncCall(n.Values)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Statement{
-			FuncCall: fc,
 		}, nil
 	}
 
@@ -165,16 +174,12 @@ func toAssign(vs []*parser.Value) (*Assign, error) {
 }
 
 func toValue(n *parser.Node) (*Value, error) {
-	if len(n.Values) != 1 {
-		return nil, fmt.Errorf("invalid number of values: %d", len(n.Values))
-	}
-
 	val := n.Values[0]
 
 	switch n.Name {
 	case "int":
 		return &Value{
-			Int: val.Number,
+			Int: &val.Number,
 		}, nil
 	case "variable":
 		v, err := toVariable(n.Values[0].Node)
@@ -185,35 +190,89 @@ func toValue(n *parser.Node) (*Value, error) {
 		return &Value{
 			Var: v,
 		}, nil
-	default:
-		return nil, fmt.Errorf("unknown variable: %s", n.Name)
-	}
-}
-
-func toVariable(n *parser.Node) (*Var, error) {
-	v := &Var{
-		Name: n.Values[0].Identifier,
-	}
-
-	if len(n.Values) == 2 {
-		idx := n.Values[1].Node.Values[1].Number
-		v.Index = &idx
-	}
-
-	return v, nil
-}
-
-func toExpr(n *parser.Node) (*Expr, error) {
-	switch n.Name {
-	case "add":
-		add, err := toAddExpr(n.Values)
+	//case "str":
+	//	s, err := toStr(n.Values[0].Node)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	return &Value{
+	//		Str: s,
+	//	}, nil
+	case "char":
+		return &Value{
+			Char: &n.Values[1].Char,
+		}, nil
+	case "array":
+		a, err := toArray(n.Values[0].Node)
 		if err != nil {
 			return nil, err
 		}
 
-		return &Expr{
-			Add: add,
+		return &Value{
+			Array: a,
 		}, nil
+	default:
+		panic(fmt.Sprintf("unknown node: %s", n.Name))
+	}
+}
+
+func toVariable(n *parser.Node) (*Var, error) {
+	var array bool
+	var index int
+	if len(n.Values) == 2 {
+		array = true
+
+		arrayIndexNode := n.Values[1].Node
+		if len(arrayIndexNode.Values) == 3 {
+			index = arrayIndexNode.Values[2].Number
+		}
+	}
+
+	return &Var{
+		Name:    n.Values[0].Identifier,
+		Indexed: array,
+		Index:   index,
+	}, nil
+}
+
+func toArray(n *parser.Node) (*Array, error) {
+	a := &Array{}
+
+	if len(n.Values) == 2 {
+		return a, nil
+	}
+
+	for i, v := range n.Values[1].Node.Values {
+		exprNode := v.Node
+		if i > 0 {
+			exprNode = v.Node.Values[1].Node
+		}
+
+		expr, err := toExpr(exprNode)
+		if err != nil {
+			return nil, err
+		}
+
+		a.Entries = append(a.Entries, expr)
+	}
+
+	return a, nil
+}
+
+func toExpr(n *parser.Node) (*Expr, error) {
+	switch n.Name {
+	case "comp":
+		return handleCompExpr(n.Values[0].Node)
+	case "sub-expr":
+		return handleSubExpr(n.Values[0].Node)
+	default:
+		return nil, fmt.Errorf("unknown expr type: %s", n.Name)
+	}
+}
+
+func handleCompExpr(n *parser.Node) (*Expr, error) {
+	switch n.Name {
 	case "value":
 		v, err := toValue(n.Values[0].Node)
 		if err != nil {
@@ -223,29 +282,63 @@ func toExpr(n *parser.Node) (*Expr, error) {
 		return &Expr{
 			Val: v,
 		}, nil
+	case "func-call":
+		fc, err := toFuncCall(n.Values)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Expr{
+			FuncCall: fc,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown expr type: %s", n.Name)
+	}
+}
+
+func handleSubExpr(n *parser.Node) (*Expr, error) {
+	switch n.Name {
+	case "value":
+		v, err := toValue(n.Values[0].Node)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Expr{
+			Val: v,
+		}, nil
+	case "func-call":
+		fc, err := toFuncCall(n.Values)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Expr{
+			FuncCall: fc,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unknown expr type: %s", n.Name)
 	}
 }
 
 func toAddExpr(vs []*parser.Value) (*AddExpr, error) {
-	val, err := toValue(vs[0].Node)
+	e1, err := toExpr(vs[0].Node)
 	if err != nil {
 		return nil, err
 	}
 
-	expr, err := toExpr(vs[2].Node)
+	e2, err := toExpr(vs[2].Node)
 	if err != nil {
 		return nil, err
 	}
 
 	return &AddExpr{
-		Val:  val,
-		Expr: expr,
+		Expr1: e1,
+		Expr2: e2,
 	}, nil
 }
 
-func toVarDec(vs []*parser.Value) (*VarDec, error) {
+func toDecAssign(vs []*parser.Value) (*DecAssign, error) {
 	typ, err := toType(vs[0])
 	if err != nil {
 		return nil, err
@@ -261,22 +354,39 @@ func toVarDec(vs []*parser.Value) (*VarDec, error) {
 		return nil, err
 	}
 
-	return &VarDec{
-		Type: typ,
-		Var:  v,
-		Expr: expr,
+	return &DecAssign{
+		Dec: &Dec{
+			Type: &TypeDef{
+				Type:  typ,
+				Array: v.Indexed,
+			},
+			Name: v.Name,
+			Size: v.Index,
+		},
+		Assign: &Assign{
+			Var: &Var{
+				Name: v.Name,
+			},
+			Expr: expr,
+		},
 	}, nil
 }
 
-func toType(v *parser.Value) (Type, error) {
+// "type" node
+func toType(v *parser.Value) (*RawType, error) {
 	if v.Node == nil {
-		return TypeVoid, fmt.Errorf("expected type, got %+v", v)
+		return nil, fmt.Errorf("expected type, got %+v", v)
 	}
 
-	switch v.Node.Values[0].Literal {
-	case "int":
-		return TypeInt, nil
-	default:
-		return TypeVoid, fmt.Errorf("unknown type: %s", v.Node.Values[0].Literal)
+	if v.Node.Name == "custom" {
+		return &RawType{
+			Type: v.Node.Values[0].Identifier,
+		}, nil
 	}
+
+	// tood pointer
+
+	return &RawType{
+		Type: parser.Identifier(v.Node.Values[0].Literal),
+	}, nil
 }

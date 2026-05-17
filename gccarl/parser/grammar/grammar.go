@@ -18,6 +18,8 @@ const (
 	TTRule
 	TTIdentifier
 	TTNumber
+	TTString
+	TTChar
 )
 
 func (t TokenType) String() string {
@@ -30,6 +32,10 @@ func (t TokenType) String() string {
 		return "id"
 	case TTNumber:
 		return "num"
+	case TTString:
+		return "str"
+	case TTChar:
+		return "char"
 	default:
 		return "?"
 	}
@@ -189,6 +195,10 @@ func parseToken(s string) *Token {
 		t.Type = TTIdentifier
 	case s == "NUM":
 		t.Type = TTNumber
+	case s == "CHAR":
+		t.Type = TTChar
+	case s == "STR":
+		t.Type = TTString
 	case isLiteral(s):
 		t.Type = TTLiteral
 		t.Literal = s[1 : len(s)-1]

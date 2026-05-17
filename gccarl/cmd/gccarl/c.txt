@@ -25,28 +25,49 @@ comma-param-def:
     param:"," param-def
     
 param-def:
-    param:type IDEN
+    param:type variable
 
 value:
     int:NUM
     variable:variable
+    str:STR
+    char:"'" CHAR "'"
+    array:array-val
+    cast:"(" type ")" value
+
+array-val:
+    array-val:"{" array-entries? "}"
+
+array-entries:
+    entries:expr comma-expr*
+
+comma-expr:
+    comma-expr:"," expr
 
 variable:
     variable:IDEN array-index?
 
 array-index:
-    array-index:"[" NUM "]"
+    array-index:"[" NUM? "]"
 
 expr:
-    add:value "+" expr
-    sub:value "-" expr
-    parens:"(" expr ")"
+    sub-expr:sub-expr
+    comp:comp-expr
+
+sub-expr:
     value:value
+    parens:"(" expr ")"
+    func-call:IDEN "(" params? ")"
+
+comp-expr:
+    add:sub-expr "+" expr
+    sub:sub-expr "-" expr
 
 statement:
     dec-assign:dec-assign
+    var-dec:type variable
     assign:variable "=" expr
-    func-call:IDEN "(" params? ")"
+    expr:expr
 
 dec-assign:
     assign:type variable "=" expr
@@ -61,3 +82,5 @@ type:
     int:"int"
     char:"char"
     long:"long"
+    custom:IDEN
+    pointer:"*" type

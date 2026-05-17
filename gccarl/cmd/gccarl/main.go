@@ -10,6 +10,7 @@ import (
 	"github.com/carlmango11/gccarl/gccarl/ast"
 	"github.com/carlmango11/gccarl/gccarl/compiler"
 	"github.com/carlmango11/gccarl/gccarl/parser"
+	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
 //go:embed c.txt
@@ -48,7 +49,15 @@ func main() {
 		return
 	}
 
-	c, err := compiler.Compile(astProg)
+	program, err := semantic.Build(astProg)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+
+	cc := compiler.New()
+
+	c, err := cc.Compile(program)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

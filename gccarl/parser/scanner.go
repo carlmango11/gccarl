@@ -97,6 +97,15 @@ func (s *Scanner) ParseNumber() (int64, error) {
 	return strconv.ParseInt(string(all), 10, 64)
 }
 
+func (s *Scanner) ParseChar() (byte, error) {
+	ch, err := s.next()
+	if err != nil {
+		return 0, err
+	}
+
+	return string(ch)[0], nil
+}
+
 func (s *Scanner) ParseIdentifier() (Identifier, error) {
 	s.skipWhitespace()
 
