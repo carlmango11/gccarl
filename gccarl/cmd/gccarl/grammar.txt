@@ -1,0 +1,86 @@
+main:
+  main:include* dec-def*
+
+include:
+    include:"#include" include-iden
+
+include-iden:
+    std-iden:"<" IDEN ">"
+    custom-iden:"\"" IDEN "\""
+
+dec-def:
+    func-def:type IDEN "(" params-def? ")" "{" statement-comma* return? "}"
+    dec-assign:dec-assign
+
+return:
+    return:"return" expr ";"
+
+statement-comma:
+    statement:statement ";"
+
+params-def:
+    params:param-def comma-param-def*
+
+comma-param-def:
+    param:"," param-def
+    
+param-def:
+    param:type variable
+
+value:
+    int:NUM
+    variable:variable
+    str:STR
+    char:"'" CHAR "'"
+    array:array-val
+    cast:"(" type ")" value
+
+array-val:
+    array-val:"{" array-entries? "}"
+
+array-entries:
+    entries:expr comma-expr*
+
+comma-expr:
+    comma-expr:"," expr
+
+variable:
+    variable:IDEN array-index?
+
+array-index:
+    array-index:"[" NUM? "]"
+
+expr:
+    sub-expr:sub-expr
+    comp:comp-expr
+
+sub-expr:
+    value:value
+    parens:"(" expr ")"
+    func-call:IDEN "(" params? ")"
+
+comp-expr:
+    add:sub-expr "+" expr
+    sub:sub-expr "-" expr
+
+statement:
+    dec-assign:dec-assign
+    var-dec:type variable
+    assign:variable "=" expr
+    expr:expr
+
+dec-assign:
+    assign:type variable "=" expr
+
+params:
+    params:expr comma-expr*
+
+comma-expr:
+    comma-expr:"," expr
+
+type:
+    int:"int"
+    char:"char"
+    long:"long"
+    custom:IDEN
+    pointer:"*" type
