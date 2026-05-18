@@ -7,26 +7,32 @@ import (
 type Offset int
 
 type Var struct {
-	name   semantic.VarName
 	offset Offset
 }
 
-type Vars struct {
+type StackVars struct {
 	vars map[semantic.VarName]*Var
 	size int
 }
 
-func NewVars() *Vars {
-	return &Vars{
+func newStackVars() *StackVars {
+	return &StackVars{
 		vars: make(map[semantic.VarName]*Var),
 	}
 }
 
-func (lv *Vars) Add(name semantic.VarName, size int) Offset {
+func (lv *StackVars) Add(size int) Offset {
+	offset := Offset(lv.size + size)
+
+	lv.size += size
+
+	return offset
+}
+
+func (lv *StackVars) AddNamed(name semantic.VarName, size int) Offset {
 	offset := Offset(lv.size + size)
 
 	lv.vars[name] = &Var{
-		name:   name,
 		offset: offset,
 	}
 
@@ -35,7 +41,7 @@ func (lv *Vars) Add(name semantic.VarName, size int) Offset {
 	return offset
 }
 
-func (lv *Vars) Offset(id semantic.VarName) (Offset, bool) {
+func (lv *StackVars) Offset(id semantic.VarName) (Offset, bool) {
 	v, ok := lv.vars[id]
 	if !ok {
 		return 0, false
@@ -57,6 +63,6 @@ func (lv *Vars) Offset(id semantic.VarName) (Offset, bool) {
 //	return offset, true
 //}
 
-func (lv *Vars) Size() int {
+func (lv *StackVars) Size() int {
 	return lv.size
 }

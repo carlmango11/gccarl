@@ -67,7 +67,11 @@ statement:
     dec-assign:dec-assign
     var-dec:type variable
     assign:variable EQUALS expr
+    array-assign:array-assign
     expr:expr
+
+array-assign:
+
 
 dec-assign:
     assign:type variable EQUALS expr

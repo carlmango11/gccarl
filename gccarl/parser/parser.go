@@ -12,6 +12,8 @@ type Node struct {
 	Key         RuleKey
 	Values      []*Value
 	Cardinality grammar.Cardinality
+
+	index int
 }
 
 type RuleKey struct {
@@ -70,6 +72,7 @@ func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
 	}
 
 	for {
+		index := r.Index()
 		token, err := r.Next()
 		if err != nil {
 			if err == io.EOF {
@@ -83,7 +86,7 @@ func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
 			fmt.Printf("token: %s\n", token)
 		}
 
-		path, ok := p.handleToken(token)
+		path, ok := p.handleToken(r, index, token)
 		if ok {
 			return path, nil
 		}
@@ -92,8 +95,8 @@ func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
 	return nil, fmt.Errorf("not terminated")
 }
 
-func (p *Parser) handleToken(token *tokens.Token) (*Node, bool) {
-	cursors := p.advance(p.cursors)
+func (p *Parser) handleToken(r *tokens.Reader, idx int, token *tokens.Token) (*Node, bool) {
+	cursors := p.advance(idx, p.cursors)
 
 	var nextCursors []*Cursor
 	for _, c := range cursors {
@@ -104,7 +107,11 @@ func (p *Parser) handleToken(token *tokens.Token) (*Node, bool) {
 		optional := currentNode.Cardinality == grammar.CardOptional || currentNode.Cardinality == grammar.CardMultiple
 		if !ok && optional {
 			c.Path = c.Path[:len(c.Path)-1]
+			r.Reset(currentNode.index)
+
+			ok = p.apply(c, token)
 		}
+
 		if ok {
 			nextCursors = append(nextCursors, c)
 		}
@@ -125,7 +132,7 @@ func (p *Parser) handleToken(token *tokens.Token) (*Node, bool) {
 	return nil, false
 }
 
-func (p *Parser) advance(cursors []*Cursor) []*Cursor {
+func (p *Parser) advance(idx int, cursors []*Cursor) []*Cursor {
 	var newCursors []*Cursor
 
 	for _, c := range cursors {
@@ -137,10 +144,10 @@ func (p *Parser) advance(cursors []*Cursor) []*Cursor {
 
 		var next []*Cursor
 		for _, o := range p.grammar[nextPart.Rule].Options {
-			next = append(next, newCursor(c, nextPart, o))
+			next = append(next, newCursor(c, nextPart, o, idx))
 		}
 
-		advanced := p.advance(next)
+		advanced := p.advance(idx, next)
 		for _, c := range advanced {
 			newCursors = append(newCursors, c)
 		}
@@ -149,13 +156,14 @@ func (p *Parser) advance(cursors []*Cursor) []*Cursor {
 	return newCursors
 }
 
-func newCursor(c *Cursor, part *grammar.Part, o *grammar.Option) *Cursor {
+func newCursor(c *Cursor, part *grammar.Part, o *grammar.Option, index int) *Cursor {
 	newNode := &Node{
 		Key: RuleKey{
 			Rule:   part.Rule,
 			Option: o.Name,
 		},
 		Cardinality: part.Cardinality,
+		index:       index,
 	}
 
 	//node := copyNode(c.Path[len(c.Path)-1])

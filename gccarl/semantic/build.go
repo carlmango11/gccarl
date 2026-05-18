@@ -124,6 +124,7 @@ func (b *builder) toType(i *ast.TypeDef) (Type, error) {
 	if i.Array {
 		kind = KindArray
 	}
+	panic("handle array")
 
 	var prim PrimitiveType
 	switch i.Type.Type {
@@ -157,6 +158,16 @@ func (b *builder) toParamDec(p *ast.ParamDef) (*ParamDef, error) {
 func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*Statement, error) {
 	switch {
 	case s.DecAssign != nil:
+		if s.DecAssign.Dec.Type.Array {
+			a, err := b.toArrayAssign(vars, s.DecAssign.Assign)
+			if err != nil {
+				return nil, err
+			}
+
+			return &Statement{
+				ArrayAssign: a,
+			}, nil
+		}
 		a, err := b.toAssign(vars, s.DecAssign.Assign)
 		if err != nil {
 			return nil, err
@@ -197,7 +208,7 @@ func (b *builder) toAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*Assign
 		}
 	}
 
-	indexable := v.Kind == KindArray || v.Kind == KindPointer
+	indexable := v.Kind == KindPointer
 	if a.Var.Indexed && !indexable {
 		return nil, fmt.Errorf("variable %s is not indexable", a.Var.Name)
 	}
@@ -225,6 +236,54 @@ func (b *builder) toAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*Assign
 	}, nil
 }
 
+func (b *builder) toArrayAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*ArrayAssign, error) {
+	v, ok := vars[a.Var.Name]
+	if !ok {
+		v, ok = vars[a.Var.Name]
+		if !ok {
+			return nil, fmt.Errorf("variable %s not declared", a.Var.Name)
+		}
+	}
+
+	if v.Kind != KindArray {
+		panic("got non array in array assign")
+	}
+
+	arr := a.Expr.Val.Array
+
+	if a.Var.Indexed && len(arr.Entries) != a.Var.Index {
+		return nil, fmt.Errorf("expected size %v; got %v", a.Var.Index, arr)
+	}
+
+	var exprs []*Expr
+
+	for _, entry := range arr.Entries {
+		expr, err := b.toExpr(entry)
+		if err != nil {
+			return nil, err
+		}
+
+		if !v.Equals(expr.Type) {
+			if compatibleTypes(v, expr.Type) {
+				expr = &Expr{
+					Cast: &Cast{
+						To:   v,
+						Expr: expr,
+					},
+				}
+			}
+		}
+
+		exprs = append(exprs, expr)
+	}
+
+	return &ArrayAssign{
+		Type: v,
+		Name: VarName(a.Var.Name),
+		Vals: exprs,
+	}, nil
+}
+
 func (b *builder) toExpr(expr *ast.Expr) (*Expr, error) {
 	switch {
 	case expr.Val != nil:
@@ -234,47 +293,23 @@ func (b *builder) toExpr(expr *ast.Expr) (*Expr, error) {
 			// TODO other sizes
 			return &Expr{
 				Type: int32Type(),
-				Literal: Literal{
+				Literal: &Literal{
 					Int32: int32(*v.Int),
 				},
 			}, nil
 		case v.Char != nil:
 			return &Expr{
 				Type: charType(),
-				Literal: Literal{
+				Literal: &Literal{
 					Char: *v.Char,
 				},
 			}, nil
 		case v.Array != nil:
-			return b.toArrayExpr(v.Array)
+			panic("remove")
 		}
 	}
 
 	panic("invalid expression")
-}
-
-func (b *builder) toArrayExpr(array *ast.Array) (*Expr, error) {
-	var typ Type
-
-	var vals []*Expr
-	for _, v := range array.Entries {
-		val, err := b.toExpr(v)
-		if err != nil {
-			return nil, err
-		}
-
-		typ = val.Type
-		// TODO: check
-
-		vals = append(vals, val)
-	}
-
-	return &Expr{
-		Type: Type{Kind: KindArray, Prim: typ.Prim},
-		Array: &Array{
-			Vals: vals,
-		},
-	}, nil
 }
 
 func int32Type() Type {

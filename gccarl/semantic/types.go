@@ -22,7 +22,7 @@ const (
 func (p PrimitiveType) Size() int {
 	switch p {
 	case PrimInt32:
-		return 4
+		return 8
 	case PrimChar:
 		return 1
 	}
@@ -44,7 +44,7 @@ type Type struct {
 	Kind      Kind
 	Prim      PrimitiveType
 	SubType   *Type
-	ArraySize int // todo: array needs subtype
+	ArraySize int
 	Custom    TypeName
 }
 
@@ -52,6 +52,8 @@ func (t Type) Size() int {
 	switch t.Kind {
 	case KindPrimitive:
 		return t.Prim.Size()
+	case KindArray:
+		return t.ArraySize * (*t.SubType).Size()
 	}
 	panic(fmt.Sprintf("unknown type %d", t))
 }
@@ -112,9 +114,16 @@ type FuncDef struct {
 	ReturnExpr *Expr
 }
 
+type ArrayAssign struct {
+	Type Type
+	Name VarName
+	Vals []*Expr
+}
+
 type Statement struct {
-	Assign *Assign
-	Expr   *Expr
+	Assign      *Assign
+	ArrayAssign *ArrayAssign
+	Expr        *Expr
 }
 
 type Dec struct {
@@ -122,19 +131,15 @@ type Dec struct {
 	Type *Type
 }
 
-type Array struct {
-	Vals []*Expr
-}
-
 type Expr struct {
-	Type     Type
-	Add      *AddExpr
-	FuncCall *FuncCall
-	Literal  Literal
-	Var      VarName
-	ArrayVar *IndexedVar
-	Array    *Array
-	Cast     *Cast
+	Type      Type
+	Add       *AddExpr
+	FuncCall  *FuncCall
+	Literal   *Literal
+	Var       VarName
+	AddressOf VarName
+	ArrayVar  *IndexedVar
+	Cast      *Cast
 }
 
 type IndexedVar struct {

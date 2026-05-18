@@ -1,8 +1,6 @@
 package compiler
 
 import (
-	"fmt"
-
 	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
@@ -39,70 +37,53 @@ var data = []Instr{
 	"msg_size equ $ - msg",
 }
 
-func (c *Compiler) compileFuncDef(f *semantic.FuncDef) error {
-	c.addInstr("%s:", f.Name)
+func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
+	funcInstrs := &Instrs{}
+
+	funcInstrs.addInstr("%s:", f.Name)
 
 	c.inFunc = true
 	defer func() {
 		c.inFunc = false
 	}()
 
-	c.addInstr("push rbp")
-	c.addInstr("mov rbp, rsp")
+	funcInstrs.addInstr("push rbp")
+	funcInstrs.addInstr("mov rbp, rsp")
 
-	var stackSize int
-	for _, p := range f.Params {
-		switch p.Type.Kind {
-		case semantic.KindPrimitive:
-			stackSize += p.Type.Prim.Size()
-		default:
-			panic(fmt.Sprintf("unknown type %v", p.Type))
-		}
-	}
+	locals := newStackVars()
+	body := &Instrs{}
 
-	locals := NewVars()
-
-	for name, typ := range f.Locals {
-		switch typ.Kind {
-		case semantic.KindPrimitive:
-			locals.Add(name, typ.Prim.Size())
-			stackSize += typ.Prim.Size()
-		case semantic.KindArray:
-			locals.Add(name, typ.Prim.Size())
-			stackSize += typ.Prim.Size() // TODO wrong
-		default:
-			panic(fmt.Sprintf("unknown type %v", typ))
-		}
-	}
-
-	if stackSize > 0 {
-		c.addInstr("sub rsp, %d", stackSize)
-	}
-
-	err := c.handleParamsDef(f.Params, locals)
+	err := c.handleParamsDef(body, f.Params, locals)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, s := range f.Statements {
-		err := c.compileStatement(s, locals)
+		err := c.compileStatement(body, s, locals)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	if f.ReturnExpr != nil {
-		_, _, err := c.compileExpr(f.ReturnExpr, locals)
+		_, err := c.compileExpr(body, f.ReturnExpr, locals)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	c.addInstr("mov rsp, rbp")
-	c.addInstr("pop rbp")
-	c.addInstr("ret")
+	stackSize := locals.Size()
+	if stackSize > 0 {
+		funcInstrs.addInstr("sub rsp, %d", stackSize)
+	}
 
-	return nil
+	funcInstrs.instrs = append(funcInstrs.instrs, body.instrs...)
+
+	funcInstrs.addInstr("mov rsp, rbp")
+	funcInstrs.addInstr("pop rbp")
+	funcInstrs.addInstr("ret")
+
+	return funcInstrs, nil
 }
 
 var paramRegisters = []Register{
@@ -113,24 +94,24 @@ var intParamRegisters = []Register{
 	RegEDI, RegESI, RegEDX,
 }
 
-func (c *Compiler) handleIntParam(n int, name semantic.VarName, locals *Vars) {
-	offset := locals.Add(name, Size64)
+func (c *Compiler) handleIntParam(instrs *Instrs, n int, name semantic.VarName, locals *StackVars) {
+	offset := locals.AddNamed(name, Size64)
 
-	if n >= len(intParamRegisters) {
+	if n >= len(paramRegisters) {
 		panic("not implemented")
 	}
 
-	reg := intParamRegisters[n]
+	reg := paramRegisters[n]
 
-	c.addInstr("mov qword [rbp-%d], %s", offset, reg)
+	instrs.addInstr("mov qword [rbp-%d], %s", offset, reg)
 }
 
-func (c *Compiler) handleParamsDef(ps []*semantic.ParamDef, locals *Vars) error {
+func (c *Compiler) handleParamsDef(instrs *Instrs, ps []*semantic.ParamDef, locals *StackVars) error {
 	var standardC int
 
 	for _, p := range ps {
 		if p.Type.IsIntParamType() {
-			c.handleIntParam(standardC, p.Name, locals)
+			c.handleIntParam(instrs, standardC, p.Name, locals)
 			standardC++
 		}
 	}
@@ -138,22 +119,31 @@ func (c *Compiler) handleParamsDef(ps []*semantic.ParamDef, locals *Vars) error 
 	return nil
 }
 
-func (c *Compiler) functionCall(fc *semantic.FuncCall, locals *Vars) error {
+func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall, locals *StackVars) error {
+	paramOffsets := make([]Offset, len(fc.Args))
+
 	for i, expr := range fc.Args {
-		resultReg, _, err := c.compileExpr(expr, locals)
+		resultReg, err := c.compileExpr(instrs, expr, locals)
 		if err != nil {
 			return err
 		}
 
+		offset := locals.Add(8) // TODO: other sizes
+		paramOffsets[i] = offset
+
+		instrs.addInstr("mov [rbp-%d], %s", offset, resultReg)
+	}
+
+	for i := range len(fc.Args) {
 		if i >= len(paramRegisters) {
 			panic("not implemented")
 		}
 
 		argReg := paramRegisters[i]
 
-		c.addInstr("mov %s, %s", argReg, resultReg)
+		instrs.addInstr("mov %s, [rbp-%d]", argReg, paramOffsets[i])
 	}
 
-	c.addInstr("call %s", fc.Func)
+	instrs.addInstr("call %s", fc.Func)
 	return nil
 }

@@ -11,8 +11,8 @@ type Import struct {
 }
 
 type RawType struct {
-	Type    Identifier
-	Pointer *RawType
+	Type Identifier
+	Sub  *RawType
 }
 
 type ParamDef struct {

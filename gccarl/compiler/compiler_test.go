@@ -1,47 +1,75 @@
 package compiler
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/carlmango11/compiler/parser"
+	"github.com/carlmango11/gccarl/gccarl/semantic"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-const grammar = `
-main:
-  statements:statement*
-
-value:
-  int:NUM
-  variable:IDEN
-  
-expr:
-  add:value "+" expr
-  sub:value "-" expr
-  parens:"(" expr ")"
-  value:value
-
-statement:
-  dec-assign:type IDEN "=" NUM ";"
-  assign:IDEN "=" expr ";"
-  
-type:
-  int:"int"
-`
 
 func TestGenerator(t *testing.T) {
 	tcs := []struct {
-		text     string
+		prog     *semantic.Program
 		expected []Instr
 	}{
 		{
-			text: `
-				int x = 5;
-				int y = 3;
-				y = x + y;`,
+			prog: &semantic.Program{
+				FuncDefs: []*semantic.FuncDef{
+					{
+						ReturnType: semantic.Type{
+							Kind: semantic.KindArray,
+						},
+						Name: "main",
+						Locals: map[semantic.VarName]semantic.Type{
+							"x": {
+								Kind: semantic.KindArray,
+								SubType: &semantic.Type{
+									Kind: semantic.KindPrimitive,
+									Prim: semantic.PrimInt32,
+								},
+							},
+						},
+						Statements: []*semantic.Statement{
+							{
+								ArrayAssign: &semantic.ArrayAssign{
+									Name: "x",
+									Type: semantic.Type{
+										Kind: semantic.KindArray,
+										SubType: &semantic.Type{
+											Kind: semantic.KindPrimitive,
+											Prim: semantic.PrimChar,
+										},
+										ArraySize: 1,
+									},
+									Vals: []*semantic.Expr{
+										{
+											Type: semantic.Type{
+												Kind: semantic.KindPrimitive,
+												Prim: semantic.PrimChar,
+											},
+											Literal: &semantic.Literal{
+												Int32: 74,
+											},
+										},
+									},
+								},
+							},
+							{
+								Expr: &semantic.Expr{
+									Type: semantic.Type{
+										Kind: semantic.KindVoid,
+									},
+									FuncCall: &semantic.FuncCall{
+										Func: "print",
+										Args: []*semantic.Expr{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 			expected: []Instr{
 				"mov dword [rbp-4], 5",
 				"mov dword [rbp-8], 3",
@@ -53,17 +81,12 @@ func TestGenerator(t *testing.T) {
 		},
 	}
 
-	p, err := parser.New(strings.NewReader(grammar), true)
-	require.NoError(t, err)
-
 	for _, tc := range tcs {
-		t.Run(tc.text, func(t *testing.T) {
-			ast, err := p.Parse(strings.NewReader(tc.text))
+		t.Run("", func(t *testing.T) {
+			c := New()
+			err := c.compile(tc.prog)
 			assert.NoError(t, err)
-
-			output, err := compile(ast)
-			assert.NoError(t, err)
-			assert.Equal(t, tc.expected, output)
+			assert.Equal(t, tc.expected, c.instrs)
 		})
 	}
 }
