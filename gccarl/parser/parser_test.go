@@ -48,16 +48,21 @@ func TestParse(t *testing.T) {
 		{
 			grammar: `
 main:
-  main:control*
+  main:control* type
 
 control:
-  o1:LPAREN
-  o2:RPAREN
+	o1:LPAREN
+	o2:RPAREN
+
+type:
+	int:INT
+	char:CHAR
 `,
-			text: `()`,
+			text: `() int`,
 			expected: []RuleKey{
 				{"control", "o1"},
 				{"control", "o2"},
+				{"type", "int"},
 			},
 		},
 	}

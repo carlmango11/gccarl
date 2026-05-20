@@ -9,11 +9,8 @@ import (
 )
 
 type Node struct {
-	Key         RuleKey
-	Values      []*Value
-	Cardinality grammar.Cardinality
-
-	index int
+	Key    RuleKey
+	Values []*Value
 }
 
 type RuleKey struct {
@@ -49,6 +46,10 @@ func New(r io.Reader, debug bool) (*Parser, error) {
 		grammar: gr,
 		debug:   debug,
 	}, nil
+}
+
+func (p *Parser) Parse(r *tokens.Reader) ([]*Node, error) {
+
 }
 
 func (p *Parser) Parse(r *tokens.Reader) ([]RuleKey, error) {
@@ -87,7 +88,7 @@ func (p *Parser) Parse(r *tokens.Reader) ([]RuleKey, error) {
 		return nil, fmt.Errorf("expected 1 cursor but got %d", len(p.cursors))
 	}
 
-	if !p.cursors[0].stepUp() {
+	if !p.cursors[0].terminalState() {
 		return nil, fmt.Errorf("last cursor did not terminate: %v", p.cursors[0])
 	}
 

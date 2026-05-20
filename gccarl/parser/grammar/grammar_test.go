@@ -74,7 +74,7 @@ func:
 						{
 							Type:        TTLiteral,
 							Token:       "t3",
-							Cardinality: CardOptional,
+							Cardinality: CardZeroOrOne,
 						},
 					},
 				},

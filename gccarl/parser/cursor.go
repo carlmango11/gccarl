@@ -27,7 +27,7 @@ func (c *Cursor) Apply(token *tokens.Token) bool {
 		return false
 	}
 
-	c.Stack[len(c.Stack)-1].Index++
+	c.Stack[len(c.Stack)-1].Index++ // todo advance()
 
 	c.stepUp()
 
@@ -38,44 +38,56 @@ func (c *Cursor) stepUp() bool {
 	for len(c.Stack) > 0 && c.endOfRule() {
 		c.Stack = c.Stack[:len(c.Stack)-1]
 
-		if len(c.Stack) == 0 {
+		if c.finished() {
 			return true
 		} // todo shit
 
 		switch c.next().Cardinality {
-		case grammar.CardSingle, grammar.CardOptional:
+		case grammar.CardSingle, grammar.CardZeroOrOne:
 			c.Stack[len(c.Stack)-1].Index++
 		}
 	}
 
-	return len(c.Stack) == 0
+	return c.finished()
 }
 
 func (c *Cursor) Branch() ([]*Cursor, bool) {
+	if c.finished() {
+		return nil, true // need to indicate to skip this but add nothing
+	}
+
 	nextPart := c.next()
 	if nextPart.Cardinality == grammar.CardSingle && !nextPart.IsRule() {
 		return nil, false
 	}
 
+	if !nextPart.IsRule() {
+		var all []*Cursor
+
+		// optional token. stay here and also jump over
+		all = append(all, c.Clone())
+
+		jump := c.Clone()
+		jump.advance()
+		jump.stepUp()
+
+		return all, true
+	}
+
+	// it's a rule
 	optionBranches := c.branchOptions()
 	if nextPart.Cardinality == grammar.CardSingle {
 		return optionBranches, true
 	}
 
-	var all []*Cursor
+	// need to jump over it also
+	jump := c.Clone()
+	jump.advance()
+	jump.stepUp()
 
-	for _, ob := range optionBranches {
-		all = append(all, ob.Clone())
+	optionBranches = append(optionBranches, jump)
 
-		without := ob.Clone()
-		without.Stack[len(without.Stack)-1].Index++
-
-		without.stepUp()
-
-		all = append(all, without)
-	}
-
-	return all, true
+	return optionBranches, true
 }
 
 func (c *Cursor) Clone() *Cursor {
@@ -134,6 +146,10 @@ func (c *Cursor) endOfRule() bool {
 	return len(c.parts()) == top.Index
 }
 
+func (c *Cursor) advance() {
+	c.Stack[len(c.Stack)-1].Index++
+}
+
 func (c *Cursor) parts() []*grammar.Part {
 	top := c.Stack[len(c.Stack)-1]
 
@@ -144,4 +160,23 @@ func (c *Cursor) parts() []*grammar.Part {
 	}
 
 	panic("undefined option")
+}
+
+func (c *Cursor) finished() bool {
+	return len(c.Stack) == 0
+}
+
+func (c *Cursor) terminalState() bool {
+	for {
+		if c.stepUp() {
+			return true
+		}
+
+		nextPart := c.next()
+		if nextPart.Cardinality == grammar.CardSingle {
+			return false
+		}
+
+		c.advance()
+	}
 }

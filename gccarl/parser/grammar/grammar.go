@@ -17,13 +17,17 @@ type Cardinality int
 
 const (
 	CardSingle Cardinality = iota
-	CardOptional
+	CardZeroOrOne
 	CardMultiple
 )
 
+func (c Cardinality) Optional() bool {
+	return c == CardZeroOrOne || c == CardMultiple
+}
+
 func (c Cardinality) String() string {
 	switch c {
-	case CardOptional:
+	case CardZeroOrOne:
 		return "?"
 	case CardMultiple:
 		return "*"
@@ -157,7 +161,7 @@ func parseToken(s string) *Part {
 		card = CardMultiple
 		s = s[:len(s)-1]
 	} else if strings.HasSuffix(s, "?") {
-		card = CardOptional
+		card = CardZeroOrOne
 		s = s[:len(s)-1]
 	}
 
