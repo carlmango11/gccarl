@@ -48,7 +48,7 @@ func main() {
 		return
 	}
 
-	parser, err := parser.New(strings.NewReader(grammar), false)
+	parser, err := parser.New(strings.NewReader(grammar), true)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

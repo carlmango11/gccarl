@@ -48,11 +48,50 @@ func New(r io.Reader, debug bool) (*Parser, error) {
 	}, nil
 }
 
-func (p *Parser) Parse(r *tokens.Reader) ([]*Node, error) {
+func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
+	path, err := p.parsePath(r)
+	if err != nil {
+		return nil, err
+	}
 
+	r.Reset() // this is all shit, I should just build it as parse
+	node := p.buildNode(r, RuleKey{"main", "main"}, path)
+
+	return node, nil
 }
 
-func (p *Parser) Parse(r *tokens.Reader) ([]RuleKey, error) {
+func (p *Parser) buildNode(r *tokens.Reader, k RuleKey, path []RuleKey) *Node {
+	parts := p.getParts(k)
+
+	var vals []*Value
+	for _, part := range parts {
+		tok, err := r.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			panic(err)
+		}
+
+		if part.IsRule() {
+			vals = append(vals, &Value{
+				Node: p.buildNode(r, path[0], path[1:]),
+			})
+		} else {
+			vals = append(vals, &Value{
+				Token: tok,
+			})
+		}
+	}
+
+	return &Node{
+		Key:    k,
+		Values: vals,
+	}
+}
+
+func (p *Parser) parsePath(r *tokens.Reader) ([]RuleKey, error) {
 	p.cursors = []*Cursor{
 		{
 			grammar: p.grammar,
@@ -63,6 +102,9 @@ func (p *Parser) Parse(r *tokens.Reader) ([]RuleKey, error) {
 						Option: "main",
 					},
 				},
+			},
+			Path: []RuleKey{
+				{"main", "main"},
 			},
 		},
 	}
@@ -144,4 +186,14 @@ func (p *Parser) advance(cursors []*Cursor) []*Cursor {
 	}
 
 	return ready
+}
+
+func (p *Parser) getParts(k RuleKey) []*grammar.Part {
+	for _, o := range p.grammar[k.Rule].Options {
+		if o.Name == k.Option {
+			return o.Parts
+		}
+	}
+
+	panic("invalid rule")
 }

@@ -146,3 +146,7 @@ func (tk *Reader) skipWhitespace() {
 	v := whitespace.FindString(tk.text[tk.i:])
 	tk.i += len(v)
 }
+
+func (tk *Reader) Reset() {
+	tk.i = 0
+}

@@ -60,6 +60,7 @@ type:
 `,
 			text: `() int`,
 			expected: []RuleKey{
+				{"main", "main"},
 				{"control", "o1"},
 				{"control", "o2"},
 				{"type", "int"},
@@ -75,9 +76,9 @@ type:
 			tks, err := tokens.New(tokenDef, tc.text)
 			require.NoError(t, err)
 
-			node, err := p.Parse(tks)
+			path, err := p.parsePath(tks)
 			assert.NoError(t, err)
-			assert.Equal(t, tc.expected, node)
+			assert.Equal(t, tc.expected, path)
 		})
 	}
 }
