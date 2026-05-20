@@ -26,11 +26,6 @@ type Key struct {
 	Index   int
 }
 
-type Cursor struct {
-	Current Key
-	Path    []*Node
-}
-
 type Value struct {
 	Node  *Node
 	Token *tokens.Token
@@ -56,23 +51,22 @@ func New(r io.Reader, debug bool) (*Parser, error) {
 	}, nil
 }
 
-func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
+func (p *Parser) Parse(r *tokens.Reader) ([]RuleKey, error) {
 	p.cursors = []*Cursor{
 		{
-			Current: Key{
-				RuleKey: RuleKey{
-					Rule:   "main",
-					Option: "main",
+			grammar: p.grammar,
+			Stack: []Key{
+				{
+					RuleKey: RuleKey{
+						Rule:   "main",
+						Option: "main",
+					},
 				},
-			},
-			Path: []*Node{
-				&Node{},
 			},
 		},
 	}
 
 	for {
-		index := r.Index()
 		token, err := r.Next()
 		if err != nil {
 			if err == io.EOF {
@@ -83,178 +77,70 @@ func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
 		}
 
 		if p.debug {
-			fmt.Printf("token: %s\n", token)
+			fmt.Printf("token: %v\n", token)
 		}
 
-		path, ok := p.handleToken(r, index, token)
-		if ok {
-			return path, nil
-		}
+		p.handleToken(token)
 	}
 
-	return nil, fmt.Errorf("not terminated")
+	if len(p.cursors) != 1 {
+		return nil, fmt.Errorf("expected 1 cursor but got %d", len(p.cursors))
+	}
+
+	if !p.cursors[0].stepUp() {
+		return nil, fmt.Errorf("last cursor did not terminate: %v", p.cursors[0])
+	}
+
+	return p.cursors[0].Path, nil
 }
 
-func (p *Parser) handleToken(r *tokens.Reader, idx int, token *tokens.Token) (*Node, bool) {
-	cursors := p.advance(idx, p.cursors)
+func (p *Parser) debugf(format string, args ...any) {
+	if p.debug {
+		fmt.Printf(format+"\n", args...)
+	}
+}
+
+func (p *Parser) handleToken(token *tokens.Token) {
+	cursors := p.advance(p.cursors)
+
+	for _, c := range cursors {
+		p.debugf("handling %v with %v", token.Name, c)
+	}
 
 	var nextCursors []*Cursor
 	for _, c := range cursors {
-		currentNode := c.Path[len(c.Path)-1]
-
-		ok := p.apply(c, token)
-
-		optional := currentNode.Cardinality == grammar.CardOptional || currentNode.Cardinality == grammar.CardMultiple
-		if !ok && optional {
-			c.Path = c.Path[:len(c.Path)-1]
-			r.Reset(currentNode.index)
-
-			ok = p.apply(c, token)
-		}
-
+		ok := c.Apply(token)
 		if ok {
 			nextCursors = append(nextCursors, c)
 		}
 	}
 
-	cursors = nextCursors
-
-	p.clean(cursors)
-
-	for _, c := range cursors {
-		if len(c.Path) == 0 {
-			return c.Path[0], true
-		}
-	}
-
-	p.cursors = cursors
-
-	return nil, false
+	p.cursors = nextCursors
 }
 
-func (p *Parser) advance(idx int, cursors []*Cursor) []*Cursor {
-	var newCursors []*Cursor
+func (p *Parser) advance(cursors []*Cursor) []*Cursor {
+	needBranch := cursors
 
-	for _, c := range cursors {
-		nextPart := p.getParts(c.Current.RuleKey)[c.Current.Index]
-		if !nextPart.IsRule() {
-			newCursors = append(newCursors, c)
+	var ready []*Cursor
+	var nextNeedBranch []*Cursor
+
+	for {
+		for _, c := range needBranch {
+			inner, branched := c.Branch()
+			if branched {
+				nextNeedBranch = append(nextNeedBranch, inner...)
+			} else {
+				ready = append(ready, c)
+			}
+		}
+
+		needBranch = nextNeedBranch
+		nextNeedBranch = nil
+
+		if len(needBranch) == 0 {
 			break
 		}
-
-		var next []*Cursor
-		for _, o := range p.grammar[nextPart.Rule].Options {
-			next = append(next, newCursor(c, nextPart, o, idx))
-		}
-
-		advanced := p.advance(idx, next)
-		for _, c := range advanced {
-			newCursors = append(newCursors, c)
-		}
 	}
 
-	return newCursors
-}
-
-func newCursor(c *Cursor, part *grammar.Part, o *grammar.Option, index int) *Cursor {
-	newNode := &Node{
-		Key: RuleKey{
-			Rule:   part.Rule,
-			Option: o.Name,
-		},
-		Cardinality: part.Cardinality,
-		index:       index,
-	}
-
-	//node := copyNode(c.Path[len(c.Path)-1])
-	//node.Values = append(node.Values, &Value{
-	//	Node: newNode,
-	//})
-
-	return &Cursor{
-		Current: Key{
-			RuleKey: RuleKey{
-				Rule:   part.Rule,
-				Option: o.Name,
-			},
-		},
-		Path: append(copySlice(c.Path), newNode),
-	}
-}
-
-func copySlice[T any](stack []T) []T {
-	c := make([]T, len(stack))
-	copy(c, stack)
-	return c
-}
-
-func copyNode(n *Node) *Node {
-	if n == nil {
-		return nil
-	}
-
-	var vals []*Value
-	for _, val := range n.Values {
-		vals = append(vals, &Value{
-			Node:  copyNode(val.Node),
-			Token: val.Token,
-		})
-	}
-
-	return &Node{
-		Key:    n.Key,
-		Values: vals,
-	}
-}
-
-func (p *Parser) apply(c *Cursor, token *tokens.Token) bool {
-	parts := p.getParts(c.Current.RuleKey)
-	part := parts[c.Current.Index]
-
-	currentNode := c.Path[len(c.Path)-1]
-
-	if part.Token == token.Name {
-		if part.Cardinality != grammar.CardMultiple {
-			c.Current.Index++
-		}
-
-		currentNode.Values = append(currentNode.Values, &Value{
-			Token: token,
-		})
-
-		return true
-	}
-
-	return false
-}
-
-func (p *Parser) getParts(key RuleKey) []*grammar.Part {
-	for _, o := range p.grammar[key.Rule].Options {
-		if o.Name == key.Option {
-			return o.Parts
-		}
-	}
-
-	panic("undefined option")
-}
-
-func (p *Parser) clean(cs []*Cursor) {
-	for _, c := range cs {
-		for {
-			if c.Current.Index != len(p.getParts(c.Current.RuleKey)) {
-				break
-			}
-
-			if len(c.Path) == 0 {
-				break
-			}
-
-			// end of rule
-			c.Path = c.Path[:len(c.Path)-1]
-
-			if p.getParts(c.Current.RuleKey)[c.Current.Index].Cardinality != grammar.CardMultiple {
-				c.Current.Index++
-			}
-		}
-	}
+	return ready
 }

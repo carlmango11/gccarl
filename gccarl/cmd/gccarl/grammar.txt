@@ -1,12 +1,5 @@
 main:
-  main:include* dec-def*
-
-include:
-    include:HASH INCLUDE include-iden
-
-include-iden:
-    std-iden:LESS_THAN IDEN GREATER_THAN
-    custom-iden:DQUOTE IDEN DQUOTE
+  main:dec-def*
 
 dec-def:
     func-def:type IDEN LPAREN params-def? RPAREN LBRACE statement-comma* return? RBRACE
@@ -67,11 +60,7 @@ statement:
     dec-assign:dec-assign
     var-dec:type variable
     assign:variable EQUALS expr
-    array-assign:array-assign
     expr:expr
-
-array-assign:
-
 
 dec-assign:
     assign:type variable EQUALS expr
