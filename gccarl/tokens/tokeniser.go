@@ -62,6 +62,8 @@ func parseTokenDefs(r string) ([]*TokenDef, error) {
 		if def[0] == '\'' && def[len(def)-1] == '\'' {
 			defs = append(defs, &TokenDef{Name: name, Literal: def[1 : len(def)-1]})
 		} else {
+			def = strings.ReplaceAll(def, `\'`, `'`)
+
 			reg, err := regexp.Compile("^" + def)
 			if err != nil {
 				return nil, fmt.Errorf("tokeniser: invalid token definition: %s", def)
@@ -93,7 +95,7 @@ func (tk *Reader) Next() (*Token, error) {
 	}
 
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("tokeniser: no matches found for token: %s", tk.text[tk.i])
+		return nil, fmt.Errorf("tokeniser: no matches found for token: %s", tk.text[tk.i:])
 	}
 
 	sort.Slice(matches, func(i, j int) bool {

@@ -51,33 +51,31 @@ func (c *Cursor) stepUp() bool {
 	return c.finished()
 }
 
-func (c *Cursor) Branch() ([]*Cursor, bool) {
+func (c *Cursor) Branch() (ready []*Cursor, needBranch []*Cursor) {
 	if c.finished() {
-		return nil, true // need to indicate to skip this but add nothing
+		return nil, nil
 	}
 
 	nextPart := c.next()
 	if nextPart.Cardinality == grammar.CardSingle && !nextPart.IsRule() {
-		return nil, false
+		return []*Cursor{c}, nil
 	}
 
 	if !nextPart.IsRule() {
-		var all []*Cursor
-
 		// optional token. stay here and also jump over
-		all = append(all, c.Clone())
+		stay := c.Clone()
 
 		jump := c.Clone()
 		jump.advance()
 		jump.stepUp()
 
-		return all, true
+		return []*Cursor{stay}, []*Cursor{jump}
 	}
 
 	// it's a rule
 	optionBranches := c.branchOptions()
 	if nextPart.Cardinality == grammar.CardSingle {
-		return optionBranches, true
+		return nil, optionBranches
 	}
 
 	// need to jump over it also
@@ -87,7 +85,7 @@ func (c *Cursor) Branch() ([]*Cursor, bool) {
 
 	optionBranches = append(optionBranches, jump)
 
-	return optionBranches, true
+	return nil, optionBranches
 }
 
 func (c *Cursor) Clone() *Cursor {

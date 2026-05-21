@@ -24,7 +24,7 @@ value:
     int:NUM
     variable:variable
     str:STR
-    char:QUOTE CHAR QUOTE
+    char:CHAR
     array:array-val
     cast:LPAREN type RPAREN value
 
@@ -72,7 +72,7 @@ comma-expr:
     comma-expr:COMMA expr
 
 type:
-    int:INT
-    char:CHAR
+    int:INT_TYPE
+    char:CHAR_TYPE
     custom:IDEN
     pointer:ASTERISKS type

@@ -48,22 +48,22 @@ func TestParse(t *testing.T) {
 		{
 			grammar: `
 main:
-  main:control* type
+  main:statement*
 
-control:
-	o1:LPAREN
-	o2:RPAREN
+statement:
+	def:type IDEN EQUALS NUM SEMI
+	add:NUM PLUS NUM SEMI
 
 type:
 	int:INT
 	char:CHAR
 `,
-			text: `() int`,
+			text: `int x = 5; 8 + 3;`,
 			expected: []RuleKey{
 				{"main", "main"},
-				{"control", "o1"},
-				{"control", "o2"},
+				{"statement", "def"},
 				{"type", "int"},
+				{"statement", "add"},
 			},
 		},
 	}
@@ -77,7 +77,7 @@ type:
 			require.NoError(t, err)
 
 			path, err := p.parsePath(tks)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.expected, path)
 		})
 	}

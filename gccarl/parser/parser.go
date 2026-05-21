@@ -123,6 +123,10 @@ func (p *Parser) parsePath(r *tokens.Reader) ([]RuleKey, error) {
 			fmt.Printf("token: %v\n", token)
 		}
 
+		if len(p.cursors) == 0 {
+			return nil, fmt.Errorf("expected at least one cursor")
+		}
+
 		p.handleToken(token)
 	}
 
@@ -154,6 +158,7 @@ func (p *Parser) handleToken(token *tokens.Token) {
 	for _, c := range cursors {
 		ok := c.Apply(token)
 		if ok {
+			p.debugf("applied %v to %v", token.Name, c)
 			nextCursors = append(nextCursors, c)
 		}
 	}
@@ -167,14 +172,13 @@ func (p *Parser) advance(cursors []*Cursor) []*Cursor {
 	var ready []*Cursor
 	var nextNeedBranch []*Cursor
 
+	var i int
 	for {
 		for _, c := range needBranch {
-			inner, branched := c.Branch()
-			if branched {
-				nextNeedBranch = append(nextNeedBranch, inner...)
-			} else {
-				ready = append(ready, c)
-			}
+			innerReady, innerNeedBrach := c.Branch()
+
+			ready = append(ready, innerReady...)
+			nextNeedBranch = append(nextNeedBranch, innerNeedBrach...)
 		}
 
 		needBranch = nextNeedBranch
@@ -182,6 +186,13 @@ func (p *Parser) advance(cursors []*Cursor) []*Cursor {
 
 		if len(needBranch) == 0 {
 			break
+		}
+
+		const maxBranches = 100
+
+		i++
+		if i > maxBranches {
+			panic("too many branches")
 		}
 	}
 
