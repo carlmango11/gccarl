@@ -122,9 +122,9 @@ func (b *builder) declareVar(vars map[ast.Identifier]Type, dec *ast.Dec) error {
 func (b *builder) toType(i *ast.TypeDef) (Type, error) {
 	kind := KindPrimitive
 	if i.Array {
+		panic("array declared as a primitive")
 		kind = KindArray
 	}
-	panic("handle array")
 
 	var prim PrimitiveType
 	switch i.Type.Type {

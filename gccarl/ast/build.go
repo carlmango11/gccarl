@@ -130,6 +130,15 @@ func toStatement(n *parser.Node) (*Statement, error) {
 		return &Statement{
 			Assign: a,
 		}, nil
+	case "expr":
+		expr, err := toExpr(n.Values[0].Node)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Statement{
+			Expr: expr,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("unknown node: %s", n.Key.Option)

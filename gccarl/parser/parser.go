@@ -13,14 +13,18 @@ type RuleKey struct {
 	Option grammar.OptionName
 }
 
+func (k RuleKey) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%v:%v"`, k.Rule, k.Option)), nil
+}
+
 type Index struct {
 	RuleKey RuleKey
 	Index   int
 }
 
 type Value struct {
-	Node  *Node
-	Token *tokens.Token
+	Node  *Node         `json:"node,omitempty"`
+	Token *tokens.Token `json:"token,omitempty"`
 }
 
 type Parser struct {

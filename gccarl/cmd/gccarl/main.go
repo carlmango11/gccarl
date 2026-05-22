@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -60,7 +61,21 @@ func main() {
 		return
 	}
 
-	fmt.Fprintln(os.Stdout, parsed.String())
+	astOutput, err := os.Create(outputName + ".ast")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+
+	defer astOutput.Close()
+
+	astJSON, err := json.MarshalIndent(parsed, "", "\t")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+
+	astOutput.Write(astJSON)
 
 	astProg, err := ast.Build(parsed)
 	if err != nil {
