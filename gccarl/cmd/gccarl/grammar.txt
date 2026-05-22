@@ -2,8 +2,15 @@ main:
   main:dec-def*
 
 dec-def:
-    func-def:type IDEN LPAREN params-def? RPAREN LBRACE statement-comma* return? RBRACE
+    func-def:type IDEN LPAREN params-def? RPAREN LBRACE control* return? RBRACE
     dec-assign:dec-assign
+
+line:
+    control:control
+    statement:statement-comma
+
+control:
+    if:IF LPAREN expr RPAREN LBRACE statement-comma* RBRACE
 
 return:
     return:RETURN expr SEMI
@@ -47,8 +54,9 @@ sub-expr:
     func-call:IDEN LPAREN params? RPAREN
 
 comp-expr:
-    add:sub-expr "+" expr
-    sub:sub-expr "-" expr
+    add:sub-expr PLUS expr
+    sub:sub-expr MINUS expr
+    is-equal:sub-expr EEQUALS expr
 
 statement:
     dec-assign:dec-assign

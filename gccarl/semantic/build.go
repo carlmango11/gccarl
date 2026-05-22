@@ -55,23 +55,23 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 
 	locals := map[ast.Identifier]Type{}
 
-	for _, s := range f.Statements {
-		dec := s.Dec
-		if s.DecAssign != nil {
-			dec = s.DecAssign.Dec
+	for _, l := range f.Lines {
+		switch {
+		case l.Control != nil:
+		case l.Statement != nil:
+			dec := l.Statement.Dec
+			if l.Statement.DecAssign != nil {
+				dec = l.Statement.DecAssign.Dec
+			}
 
-			//if s.DecAssign.Array != nil {
-			//	dec = s.DecAssign.Array.Dec
-			//}
-		}
+			if dec == nil {
+				continue
+			}
 
-		if dec == nil {
-			continue
-		}
-
-		err := b.declareVar(locals, dec)
-		if err != nil {
-			return nil, err
+			err := b.declareVar(locals, dec)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -86,13 +86,17 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 	}
 
 	var statements []*Statement
-	for _, astStatement := range f.Statements {
-		s, err := b.toStatement(locals, astStatement)
-		if err != nil {
-			return nil, err
-		}
+	for _, l := range f.Lines {
+		switch {
+		case l.Control != nil:
+		case l.Statement != nil:
+			s, err := b.toStatement(locals, l.Statement)
+			if err != nil {
+				return nil, err
+			}
 
-		statements = append(statements, s)
+			statements = append(statements, s)
+		}
 	}
 
 	var returnExpr *Expr
@@ -183,6 +187,33 @@ func (b *builder) toParamDec(p *ast.ParamDef) (*ParamDef, error) {
 
 func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*Statement, error) {
 	switch {
+	case s.If != nil:
+		expr, err := b.toExpr(s.If.Condition, vars)
+		if err != nil {
+			return nil, err
+		}
+
+		if expr.Type.Prim != PrimBool {
+			return nil, fmt.Errorf("if condition must be a boolean")
+		}
+
+		var ss []*Statement
+		for _, n := range s.If.Statements {
+			state, err := b.toStatement(vars, n)
+			if err != nil {
+				return nil, err
+			}
+
+			ss = append(ss, state)
+		}
+
+		return &Statement{
+			If: &If{
+				Condition:  expr,
+				Statements: ss,
+			},
+		}, nil
+
 	case s.DecAssign != nil:
 		switch {
 		case s.DecAssign.Assign != nil:
@@ -194,15 +225,6 @@ func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*
 			return &Statement{
 				Assign: a,
 			}, nil
-			//case s.DecAssign.Array != nil:
-			//	a, err := b.toArrayDecAssign(vars, s.DecAssign.Array)
-			//	if err != nil {
-			//		return nil, err
-			//	}
-			//
-			//	return &Statement{
-			//		ArrayAssign: a,
-			//	}, nil
 		}
 
 	case s.Assign != nil:

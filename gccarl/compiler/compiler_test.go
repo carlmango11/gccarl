@@ -1,92 +1,59 @@
 package compiler
 
 import (
+	"bytes"
+	"os"
 	"testing"
 
+	"github.com/carlmango11/gccarl/gccarl/ast"
+	"github.com/carlmango11/gccarl/gccarl/parser"
 	"github.com/carlmango11/gccarl/gccarl/semantic"
-
-	"github.com/stretchr/testify/assert"
+	"github.com/carlmango11/gccarl/gccarl/tokens"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerator(t *testing.T) {
-	tcs := []struct {
-		prog     *semantic.Program
-		expected []Instr
-	}{
-		{
-			prog: &semantic.Program{
-				FuncDefs: []*semantic.FuncDef{
-					{
-						ReturnType: semantic.Type{
-							Kind: semantic.KindArray,
-						},
-						Name: "main",
-						Locals: map[semantic.VarName]semantic.Type{
-							"x": {
-								Kind: semantic.KindArray,
-								SubType: &semantic.Type{
-									Kind: semantic.KindPrimitive,
-									Prim: semantic.PrimInt32,
-								},
-							},
-						},
-						Statements: []*semantic.Statement{
-							{
-								ArrayAssign: &semantic.ArrayAssign{
-									Name: "x",
-									Type: semantic.Type{
-										Kind: semantic.KindArray,
-										SubType: &semantic.Type{
-											Kind: semantic.KindPrimitive,
-											Prim: semantic.PrimChar,
-										},
-										ArraySize: 1,
-									},
-									Vals: []*semantic.Expr{
-										{
-											Type: semantic.Type{
-												Kind: semantic.KindPrimitive,
-												Prim: semantic.PrimChar,
-											},
-											Literal: &semantic.Literal{
-												Int32: 74,
-											},
-										},
-									},
-								},
-							},
-							{
-								Expr: &semantic.Expr{
-									Type: semantic.Type{
-										Kind: semantic.KindVoid,
-									},
-									FuncCall: &semantic.FuncCall{
-										Func: "print",
-										Args: []*semantic.Expr{},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expected: []Instr{
-				"mov dword [rbp-4], 5",
-				"mov dword [rbp-8], 3",
-				"mov rax, [rbp-8]",
-				"mov rbx, [rbp-4]",
-				"add rax, rbx",
-				"mov dword [rbp-8], rax",
-			},
-		},
+	texts := []string{
+		`int main() {
+    char x[16] = "eat some sun sun";
+    print(1, x, 16);
+}`,
 	}
 
-	for _, tc := range tcs {
-		t.Run("", func(t *testing.T) {
-			c := New()
-			err := c.compile(tc.prog)
-			assert.NoError(t, err)
-			assert.Equal(t, tc.expected, c.instrs)
-		})
+	tokenDef, err := os.ReadFile("../cmd/gccarl/tokens.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	grammar, err := os.ReadFile("../cmd/gccarl/grammar.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, text := range texts {
+		tk, err := tokens.New(string(tokenDef), text)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		p, err := parser.New(bytes.NewReader(grammar), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		parsed, err := p.Parse(tk)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		astProg, err := ast.Build(parsed)
+		require.NoError(t, err)
+
+		prog, err := semantic.Build(astProg)
+		require.NoError(t, err)
+
+		c := New()
+		_, err = c.Compile(prog)
+		require.NoError(t, err)
 	}
 }

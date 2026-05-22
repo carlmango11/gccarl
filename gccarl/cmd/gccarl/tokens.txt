@@ -21,7 +21,9 @@ LSQUARE: '['
 RSQUARE: ']'
 PLUS: '+'
 MINUS: '-'
+EEQUALS: '=='
 
 INCLUDE: 'include'
 RETURN: 'return'
+IF: 'if'
 

@@ -22,6 +22,9 @@ var grammar string
 //go:embed tokens.txt
 var tokenDef string
 
+//go:embed lib.asm
+var libASM string
+
 func main() {
 	var outputName string
 	var debug bool
@@ -106,6 +109,12 @@ func main() {
 	defer outputFile.Close()
 
 	_, err = outputFile.Write(c)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+
+	_, err = outputFile.WriteString("\n" + libASM)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

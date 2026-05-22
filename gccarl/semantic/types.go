@@ -17,6 +17,7 @@ const (
 	PrimUnset PrimitiveType = iota
 	PrimInt32
 	PrimChar
+	PrimBool
 )
 
 func (p PrimitiveType) Size() int {
@@ -116,8 +117,14 @@ type FuncDef struct {
 }
 
 type Statement struct {
+	If     *If
 	Assign *Assign
 	Expr   *Expr
+}
+
+type If struct {
+	Condition  *Expr
+	Statements []*Statement
 }
 
 type Dec struct {
@@ -127,9 +134,15 @@ type Dec struct {
 
 type StringID int
 
+type IsEqual struct {
+	Left  *Expr
+	Right *Expr
+}
+
 type Expr struct {
 	Type        Type
 	Add         *AddExpr
+	IsEqual     *IsEqual
 	FuncCall    *FuncCall
 	Literal     *Literal
 	Var         VarName

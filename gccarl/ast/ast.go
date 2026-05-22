@@ -26,6 +26,12 @@ type Expr struct {
 	Val      *Value
 	Cast     *Cast
 	FuncCall *FuncCall
+	IfEqual  *IfEqual
+}
+
+type IfEqual struct {
+	Left  *Expr
+	Right *Expr
 }
 
 type Cast struct {
@@ -67,11 +73,20 @@ type TypeDef struct {
 	Arrays []*ArrayDef
 }
 
+type Control struct {
+	If *If
+}
+
+type Line struct {
+	Statement *Statement
+	Control   *Control
+}
+
 type FuncDef struct {
 	ReturnType *TypeDef
 	Name       Identifier
 	Params     []*ParamDef
-	Statements []*Statement
+	Lines      []*Line
 	ReturnExpr *Expr
 }
 
@@ -85,12 +100,17 @@ type Statement struct {
 	DecAssign *DecAssign
 	Assign    *Assign
 	Expr      *Expr
+	If        *If
+}
+
+type If struct {
+	Condition  *Expr
+	Statements []*Statement
 }
 
 type DecAssign struct {
 	Dec    *Dec
 	Assign *Assign
-	//Array  *ArrayDecAssign
 }
 
 type ArrayDecAssign struct {

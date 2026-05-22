@@ -36,7 +36,8 @@ type FuncDef struct {
 }
 
 type Compiler struct {
-	funcs map[semantic.FuncName]*FuncDef
+	funcs  map[semantic.FuncName]*FuncDef
+	labelC int
 }
 
 func New() *Compiler {
@@ -105,6 +106,8 @@ func (c *Compiler) addDataSection(prog *semantic.Program, full *Instrs) {
 
 func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, locals *StackVars) error {
 	switch {
+	case s.If != nil:
+		return c.compileIf(instrs, s.If, locals)
 	case s.Assign != nil:
 		return c.compileAssign(instrs, s.Assign, locals)
 	case s.Expr != nil:
@@ -196,6 +199,9 @@ func (c *Compiler) compileStandardAssign(instrs *Instrs, a *semantic.Assign, loc
 
 func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Register, error) {
 	switch {
+	case e.IsEqual != nil:
+		err := c.compileIsEqual(instrs, e.IsEqual, locals)
+		return RegUnset, err
 	case e.FuncCall != nil:
 		err := c.functionCall(instrs, e.FuncCall, locals)
 		if err != nil {
@@ -252,6 +258,50 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 
 func (c *Compiler) stringLabel(id semantic.StringID) DataLabel {
 	return DataLabel(fmt.Sprintf("str_%d", id))
+}
+
+func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If, locals *StackVars) error {
+	_, err := c.compileExpr(instrs, ifs.Condition, locals)
+	if err != nil {
+		return err
+	}
+
+	skip := c.newLabel("skip")
+	instrs.addInstr("jne %s", skip)
+
+	for _, s := range ifs.Statements {
+		err := c.compileStatement(instrs, s, locals)
+		if err != nil {
+			return err
+		}
+	}
+
+	instrs.addInstr("skip:")
+
+	return nil
+}
+
+func (c *Compiler) newLabel(prefix string) string {
+	c.labelC++
+	return fmt.Sprintf("%v_%d", prefix, c.labelC)
+}
+
+func (c *Compiler) compileIsEqual(instrs *Instrs, e *semantic.IsEqual, locals *StackVars) error {
+	reg, err := c.compileExpr(instrs, e.Left, locals)
+	if err != nil {
+		return err
+	}
+
+	offset := locals.Add(8)
+	instrs.addInstr("mov qword [rbp-%d], %s", offset, reg)
+
+	reg, err = c.compileExpr(instrs, e.Right, locals)
+	if err != nil {
+		return err
+	}
+
+	instrs.addInstr("cmp [rbp-%d], %s", offset, reg)
+	return nil
 }
 
 //func (c *Compiler) compileAdd(a *semantic.AddExpr, locals *Vars, target Register) (ast.RawType, error) {

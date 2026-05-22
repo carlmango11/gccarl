@@ -73,17 +73,50 @@ func toFuncDef(node *parser.Node) (*FuncDef, error) {
 			}
 
 			f.ReturnExpr = expr
-		case "statement":
-			s, err := toStatement(n.Values[0].Node)
-			if err != nil {
-				return nil, err
-			}
+		case "line":
+			for _, v := range n.Values[0].Node.Values {
+				switch v.Node.Key.Option {
+				case "statement":
+					s, err := toStatement(n.Values[0].Node)
+					if err != nil {
+						return nil, err
+					}
 
-			f.Statements = append(f.Statements, s)
+					f.Lines = append(f.Lines, &Line{
+						Statement: s,
+					})
+				case "control":
+					c, err := toControl(n.Values[0].Node)
+					if err != nil {
+						return nil, err
+					}
+
+					f.Lines = append(f.Lines, &Line{
+						Control: c,
+					})
+				}
+			}
+		case "statement":
 		}
 	}
 
 	return f, nil
+}
+
+func toControl(n *parser.Node) (*Control, error) {
+	switch n.Key.Option {
+	case "if":
+		ifStatement, err := toIf(n.Values[1].Node)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Control{
+			If: ifStatement,
+		}, nil
+	}
+
+	panic("invalid control")
 }
 
 func toParamDef(n *parser.Node) (*ParamDef, error) {
@@ -142,6 +175,28 @@ func toStatement(n *parser.Node) (*Statement, error) {
 	}
 
 	return nil, fmt.Errorf("unknown node: %s", n.Key.Option)
+}
+
+func toIf(n *parser.Node) (*If, error) {
+	expr, err := toExpr(n.Values[2].Node)
+	if err != nil {
+		return nil, err
+	}
+
+	var statements []*Statement
+	for _, sn := range n.Values[4 : len(n.Values)-1] {
+		s, err := toStatement(sn.Node)
+		if err != nil {
+			return nil, err
+		}
+
+		statements = append(statements, s)
+	}
+
+	return &If{
+		Condition:  expr,
+		Statements: statements,
+	}, nil
 }
 
 func toFuncCall(vs []*parser.Value) (*FuncCall, error) {
@@ -264,6 +319,23 @@ func toVariable(n *parser.Node) (*Var, error) {
 
 func toExpr(n *parser.Node) (*Expr, error) {
 	switch n.Key.Option {
+	case "is-equal":
+		left, err := toExpr(n.Values[0].Node)
+		if err != nil {
+			return nil, err
+		}
+
+		right, err := toExpr(n.Values[2].Node)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Expr{
+			IfEqual: &IfEqual{
+				Left:  left,
+				Right: right,
+			},
+		}, nil
 	case "comp":
 		return handleCompExpr(n.Values[0].Node)
 	case "sub-expr":
