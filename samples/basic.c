@@ -1,4 +1,4 @@
 int main() {
-    char x[2] = "hello";
-    print(1, x, 2);
+    char x[16] = "eat some sun sun";
+    print(1, x, 16);
 }

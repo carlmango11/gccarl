@@ -314,7 +314,7 @@ func (b *builder) toExpr(expr *ast.Expr, locals map[ast.Identifier]Type) (*Expr,
 					},
 					ArraySize: len(*v.Str),
 				},
-				StringID: len(b.strs),
+				StringID: StringID(len(b.strs)),
 			}, nil
 		case v.Int != nil:
 			// TODO other sizes

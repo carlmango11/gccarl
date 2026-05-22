@@ -125,6 +125,8 @@ type Dec struct {
 	Type *Type
 }
 
+type StringID int
+
 type Expr struct {
 	Type        Type
 	Add         *AddExpr
@@ -135,7 +137,7 @@ type Expr struct {
 	ArrayVar    *IndexedVar
 	Cast        *Cast
 	CompLiteral []*Expr
-	StringID    int
+	StringID    StringID
 }
 
 type IndexedVar struct {

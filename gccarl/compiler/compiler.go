@@ -28,6 +28,7 @@ const (
 )
 
 type Instr string
+type DataLabel string
 
 type FuncDef struct {
 	ReturnType semantic.Type
@@ -62,7 +63,7 @@ func (c *Compiler) Compile(prog *semantic.Program) ([]byte, error) {
 func (c *Compiler) compile(prog *semantic.Program) (*Instrs, error) {
 	full := &Instrs{}
 
-	addDataSection(prog, full)
+	c.addDataSection(prog, full)
 
 	full.addInstr("section .text")
 	full.addInstr("global _start")
@@ -93,11 +94,12 @@ func (c *Compiler) compile(prog *semantic.Program) (*Instrs, error) {
 	return full, nil
 }
 
-func addDataSection(prog *semantic.Program, full *Instrs) {
+func (c *Compiler) addDataSection(prog *semantic.Program, full *Instrs) {
 	full.addInstr("section .data")
 
 	for id, val := range prog.Strings {
-		full.addInstr(`str_%d db "%s", 0xA`, id+1, val)
+		label := DataLabel(fmt.Sprintf("str_%d", id+1))
+		full.addInstr(`%s db "%s", 0xA`, label, val)
 	}
 }
 
@@ -125,7 +127,7 @@ func (c *Compiler) compileAssign(instrs *Instrs, a *semantic.Assign, locals *Sta
 func (c *Compiler) compileArrayAssign(instrs *Instrs, a *semantic.Assign, locals *StackVars) error {
 	switch {
 	case a.Expr.StringID != 0:
-
+		locals.AddLabelled(a.Name, c.stringLabel(a.Expr.StringID))
 	default:
 		startOffset, ok := locals.Offset(a.Name)
 		if !ok {
@@ -202,12 +204,17 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 
 		return returnRegister(e.Type), nil
 	case e.AddressOf != "":
-		offset, ok := locals.Offset(e.AddressOf)
+		addr, ok := locals.Address(e.AddressOf)
 		if !ok {
 			return RegUnset, fmt.Errorf("undefined variable: %s", e.Var)
 		}
 
-		instrs.addInstr("lea %s, [rbp-%d]", RegRAX, offset)
+		if addr.IsStack() {
+			instrs.addInstr("lea %s, [rbp-%d]", RegRAX, addr.stack)
+		} else {
+			instrs.addInstr("lea %s, [rel %s]", RegRAX, addr.label)
+		}
+
 		return RegRAX, nil
 
 	case e.StringID != 0:
@@ -243,8 +250,8 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 	panic(fmt.Sprintf("unknown expr type: %+v", e))
 }
 
-func (c *Compiler) stringLabel(id int) string {
-	return fmt.Sprintf("str_%d", id)
+func (c *Compiler) stringLabel(id semantic.StringID) DataLabel {
+	return DataLabel(fmt.Sprintf("str_%d", id))
 }
 
 //func (c *Compiler) compileAdd(a *semantic.AddExpr, locals *Vars, target Register) (ast.RawType, error) {
