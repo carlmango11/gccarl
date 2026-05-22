@@ -205,20 +205,27 @@ func toValue(n *parser.Node) (*Value, error) {
 		return &Value{
 			Var: v,
 		}, nil
-	//case "str":
-	//	s, err := toStr(n.Values[0].Node)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	return &Value{
-	//		Str: s,
-	//	}, nil
+	case "str":
+		str := n.Values[0].Token.Val
+		str = str[1 : len(str)-1]
+
+		return &Value{
+			Str: &str,
+		}, nil
 	case "char":
 		ch := n.Values[0].Token.Val[1]
 
 		return &Value{
 			Char: &ch,
+		}, nil
+	case "comp-lit":
+		exprs, err := toCompositeLiteral(n.Values[0].Node)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Value{
+			CompLit: exprs,
 		}, nil
 	default:
 		panic(fmt.Sprintf("unknown node: %s", n.Key.Option))
@@ -268,24 +275,6 @@ func toExpr(n *parser.Node) (*Expr, error) {
 
 func handleCompExpr(n *parser.Node) (*Expr, error) {
 	switch n.Key.Option {
-	case "value":
-		v, err := toValue(n.Values[0].Node)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Expr{
-			Val: v,
-		}, nil
-	case "func-call":
-		fc, err := toFuncCall(n.Values)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Expr{
-			FuncCall: fc,
-		}, nil
 	default:
 		return nil, fmt.Errorf("unknown expr type: %s", n.Key.Option)
 	}
@@ -336,34 +325,29 @@ func toAddExpr(vs []*parser.Value) (*AddExpr, error) {
 // dec-assign node
 func toDecAssign(n *parser.Node) (*DecAssign, error) {
 	switch n.Key.Option {
-	case "array":
-		typ, err := toType(n.Values[0])
-		if err != nil {
-			return nil, err
-		}
-
-		v, err := toVariable(n.Values[1].Node)
-		if err != nil {
-			return nil, err
-		}
-
-		compLit, err := toCompositeLiteral(n.Values[3].Node)
-		if err != nil {
-			return nil, err
-		}
-
-		return &DecAssign{
-			Array: &ArrayDecAssign{
-				Dec: &Dec{
-					Type: &TypeDef{
-						Type:   typ,
-						Arrays: v.Arrays,
-					},
-					Name: v.Name,
-				},
-				Exprs: compLit,
-			},
-		}, nil
+	//case "array":
+	//	typ, err := toType(n.Values[0])
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	v, err := toVariable(n.Values[1].Node)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	return &DecAssign{
+	//		Array: &ArrayDecAssign{
+	//			Dec: &Dec{
+	//				Type: &TypeDef{
+	//					Type:   typ,
+	//					Arrays: v.Arrays,
+	//				},
+	//				Name: v.Name,
+	//			},
+	//			Exprs: compLit,
+	//		},
+	//	}, nil
 	case "standard":
 		typ, err := toType(n.Values[0])
 		if err != nil {
@@ -383,7 +367,8 @@ func toDecAssign(n *parser.Node) (*DecAssign, error) {
 		return &DecAssign{
 			Dec: &Dec{
 				Type: &TypeDef{
-					Type: typ,
+					Type:   typ,
+					Arrays: v.Arrays,
 				},
 				Name: v.Name,
 			},

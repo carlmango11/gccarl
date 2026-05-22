@@ -35,8 +35,7 @@ type FuncDef struct {
 }
 
 type Compiler struct {
-	funcs  map[semantic.FuncName]*FuncDef
-	inFunc bool
+	funcs map[semantic.FuncName]*FuncDef
 }
 
 func New() *Compiler {
@@ -62,6 +61,9 @@ func (c *Compiler) Compile(prog *semantic.Program) ([]byte, error) {
 
 func (c *Compiler) compile(prog *semantic.Program) (*Instrs, error) {
 	full := &Instrs{}
+
+	addDataSection(prog, full)
+
 	full.addInstr("section .text")
 	full.addInstr("global _start")
 
@@ -91,12 +93,18 @@ func (c *Compiler) compile(prog *semantic.Program) (*Instrs, error) {
 	return full, nil
 }
 
+func addDataSection(prog *semantic.Program, full *Instrs) {
+	full.addInstr("section .data")
+
+	for id, val := range prog.Strings {
+		full.addInstr(`str_%d db "%s", 0xA`, id+1, val)
+	}
+}
+
 func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, locals *StackVars) error {
 	switch {
 	case s.Assign != nil:
 		return c.compileAssign(instrs, s.Assign, locals)
-	case s.ArrayAssign != nil:
-		return c.compileArrayAssign(instrs, s.ArrayAssign, locals)
 	case s.Expr != nil:
 		_, err := c.compileExpr(instrs, s.Expr, locals)
 		return err
@@ -105,23 +113,40 @@ func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, local
 	panic("missing statement type")
 }
 
-func (c *Compiler) compileArrayAssign(instrs *Instrs, a *semantic.ArrayAssign, locals *StackVars) error {
-	startOffset := locals.AddNamed(a.Name, a.Type.Size())
+func (c *Compiler) compileAssign(instrs *Instrs, a *semantic.Assign, locals *StackVars) error {
+	switch a.Expr.Type.Kind {
+	case semantic.KindArray:
+		return c.compileArrayAssign(instrs, a, locals)
+	default:
+		return c.compileStandardAssign(instrs, a, locals)
+	}
+}
 
-	for i, v := range a.Vals {
-		reg, err := c.compileExpr(instrs, v, locals)
-		if err != nil {
-			return err
+func (c *Compiler) compileArrayAssign(instrs *Instrs, a *semantic.Assign, locals *StackVars) error {
+	switch {
+	case a.Expr.StringID != 0:
+
+	default:
+		startOffset, ok := locals.Offset(a.Name)
+		if !ok {
+			return fmt.Errorf("undefined variable %s", a.Name)
 		}
 
-		offset := startOffset - Offset(a.Vals[0].Type.Size()*i)
-		instrs.addInstr("mov qword [rbp-%d], %s", offset, reg) // TODO needs to change for floats
+		for i, v := range a.Expr.CompLiteral {
+			reg, err := c.compileExpr(instrs, v, locals)
+			if err != nil {
+				return err
+			}
+
+			offset := startOffset - Offset(v.Type.Size()*i)
+			instrs.addInstr("mov qword [rbp-%d], %s", offset, reg) // TODO needs to change for floats
+		}
 	}
 
 	return nil
 }
 
-func (c *Compiler) compileAssign(instrs *Instrs, a *semantic.Assign, locals *StackVars) error {
+func (c *Compiler) compileStandardAssign(instrs *Instrs, a *semantic.Assign, locals *StackVars) error {
 	toOffset, ok := locals.Offset(a.Name)
 	if !ok {
 		return fmt.Errorf("undefined variable: %s", a.Name)
@@ -185,6 +210,10 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 		instrs.addInstr("lea %s, [rbp-%d]", RegRAX, offset)
 		return RegRAX, nil
 
+	case e.StringID != 0:
+		instrs.addInstr("lea %s, [rel %s]", RegRAX, c.stringLabel(e.StringID))
+		return RegRAX, nil
+
 	case e.Literal != nil:
 		switch e.Type.Kind {
 		//case e.Add != nil:
@@ -211,7 +240,11 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 		return RegRAX, nil
 	}
 
-	return "", fmt.Errorf("unknown expr type: %+v", e)
+	panic(fmt.Sprintf("unknown expr type: %+v", e))
+}
+
+func (c *Compiler) stringLabel(id int) string {
+	return fmt.Sprintf("str_%d", id)
 }
 
 //func (c *Compiler) compileAdd(a *semantic.AddExpr, locals *Vars, target Register) (ast.RawType, error) {

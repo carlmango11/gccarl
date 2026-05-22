@@ -39,10 +39,11 @@ type AddExpr struct {
 }
 
 type Value struct {
-	Int  *int
-	Var  *Var
-	Str  *string
-	Char *byte
+	Int     *int
+	Var     *Var
+	Str     *string
+	Char    *byte
+	CompLit []*Expr
 }
 
 type ArrayDef struct {
@@ -89,7 +90,7 @@ type Statement struct {
 type DecAssign struct {
 	Dec    *Dec
 	Assign *Assign
-	Array  *ArrayDecAssign
+	//Array  *ArrayDecAssign
 }
 
 type ArrayDecAssign struct {

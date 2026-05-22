@@ -26,6 +26,7 @@ value:
     str:STR
     char:CHAR
     cast:LPAREN type RPAREN value
+    comp-lit:composite-literal
 
 comma-expr:
     comma-expr:COMMA expr
@@ -57,7 +58,6 @@ statement:
 
 dec-assign:
     standard:type variable EQUALS expr
-    array:type variable EQUALS composite-literal
 
 composite-literal:
     array-val:LBRACE comp-entries? RBRACE

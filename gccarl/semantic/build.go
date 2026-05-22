@@ -9,6 +9,7 @@ import (
 type builder struct {
 	vars  map[ast.Identifier]PrimitiveType
 	funcs map[ast.Identifier]Type
+	strs  []string
 }
 
 func Build(program *ast.Program) (*Program, error) {
@@ -38,6 +39,7 @@ func (b *builder) build(p *ast.Program) (*Program, error) {
 	return &Program{
 		Imports:  p.Imports,
 		FuncDefs: funcDecs,
+		Strings:  b.strs,
 	}, nil
 }
 
@@ -58,9 +60,9 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 		if s.DecAssign != nil {
 			dec = s.DecAssign.Dec
 
-			if s.DecAssign.Array != nil {
-				dec = s.DecAssign.Array.Dec
-			}
+			//if s.DecAssign.Array != nil {
+			//	dec = s.DecAssign.Array.Dec
+			//}
 		}
 
 		if dec == nil {
@@ -192,15 +194,15 @@ func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*
 			return &Statement{
 				Assign: a,
 			}, nil
-		case s.DecAssign.Array != nil:
-			a, err := b.toArrayDecAssign(vars, s.DecAssign.Array)
-			if err != nil {
-				return nil, err
-			}
-
-			return &Statement{
-				ArrayAssign: a,
-			}, nil
+			//case s.DecAssign.Array != nil:
+			//	a, err := b.toArrayDecAssign(vars, s.DecAssign.Array)
+			//	if err != nil {
+			//		return nil, err
+			//	}
+			//
+			//	return &Statement{
+			//		ArrayAssign: a,
+			//	}, nil
 		}
 
 	case s.Assign != nil:
@@ -262,37 +264,37 @@ func (b *builder) toAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*Assign
 	}, nil
 }
 
-func (b *builder) toArrayDecAssign(vars map[ast.Identifier]Type, a *ast.ArrayDecAssign) (*ArrayAssign, error) {
-	v := vars[a.Dec.Name]
-
-	var exprs []*Expr
-
-	for _, entry := range a.Exprs {
-		expr, err := b.toExpr(entry, vars)
-		if err != nil {
-			return nil, err
-		}
-
-		if !v.SubType.Equals(expr.Type) {
-			if compatibleTypes(v, expr.Type) {
-				expr = &Expr{
-					Cast: &Cast{
-						To:   v,
-						Expr: expr,
-					},
-				}
-			}
-		}
-
-		exprs = append(exprs, expr)
-	}
-
-	return &ArrayAssign{
-		Type: v,
-		Name: VarName(a.Dec.Name),
-		Vals: exprs,
-	}, nil
-}
+//func (b *builder) toArrayDecAssign(vars map[ast.Identifier]Type, a *ast.ArrayDecAssign) (*ArrayAssign, error) {
+//	v := vars[a.Dec.Name]
+//
+//	var exprs []*Expr
+//
+//	for _, entry := range a.Exprs {
+//		expr, err := b.toExpr(entry, vars)
+//		if err != nil {
+//			return nil, err
+//		}
+//
+//		if !v.SubType.Equals(expr.Type) {
+//			if compatibleTypes(v, expr.Type) {
+//				expr = &Expr{
+//					Cast: &Cast{
+//						To:   v,
+//						Expr: expr,
+//					},
+//				}
+//			}
+//		}
+//
+//		exprs = append(exprs, expr)
+//	}
+//
+//	return &ArrayAssign{
+//		Type: v,
+//		Name: VarName(a.Dec.Name),
+//		Vals: exprs,
+//	}, nil
+//}
 
 func (b *builder) toExpr(expr *ast.Expr, locals map[ast.Identifier]Type) (*Expr, error) {
 	switch {
@@ -300,6 +302,20 @@ func (b *builder) toExpr(expr *ast.Expr, locals map[ast.Identifier]Type) (*Expr,
 		v := expr.Val
 
 		switch {
+		case v.Str != nil:
+			b.strs = append(b.strs, *v.Str)
+
+			return &Expr{
+				Type: Type{
+					Kind: KindArray,
+					SubType: &Type{
+						Kind: KindPrimitive,
+						Prim: PrimChar,
+					},
+					ArraySize: len(*v.Str),
+				},
+				StringID: len(b.strs),
+			}, nil
 		case v.Int != nil:
 			// TODO other sizes
 			return &Expr{
@@ -325,6 +341,19 @@ func (b *builder) toExpr(expr *ast.Expr, locals map[ast.Identifier]Type) (*Expr,
 				Type: typ,
 				Var:  VarName(v.Var.Name),
 			}, nil
+		case v.CompLit != nil:
+			exprs, err := b.toCompLit(v.CompLit, locals)
+			if err != nil {
+				return nil, err
+			}
+
+			return &Expr{
+				Type: Type{
+					Kind:    KindArray,
+					SubType: &exprs[0].Type,
+				},
+				CompLiteral: exprs,
+			}, nil
 		}
 	case expr.FuncCall != nil:
 		fc, err := b.toFuncCall(expr.FuncCall, locals)
@@ -344,6 +373,23 @@ func (b *builder) toExpr(expr *ast.Expr, locals map[ast.Identifier]Type) (*Expr,
 	}
 
 	panic("invalid expression")
+}
+
+func (b *builder) toCompLit(lit []*ast.Expr, locals map[ast.Identifier]Type) ([]*Expr, error) {
+	var exprs []*Expr
+
+	for _, astExpr := range lit {
+		expr, err := b.toExpr(astExpr, locals)
+		if err != nil {
+			return nil, err
+		}
+
+		// type check TODO
+
+		exprs = append(exprs, expr)
+	}
+
+	return exprs, nil
 }
 
 func (b *builder) toFuncCall(call *ast.FuncCall, locals map[ast.Identifier]Type) (*FuncCall, error) {

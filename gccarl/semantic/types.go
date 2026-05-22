@@ -75,7 +75,7 @@ func (t Type) Equals(t2 Type) bool {
 		return true
 	}
 
-	if t.SubType != nil || t2.SubType != nil {
+	if t.SubType == nil || t2.SubType == nil {
 		return false
 	}
 
@@ -99,6 +99,7 @@ func (t Type) IsIntParamType() bool {
 }
 
 type Program struct {
+	Strings  []string
 	Imports  []*ast.Import
 	FuncDefs []*FuncDef
 	Dec      []*ast.Dec
@@ -114,16 +115,9 @@ type FuncDef struct {
 	ReturnExpr *Expr
 }
 
-type ArrayAssign struct {
-	Type Type
-	Name VarName
-	Vals []*Expr
-}
-
 type Statement struct {
-	Assign      *Assign
-	ArrayAssign *ArrayAssign
-	Expr        *Expr
+	Assign *Assign
+	Expr   *Expr
 }
 
 type Dec struct {
@@ -132,14 +126,16 @@ type Dec struct {
 }
 
 type Expr struct {
-	Type      Type
-	Add       *AddExpr
-	FuncCall  *FuncCall
-	Literal   *Literal
-	Var       VarName
-	AddressOf VarName
-	ArrayVar  *IndexedVar
-	Cast      *Cast
+	Type        Type
+	Add         *AddExpr
+	FuncCall    *FuncCall
+	Literal     *Literal
+	Var         VarName
+	AddressOf   VarName
+	ArrayVar    *IndexedVar
+	Cast        *Cast
+	CompLiteral []*Expr
+	StringID    int
 }
 
 type IndexedVar struct {

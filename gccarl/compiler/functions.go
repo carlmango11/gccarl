@@ -39,17 +39,15 @@ var data = []Instr{
 
 func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	funcInstrs := &Instrs{}
-
-	c.inFunc = true
-	defer func() {
-		c.inFunc = false
-	}()
-
 	funcInstrs.addInstr("push rbp")
 	funcInstrs.addInstr("mov rbp, rsp")
 
 	locals := newStackVars()
 	body := &Instrs{}
+
+	for name, typ := range f.Locals {
+		locals.AddNamed(name, typ.Size())
+	}
 
 	err := c.handleParamsDef(body, f.Params, locals)
 	if err != nil {
