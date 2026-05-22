@@ -65,7 +65,7 @@ func toFuncDef(node *parser.Node) (*FuncDef, error) {
 			continue
 		}
 
-		switch n.Key.Option {
+		switch n.Key.Rule {
 		case "return":
 			expr, err := toExpr(n.Values[1].Node)
 			if err != nil {
@@ -74,39 +74,47 @@ func toFuncDef(node *parser.Node) (*FuncDef, error) {
 
 			f.ReturnExpr = expr
 		case "line":
-			for _, v := range n.Values[0].Node.Values {
-				switch v.Node.Key.Option {
-				case "statement":
-					s, err := toStatement(n.Values[0].Node)
-					if err != nil {
-						return nil, err
-					}
-
-					f.Lines = append(f.Lines, &Line{
-						Statement: s,
-					})
-				case "control":
-					c, err := toControl(n.Values[0].Node)
-					if err != nil {
-						return nil, err
-					}
-
-					f.Lines = append(f.Lines, &Line{
-						Control: c,
-					})
-				}
+			l, err := toLine(n.Values[0].Node)
+			if err != nil {
+				return nil, err
 			}
-		case "statement":
+
+			f.Lines = append(f.Lines, l)
 		}
 	}
 
 	return f, nil
 }
 
+func toLine(n *parser.Node) (*Line, error) {
+	switch n.Key.Rule {
+	case "statement":
+		s, err := toStatement(n.Values[0].Node)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Line{
+			Statement: s,
+		}, nil
+	case "control":
+		c, err := toControl(n)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Line{
+			Control: c,
+		}, nil
+	}
+
+	panic("invalid line")
+}
+
 func toControl(n *parser.Node) (*Control, error) {
 	switch n.Key.Option {
 	case "if":
-		ifStatement, err := toIf(n.Values[1].Node)
+		ifStatement, err := toIf(n)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +186,7 @@ func toStatement(n *parser.Node) (*Statement, error) {
 }
 
 func toIf(n *parser.Node) (*If, error) {
-	expr, err := toExpr(n.Values[2].Node)
+	expr, err := toExpr(n.Values[2].Node.Values[0].Node)
 	if err != nil {
 		return nil, err
 	}

@@ -85,17 +85,29 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 		paramDefs = append(paramDefs, pd)
 	}
 
-	var statements []*Statement
+	var lines []*Line
+
 	for _, l := range f.Lines {
 		switch {
 		case l.Control != nil:
+			c, err := b.toControl(locals, l.Control)
+			if err != nil {
+				return nil, err
+			}
+
+			lines = append(lines, &Line{
+				Control: c,
+			})
+
 		case l.Statement != nil:
 			s, err := b.toStatement(locals, l.Statement)
 			if err != nil {
 				return nil, err
 			}
 
-			statements = append(statements, s)
+			lines = append(lines, &Line{
+				Statement: s,
+			})
 		}
 	}
 
@@ -117,7 +129,7 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 		Name:       FuncName(f.Name),
 		Locals:     localsCast,
 		Params:     paramDefs,
-		Statements: statements,
+		Lines:      lines,
 		ReturnExpr: returnExpr,
 	}, nil
 }
@@ -187,33 +199,6 @@ func (b *builder) toParamDec(p *ast.ParamDef) (*ParamDef, error) {
 
 func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*Statement, error) {
 	switch {
-	case s.If != nil:
-		expr, err := b.toExpr(s.If.Condition, vars)
-		if err != nil {
-			return nil, err
-		}
-
-		if expr.Type.Prim != PrimBool {
-			return nil, fmt.Errorf("if condition must be a boolean")
-		}
-
-		var ss []*Statement
-		for _, n := range s.If.Statements {
-			state, err := b.toStatement(vars, n)
-			if err != nil {
-				return nil, err
-			}
-
-			ss = append(ss, state)
-		}
-
-		return &Statement{
-			If: &If{
-				Condition:  expr,
-				Statements: ss,
-			},
-		}, nil
-
 	case s.DecAssign != nil:
 		switch {
 		case s.DecAssign.Assign != nil:
@@ -285,38 +270,6 @@ func (b *builder) toAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*Assign
 		Expr: expr,
 	}, nil
 }
-
-//func (b *builder) toArrayDecAssign(vars map[ast.Identifier]Type, a *ast.ArrayDecAssign) (*ArrayAssign, error) {
-//	v := vars[a.Dec.Name]
-//
-//	var exprs []*Expr
-//
-//	for _, entry := range a.Exprs {
-//		expr, err := b.toExpr(entry, vars)
-//		if err != nil {
-//			return nil, err
-//		}
-//
-//		if !v.SubType.Equals(expr.Type) {
-//			if compatibleTypes(v, expr.Type) {
-//				expr = &Expr{
-//					Cast: &Cast{
-//						To:   v,
-//						Expr: expr,
-//					},
-//				}
-//			}
-//		}
-//
-//		exprs = append(exprs, expr)
-//	}
-//
-//	return &ArrayAssign{
-//		Type: v,
-//		Name: VarName(a.Dec.Name),
-//		Vals: exprs,
-//	}, nil
-//}
 
 func (b *builder) toExpr(expr *ast.Expr, locals map[ast.Identifier]Type) (*Expr, error) {
 	switch {
@@ -450,6 +403,39 @@ func (b *builder) toFuncCall(call *ast.FuncCall, locals map[ast.Identifier]Type)
 		Func: FuncName(call.Name),
 		Args: args,
 	}, nil
+}
+
+func (b *builder) toControl(locals map[ast.Identifier]Type, c *ast.Control) (*Control, error) {
+	switch {
+	case c.If != nil:
+		expr, err := b.toExpr(c.If.Condition, locals)
+		if err != nil {
+			return nil, err
+		}
+
+		if expr.Type.Prim != PrimBool {
+			return nil, fmt.Errorf("if condition must be a boolean")
+		}
+
+		var ss []*Statement
+		for _, n := range c.If.Statements {
+			state, err := b.toStatement(locals, n)
+			if err != nil {
+				return nil, err
+			}
+
+			ss = append(ss, state)
+		}
+
+		return &Control{
+			If: &If{
+				Condition:  expr,
+				Statements: ss,
+			},
+		}, nil
+	}
+
+	panic("invalid control")
 }
 
 func int32Type() Type {

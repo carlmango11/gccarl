@@ -54,10 +54,19 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 		return nil, err
 	}
 
-	for _, s := range f.Statements {
-		err := c.compileStatement(body, s, locals)
-		if err != nil {
-			return nil, err
+	for _, s := range f.Lines {
+		switch {
+		case s.Control != nil:
+			err := c.compileControl(body, s.Control, locals)
+			if err != nil {
+				return nil, err
+			}
+
+		case s.Statement != nil:
+			err := c.compileStatement(body, s.Statement, locals)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

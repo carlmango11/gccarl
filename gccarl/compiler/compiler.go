@@ -106,8 +106,6 @@ func (c *Compiler) addDataSection(prog *semantic.Program, full *Instrs) {
 
 func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, locals *StackVars) error {
 	switch {
-	case s.If != nil:
-		return c.compileIf(instrs, s.If, locals)
 	case s.Assign != nil:
 		return c.compileAssign(instrs, s.Assign, locals)
 	case s.Expr != nil:
@@ -170,32 +168,6 @@ func (c *Compiler) compileStandardAssign(instrs *Instrs, a *semantic.Assign, loc
 
 	return nil
 }
-
-//func (c *Compiler) compileVal(v *semantic.Value, locals *Vars, target Register) (ast.RawType, error) {
-//	switch {
-//	case v.Int != nil:
-//		return c.addInstr(nil, "mov %s, %d", target, *v.Int), ast.TypeInt, nil
-//	case v.Char != nil:
-//		return c.addInstr(nil, "mov %s, 0x%X", target, *v.Char), ast.TypeChar, nil
-//	case v.Var != nil:
-//		var idx int
-//		if v.Var.Index != nil {
-//			idx = *v.Var.Index
-//		}
-//
-//		offset, ok := locals.ArrayOffset(v.Var.Name, idx)
-//		if !ok {
-//			return nil, fmt.Errorf("undefined variable: %s", v.Var.Name)
-//		}
-//
-//		return c.addInstr(nil, "mov %s, [rbp-%d]", target, offset), nil
-//	case v.Array != nil:
-//		// TODO: types
-//		return c.compileArray(v.Array, ast.TypeInt, locals, target)
-//	}
-//
-//	panic("missing value type")
-//}
 
 func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Register, error) {
 	switch {
@@ -302,6 +274,15 @@ func (c *Compiler) compileIsEqual(instrs *Instrs, e *semantic.IsEqual, locals *S
 
 	instrs.addInstr("cmp [rbp-%d], %s", offset, reg)
 	return nil
+}
+
+func (c *Compiler) compileControl(instrs *Instrs, control *semantic.Control, locals *StackVars) error {
+	switch {
+	case control.If != nil:
+		return c.compileIf(instrs, control.If, locals)
+	}
+
+	panic("invalid control")
 }
 
 //func (c *Compiler) compileAdd(a *semantic.AddExpr, locals *Vars, target Register) (ast.RawType, error) {

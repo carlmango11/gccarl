@@ -112,12 +112,20 @@ type FuncDef struct {
 	Params     []*ParamDef
 	//TypeDefs []
 	Locals     map[VarName]Type
-	Statements []*Statement
+	Lines      []*Line
 	ReturnExpr *Expr
 }
 
+type Line struct {
+	Statement *Statement
+	Control   *Control
+}
+
+type Control struct {
+	If *If
+}
+
 type Statement struct {
-	If     *If
 	Assign *Assign
 	Expr   *Expr
 }
