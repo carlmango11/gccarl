@@ -27,8 +27,7 @@ func (c *Cursor) Apply(token *tokens.Token) bool {
 		return false
 	}
 
-	c.Stack[len(c.Stack)-1].Index++ // todo advance()
-
+	c.advance()
 	c.stepUp()
 
 	return true

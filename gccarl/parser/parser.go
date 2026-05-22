@@ -54,17 +54,59 @@ func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
 		return nil, err
 	}
 
-	r.Reset() // this is all shit, I should just build it as parse
-	node := p.buildNode(r, RuleKey{"main", "main"}, path)
+	p.debugf("path: %s", path)
+
+	r.Reset() // this is all shit, I should just build it as I parse
+	node := p.buildNode(r, RuleKey{"main", "main"}, &PathReader{path: path})
 
 	return node, nil
 }
 
-func (p *Parser) buildNode(r *tokens.Reader, k RuleKey, path []RuleKey) *Node {
+type PathReader struct {
+	path []RuleKey
+	i    int
+}
+
+func (p *PathReader) Next() RuleKey {
+	if p.i >= len(p.path) {
+		panic("path too short")
+	}
+
+	r := p.path[p.i]
+	p.i++
+
+	return r
+}
+
+func (p *PathReader) Peek() RuleKey {
+	if p.i >= len(p.path) {
+		panic("peek called on empty path")
+	}
+
+	return p.path[p.i]
+}
+
+func (p *Parser) buildNode(r *tokens.Reader, k RuleKey, path *PathReader) *Node {
 	parts := p.getParts(k)
 
 	var vals []*Value
-	for _, part := range parts {
+	for i, part := range parts {
+		if part.IsRule() {
+			if path.Peek().Rule != part.Rule {
+				continue
+			}
+
+			n := path.Next()
+
+			p.debugf("[%v] new rule %v", i, n)
+
+			vals = append(vals, &Value{
+				Node: p.buildNode(r, n, path),
+			})
+
+			continue
+		}
+
 		tok, err := r.Next()
 		if err != nil {
 			if err == io.EOF {
@@ -74,15 +116,11 @@ func (p *Parser) buildNode(r *tokens.Reader, k RuleKey, path []RuleKey) *Node {
 			panic(err)
 		}
 
-		if part.IsRule() {
-			vals = append(vals, &Value{
-				Node: p.buildNode(r, path[0], path[1:]),
-			})
-		} else {
-			vals = append(vals, &Value{
-				Token: tok,
-			})
-		}
+		p.debugf("[%d] applying %v to token %v", i, tok.Name, k)
+
+		vals = append(vals, &Value{
+			Token: tok,
+		})
 	}
 
 	return &Node{
@@ -102,9 +140,6 @@ func (p *Parser) parsePath(r *tokens.Reader) ([]RuleKey, error) {
 						Option: "main",
 					},
 				},
-			},
-			Path: []RuleKey{
-				{"main", "main"},
 			},
 		},
 	}

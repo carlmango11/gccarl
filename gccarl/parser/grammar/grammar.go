@@ -46,21 +46,6 @@ func (t Part) IsRule() bool {
 	return t.Rule != ""
 }
 
-//func (t Token) String() string {
-//	if
-//	s := t.Type.String() + t.Cardinality.String()
-//
-//	if t.Literal != "" {
-//		s += ":" + t.Literal
-//	}
-//
-//	if t.Rule != "" {
-//		s += ":" + string(t.Rule)
-//	}
-//
-//	return s
-//}
-
 type Option struct {
 	Name  OptionName
 	Parts []*Part
