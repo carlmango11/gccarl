@@ -206,7 +206,7 @@ func toValue(n *parser.Node) (*Value, error) {
 	//		Str: s,
 	//	}, nil
 	case "char":
-		ch := n.Values[1].Token.Val[0]
+		ch := n.Values[0].Token.Val[0]
 
 		return &Value{
 			Char: &ch,

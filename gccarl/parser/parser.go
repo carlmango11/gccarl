@@ -8,17 +8,12 @@ import (
 	"github.com/carlmango11/gccarl/gccarl/tokens"
 )
 
-type Node struct {
-	Key    RuleKey
-	Values []*Value
-}
-
 type RuleKey struct {
 	Rule   grammar.RuleName
 	Option grammar.OptionName
 }
 
-type Key struct {
+type Index struct {
 	RuleKey RuleKey
 	Index   int
 }
@@ -49,91 +44,17 @@ func New(r io.Reader, debug bool) (*Parser, error) {
 }
 
 func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
-	path, err := p.parsePath(r)
-	if err != nil {
-		return nil, err
+	top := &Node{
+		Key: RuleKey{
+			Rule:   "main",
+			Option: "main",
+		},
 	}
 
-	p.debugf("path: %s", path)
-
-	r.Reset() // this is all shit, I should just build it as I parse
-	node := p.buildNode(r, RuleKey{"main", "main"}, &PathReader{path: path})
-
-	return node, nil
-}
-
-type PathReader struct {
-	path []RuleKey
-	i    int
-}
-
-func (p *PathReader) Next() RuleKey {
-	if p.i >= len(p.path) {
-		panic("path too short")
-	}
-
-	r := p.path[p.i]
-	p.i++
-
-	return r
-}
-
-func (p *PathReader) Peek() RuleKey {
-	if p.i >= len(p.path) {
-		panic("peek called on empty path")
-	}
-
-	return p.path[p.i]
-}
-
-func (p *Parser) buildNode(r *tokens.Reader, k RuleKey, path *PathReader) *Node {
-	parts := p.getParts(k)
-
-	var vals []*Value
-	for i, part := range parts {
-		if part.IsRule() {
-			if path.Peek().Rule != part.Rule {
-				continue
-			}
-
-			n := path.Next()
-
-			p.debugf("[%v] new rule %v", i, n)
-
-			vals = append(vals, &Value{
-				Node: p.buildNode(r, n, path),
-			})
-
-			continue
-		}
-
-		tok, err := r.Next()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			panic(err)
-		}
-
-		p.debugf("[%d] applying %v to token %v", i, tok.Name, k)
-
-		vals = append(vals, &Value{
-			Token: tok,
-		})
-	}
-
-	return &Node{
-		Key:    k,
-		Values: vals,
-	}
-}
-
-func (p *Parser) parsePath(r *tokens.Reader) ([]RuleKey, error) {
 	p.cursors = []*Cursor{
 		{
 			grammar: p.grammar,
-			Stack: []Key{
+			Stack: []Index{
 				{
 					RuleKey: RuleKey{
 						Rule:   "main",
@@ -141,6 +62,8 @@ func (p *Parser) parsePath(r *tokens.Reader) ([]RuleKey, error) {
 					},
 				},
 			},
+			Current: top,
+			Top:     top,
 		},
 	}
 
@@ -173,7 +96,7 @@ func (p *Parser) parsePath(r *tokens.Reader) ([]RuleKey, error) {
 		return nil, fmt.Errorf("last cursor did not terminate: %v", p.cursors[0])
 	}
 
-	return p.cursors[0].Path, nil
+	return p.cursors[0].Top, nil
 }
 
 func (p *Parser) debugf(format string, args ...any) {

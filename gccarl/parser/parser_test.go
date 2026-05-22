@@ -76,7 +76,7 @@ type:
 			tks, err := tokens.New(tokenDef, tc.text)
 			require.NoError(t, err)
 
-			path, err := p.parsePath(tks)
+			path, err := p.Parse(tks)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, path)
 		})

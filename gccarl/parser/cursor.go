@@ -9,8 +9,9 @@ import (
 
 type Cursor struct {
 	grammar map[grammar.RuleName]*grammar.Rule
-	Stack   []Key
-	Path    []RuleKey
+	Stack   []Index
+	Current *Node
+	Top     *Node
 }
 
 func (c *Cursor) String() string {
@@ -27,6 +28,10 @@ func (c *Cursor) Apply(token *tokens.Token) bool {
 		return false
 	}
 
+	c.Current.Values = append(c.Current.Values, &Value{
+		Token: token,
+	})
+
 	c.advance()
 	c.stepUp()
 
@@ -35,7 +40,7 @@ func (c *Cursor) Apply(token *tokens.Token) bool {
 
 func (c *Cursor) stepUp() bool {
 	for len(c.Stack) > 0 && c.endOfRule() {
-		c.Stack = c.Stack[:len(c.Stack)-1]
+		c.pop()
 
 		if c.finished() {
 			return true
@@ -88,15 +93,21 @@ func (c *Cursor) Branch() (ready []*Cursor, needBranch []*Cursor) {
 }
 
 func (c *Cursor) Clone() *Cursor {
-	stack := make([]Key, len(c.Stack))
+	stack := make([]Index, len(c.Stack))
 	copy(stack, c.Stack)
-	path := make([]RuleKey, len(c.Path))
-	copy(path, c.Path)
+
+	node := c.Current.Clone()
+	top := node
+
+	for top.parent != nil {
+		top = top.parent
+	}
 
 	return &Cursor{
 		grammar: c.grammar,
 		Stack:   stack,
-		Path:    path,
+		Current: node,
+		Top:     top,
 	}
 }
 
@@ -122,15 +133,27 @@ func (c *Cursor) branchOptions() []*Cursor {
 	for _, o := range c.grammar[nextPart.Rule].Options {
 		cloned := c.Clone()
 
-		key := Key{
-			RuleKey: RuleKey{
-				Rule:   nextPart.Rule,
-				Option: o.Name,
-			},
+		ruleKey := RuleKey{
+			Rule:   nextPart.Rule,
+			Option: o.Name,
+		}
+
+		key := Index{
+			RuleKey: ruleKey,
 		}
 
 		cloned.Stack = append(cloned.Stack, key)
-		cloned.Path = append(cloned.Path, key.RuleKey)
+
+		newNode := &Node{
+			Key:    ruleKey,
+			parent: cloned.Current,
+		}
+
+		cloned.Current.Values = append(cloned.Current.Values, &Value{
+			Node: newNode,
+		})
+
+		cloned.Current = newNode
 
 		cursors = append(cursors, cloned)
 	}
@@ -176,4 +199,9 @@ func (c *Cursor) terminalState() bool {
 
 		c.advance()
 	}
+}
+
+func (c *Cursor) pop() {
+	c.Stack = c.Stack[:len(c.Stack)-1]
+	c.Current = c.Current.parent
 }

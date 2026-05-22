@@ -60,6 +60,8 @@ func main() {
 		return
 	}
 
+	fmt.Fprintln(os.Stdout, parsed.String())
+
 	astProg, err := ast.Build(parsed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
