@@ -40,8 +40,6 @@ var data = []Instr{
 func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	funcInstrs := &Instrs{}
 
-	funcInstrs.addInstr("%s:", f.Name)
-
 	c.inFunc = true
 	defer func() {
 		c.inFunc = false

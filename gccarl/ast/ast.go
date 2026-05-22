@@ -11,8 +11,9 @@ type Import struct {
 }
 
 type RawType struct {
-	Type Identifier
-	Sub  *RawType
+	Type    Identifier
+	Sub     *RawType
+	Pointer bool
 }
 
 type ParamDef struct {
@@ -38,21 +39,20 @@ type AddExpr struct {
 }
 
 type Value struct {
-	Int   *int
-	Var   *Var
-	Str   *string
-	Char  *byte
-	Array *Array
+	Int  *int
+	Var  *Var
+	Str  *string
+	Char *byte
 }
 
-type Array struct {
-	Entries []*Expr
+type ArrayDef struct {
+	Size    int
+	HasSize bool
 }
 
 type Var struct {
-	Name    Identifier
-	Indexed bool
-	Index   int
+	Name   Identifier
+	Arrays []*ArrayDef
 }
 
 type VarAccess struct {
@@ -62,8 +62,8 @@ type VarAccess struct {
 }
 
 type TypeDef struct {
-	Type  *RawType
-	Array bool
+	Type   *RawType
+	Arrays []*ArrayDef
 }
 
 type FuncDef struct {
@@ -76,7 +76,6 @@ type FuncDef struct {
 
 type Dec struct {
 	Type *TypeDef
-	Size int
 	Name Identifier
 }
 
@@ -90,6 +89,12 @@ type Statement struct {
 type DecAssign struct {
 	Dec    *Dec
 	Assign *Assign
+	Array  *ArrayDecAssign
+}
+
+type ArrayDecAssign struct {
+	Dec   *Dec
+	Exprs []*Expr
 }
 
 type Assign struct {
@@ -100,6 +105,6 @@ type Assign struct {
 type Identifier string
 
 type FuncCall struct {
-	Name   Identifier
-	Params []*Expr
+	Name Identifier
+	Args []*Expr
 }

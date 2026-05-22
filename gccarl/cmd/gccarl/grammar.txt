@@ -25,20 +25,13 @@ value:
     variable:variable
     str:STR
     char:CHAR
-    array:array-val
     cast:LPAREN type RPAREN value
-
-array-val:
-    array-val:LBRACE array-entries? RBRACE
-
-array-entries:
-    entries:expr comma-expr*
 
 comma-expr:
     comma-expr:COMMA expr
 
 variable:
-    variable:IDEN array-index?
+    variable:IDEN array-index*
 
 array-index:
     array-index:LSQUARE NUM? RSQUARE
@@ -63,7 +56,14 @@ statement:
     expr:expr
 
 dec-assign:
-    assign:type variable EQUALS expr
+    standard:type variable EQUALS expr
+    array:type variable EQUALS composite-literal
+
+composite-literal:
+    array-val:LBRACE comp-entries? RBRACE
+
+comp-entries:
+    entries:expr comma-expr*
 
 params:
     params:expr comma-expr*

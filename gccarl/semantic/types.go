@@ -168,9 +168,8 @@ type FuncCall struct {
 }
 
 type Assign struct {
-	Name  VarName
-	Index int
-	Expr  *Expr
+	Name VarName
+	Expr *Expr
 }
 
 type ParamDef struct {

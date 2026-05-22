@@ -84,7 +84,8 @@ func (c *Compiler) compile(prog *semantic.Program) (*Instrs, error) {
 			return nil, err
 		}
 
-		full.instrs = append(full.instrs, funcInstrs.instrs...)
+		full.addInstr("%s:", fd.Name)
+		full.addInstrsIndent(funcInstrs)
 	}
 
 	return full, nil
@@ -105,10 +106,6 @@ func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, local
 }
 
 func (c *Compiler) compileArrayAssign(instrs *Instrs, a *semantic.ArrayAssign, locals *StackVars) error {
-	if len(a.Vals) == 0 {
-		panic("handle")
-	}
-
 	startOffset := locals.AddNamed(a.Name, a.Type.Size())
 
 	for i, v := range a.Vals {
@@ -204,6 +201,14 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 				return RegRAX, nil
 			}
 		}
+	case e.Var != "":
+		offset, ok := locals.Offset(e.Var)
+		if !ok {
+			return RegUnset, fmt.Errorf("undefined variable: %s", e.Var)
+		}
+
+		instrs.addInstr("mov %s, [rbp-%d]", RegRAX, offset)
+		return RegRAX, nil
 	}
 
 	return "", fmt.Errorf("unknown expr type: %+v", e)
@@ -247,6 +252,12 @@ type Instrs struct {
 func (i *Instrs) addInstr(format string, args ...any) {
 	instr := fmt.Sprintf(format, args...)
 	i.instrs = append(i.instrs, Instr(instr))
+}
+
+func (i *Instrs) addInstrsIndent(inner *Instrs) {
+	for _, instr := range inner.instrs {
+		i.instrs = append(i.instrs, "\t"+instr)
+	}
 }
 
 func returnRegister(t semantic.Type) Register {

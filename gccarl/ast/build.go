@@ -98,8 +98,8 @@ func toParamDef(n *parser.Node) (*ParamDef, error) {
 	}
 
 	typeDef := &TypeDef{
-		Type:  typ,
-		Array: v.Indexed,
+		Type:   typ,
+		Arrays: v.Arrays,
 	}
 
 	return &ParamDef{
@@ -113,7 +113,7 @@ func toStatement(n *parser.Node) (*Statement, error) {
 	case "var-dec":
 		panic("impl")
 	case "dec-assign":
-		vd, err := toDecAssign(n.Values[0].Node.Values)
+		vd, err := toDecAssign(n.Values[0].Node)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +160,7 @@ func toFuncCall(vs []*parser.Value) (*FuncCall, error) {
 			return nil, err
 		}
 
-		fc.Params = append(fc.Params, expr)
+		fc.Args = append(fc.Args, expr)
 	}
 
 	return fc, nil
@@ -215,19 +215,10 @@ func toValue(n *parser.Node) (*Value, error) {
 	//		Str: s,
 	//	}, nil
 	case "char":
-		ch := n.Values[0].Token.Val[0]
+		ch := n.Values[0].Token.Val[1]
 
 		return &Value{
 			Char: &ch,
-		}, nil
-	case "array":
-		a, err := toArray(n.Values[0].Node)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Value{
-			Array: a,
 		}, nil
 	default:
 		panic(fmt.Sprintf("unknown node: %s", n.Key.Option))
@@ -235,51 +226,33 @@ func toValue(n *parser.Node) (*Value, error) {
 }
 
 func toVariable(n *parser.Node) (*Var, error) {
-	var array bool
-	var index int
-	if len(n.Values) == 2 {
-		array = true
+	var arrays []*ArrayDef
 
-		arrayIndexNode := n.Values[1].Node
+	for i := 1; i < len(n.Values); i++ {
+		var hasSize bool
+		var size int
+
+		arrayIndexNode := n.Values[i].Node
 		if len(arrayIndexNode.Values) == 3 {
-			num, err := strconv.Atoi(arrayIndexNode.Values[2].Token.Val)
+			num, err := strconv.Atoi(arrayIndexNode.Values[1].Token.Val)
 			if err != nil {
 				return nil, err
 			}
 
-			index = num
+			size = num
+			hasSize = true
 		}
+
+		arrays = append(arrays, &ArrayDef{
+			HasSize: hasSize,
+			Size:    size,
+		})
 	}
 
 	return &Var{
-		Name:    Identifier(n.Values[0].Token.Val),
-		Indexed: array,
-		Index:   index,
+		Name:   Identifier(n.Values[0].Token.Val),
+		Arrays: arrays,
 	}, nil
-}
-
-func toArray(n *parser.Node) (*Array, error) {
-	a := &Array{}
-
-	if len(n.Values) == 2 {
-		return a, nil
-	}
-
-	for i, v := range n.Values[1].Node.Values {
-		exprNode := v.Node
-		if i > 0 {
-			exprNode = v.Node.Values[1].Node
-		}
-
-		expr, err := toExpr(exprNode)
-		if err != nil {
-			return nil, err
-		}
-
-		a.Entries = append(a.Entries, expr)
-	}
-
-	return a, nil
 }
 
 func toExpr(n *parser.Node) (*Expr, error) {
@@ -360,38 +333,98 @@ func toAddExpr(vs []*parser.Value) (*AddExpr, error) {
 	}, nil
 }
 
-func toDecAssign(vs []*parser.Value) (*DecAssign, error) {
-	typ, err := toType(vs[0])
-	if err != nil {
-		return nil, err
-	}
+// dec-assign node
+func toDecAssign(n *parser.Node) (*DecAssign, error) {
+	switch n.Key.Option {
+	case "array":
+		typ, err := toType(n.Values[0])
+		if err != nil {
+			return nil, err
+		}
 
-	v, err := toVariable(vs[1].Node)
-	if err != nil {
-		return nil, err
-	}
+		v, err := toVariable(n.Values[1].Node)
+		if err != nil {
+			return nil, err
+		}
 
-	expr, err := toExpr(vs[3].Node)
-	if err != nil {
-		return nil, err
-	}
+		compLit, err := toCompositeLiteral(n.Values[3].Node)
+		if err != nil {
+			return nil, err
+		}
 
-	return &DecAssign{
-		Dec: &Dec{
-			Type: &TypeDef{
-				Type:  typ,
-				Array: v.Indexed,
+		return &DecAssign{
+			Array: &ArrayDecAssign{
+				Dec: &Dec{
+					Type: &TypeDef{
+						Type:   typ,
+						Arrays: v.Arrays,
+					},
+					Name: v.Name,
+				},
+				Exprs: compLit,
 			},
-			Name: v.Name,
-			Size: v.Index,
-		},
-		Assign: &Assign{
-			Var: &Var{
+		}, nil
+	case "standard":
+		typ, err := toType(n.Values[0])
+		if err != nil {
+			return nil, err
+		}
+
+		v, err := toVariable(n.Values[1].Node)
+		if err != nil {
+			return nil, err
+		}
+
+		expr, err := toExpr(n.Values[3].Node)
+		if err != nil {
+			return nil, err
+		}
+
+		return &DecAssign{
+			Dec: &Dec{
+				Type: &TypeDef{
+					Type: typ,
+				},
 				Name: v.Name,
 			},
-			Expr: expr,
-		},
-	}, nil
+			Assign: &Assign{
+				Var: &Var{
+					Name: v.Name,
+				},
+				Expr: expr,
+			},
+		}, nil
+	}
+
+	return nil, fmt.Errorf("unknown expr type: %s", n.Key.Option)
+}
+
+func toCompositeLiteral(n *parser.Node) ([]*Expr, error) {
+	entriesNode := n.Values[1].Node
+
+	exprNodes := []*parser.Node{
+		entriesNode.Values[0].Node,
+	}
+
+	for i, n := range entriesNode.Values[1].Node.Values {
+		if i%2 == 0 {
+			continue // skip commas
+		}
+
+		exprNodes = append(exprNodes, n.Node)
+	}
+
+	var exprs []*Expr
+	for _, exprNode := range exprNodes {
+		expr, err := toExpr(exprNode)
+		if err != nil {
+			return nil, err
+		}
+
+		exprs = append(exprs, expr)
+	}
+
+	return exprs, nil
 }
 
 // "type" node

@@ -7,12 +7,18 @@ import (
 )
 
 type builder struct {
-	vars map[ast.Identifier]PrimitiveType
+	vars  map[ast.Identifier]PrimitiveType
+	funcs map[ast.Identifier]Type
 }
 
 func Build(program *ast.Program) (*Program, error) {
 	b := &builder{
-		vars: make(map[ast.Identifier]PrimitiveType),
+		vars:  make(map[ast.Identifier]PrimitiveType),
+		funcs: make(map[ast.Identifier]Type),
+	}
+
+	b.funcs["print"] = Type{
+		Kind: KindVoid,
 	}
 
 	return b.build(program)
@@ -43,12 +49,18 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 		return nil, err
 	}
 
+	b.funcs[f.Name] = returnType
+
 	locals := map[ast.Identifier]Type{}
 
 	for _, s := range f.Statements {
 		dec := s.Dec
 		if s.DecAssign != nil {
 			dec = s.DecAssign.Dec
+
+			if s.DecAssign.Array != nil {
+				dec = s.DecAssign.Array.Dec
+			}
 		}
 
 		if dec == nil {
@@ -83,7 +95,7 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 
 	var returnExpr *Expr
 	if f.ReturnExpr != nil {
-		returnExpr, err = b.toExpr(f.ReturnExpr)
+		returnExpr, err = b.toExpr(f.ReturnExpr, locals)
 		if err != nil {
 			return nil, err
 		}
@@ -120,11 +132,23 @@ func (b *builder) declareVar(vars map[ast.Identifier]Type, dec *ast.Dec) error {
 }
 
 func (b *builder) toType(i *ast.TypeDef) (Type, error) {
-	kind := KindPrimitive
-	if i.Array {
-		panic("array declared as a primitive")
-		kind = KindArray
+	if len(i.Arrays) > 0 {
+		size := i.Arrays[0].Size
+
+		i.Arrays = i.Arrays[1:]
+		sub, err := b.toType(i)
+		if err != nil {
+			return Type{}, err
+		}
+
+		return Type{
+			Kind:      KindArray,
+			SubType:   &sub,
+			ArraySize: size,
+		}, nil
 	}
+
+	kind := KindPrimitive
 
 	var prim PrimitiveType
 	switch i.Type.Type {
@@ -158,8 +182,18 @@ func (b *builder) toParamDec(p *ast.ParamDef) (*ParamDef, error) {
 func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*Statement, error) {
 	switch {
 	case s.DecAssign != nil:
-		if s.DecAssign.Dec.Type.Array {
-			a, err := b.toArrayAssign(vars, s.DecAssign.Assign)
+		switch {
+		case s.DecAssign.Assign != nil:
+			a, err := b.toAssign(vars, s.DecAssign.Assign)
+			if err != nil {
+				return nil, err
+			}
+
+			return &Statement{
+				Assign: a,
+			}, nil
+		case s.DecAssign.Array != nil:
+			a, err := b.toArrayDecAssign(vars, s.DecAssign.Array)
 			if err != nil {
 				return nil, err
 			}
@@ -168,14 +202,7 @@ func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*
 				ArrayAssign: a,
 			}, nil
 		}
-		a, err := b.toAssign(vars, s.DecAssign.Assign)
-		if err != nil {
-			return nil, err
-		}
 
-		return &Statement{
-			Assign: a,
-		}, nil
 	case s.Assign != nil:
 		a, err := b.toAssign(vars, s.Assign)
 		if err != nil {
@@ -186,7 +213,7 @@ func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*
 			Assign: a,
 		}, nil
 	case s.Expr != nil:
-		expr, err := b.toExpr(s.Expr)
+		expr, err := b.toExpr(s.Expr, vars)
 		if err != nil {
 			return nil, err
 		}
@@ -209,11 +236,11 @@ func (b *builder) toAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*Assign
 	}
 
 	indexable := v.Kind == KindPointer
-	if a.Var.Indexed && !indexable {
+	if len(a.Var.Arrays) > 0 && !indexable {
 		return nil, fmt.Errorf("variable %s is not indexable", a.Var.Name)
 	}
 
-	expr, err := b.toExpr(a.Expr)
+	expr, err := b.toExpr(a.Expr, vars)
 	if err != nil {
 		return nil, err
 	}
@@ -230,40 +257,23 @@ func (b *builder) toAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*Assign
 	}
 
 	return &Assign{
-		Name:  VarName(a.Var.Name),
-		Index: a.Var.Index,
-		Expr:  expr,
+		Name: VarName(a.Var.Name),
+		Expr: expr,
 	}, nil
 }
 
-func (b *builder) toArrayAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*ArrayAssign, error) {
-	v, ok := vars[a.Var.Name]
-	if !ok {
-		v, ok = vars[a.Var.Name]
-		if !ok {
-			return nil, fmt.Errorf("variable %s not declared", a.Var.Name)
-		}
-	}
-
-	if v.Kind != KindArray {
-		panic("got non array in array assign")
-	}
-
-	arr := a.Expr.Val.Array
-
-	if a.Var.Indexed && len(arr.Entries) != a.Var.Index {
-		return nil, fmt.Errorf("expected size %v; got %v", a.Var.Index, arr)
-	}
+func (b *builder) toArrayDecAssign(vars map[ast.Identifier]Type, a *ast.ArrayDecAssign) (*ArrayAssign, error) {
+	v := vars[a.Dec.Name]
 
 	var exprs []*Expr
 
-	for _, entry := range arr.Entries {
-		expr, err := b.toExpr(entry)
+	for _, entry := range a.Exprs {
+		expr, err := b.toExpr(entry, vars)
 		if err != nil {
 			return nil, err
 		}
 
-		if !v.Equals(expr.Type) {
+		if !v.SubType.Equals(expr.Type) {
 			if compatibleTypes(v, expr.Type) {
 				expr = &Expr{
 					Cast: &Cast{
@@ -279,15 +289,16 @@ func (b *builder) toArrayAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*A
 
 	return &ArrayAssign{
 		Type: v,
-		Name: VarName(a.Var.Name),
+		Name: VarName(a.Dec.Name),
 		Vals: exprs,
 	}, nil
 }
 
-func (b *builder) toExpr(expr *ast.Expr) (*Expr, error) {
+func (b *builder) toExpr(expr *ast.Expr, locals map[ast.Identifier]Type) (*Expr, error) {
 	switch {
 	case expr.Val != nil:
 		v := expr.Val
+
 		switch {
 		case v.Int != nil:
 			// TODO other sizes
@@ -304,12 +315,73 @@ func (b *builder) toExpr(expr *ast.Expr) (*Expr, error) {
 					Char: *v.Char,
 				},
 			}, nil
-		case v.Array != nil:
-			panic("remove")
+		case v.Var != nil:
+			typ, ok := locals[v.Var.Name]
+			if !ok {
+				return nil, fmt.Errorf("variable %s not declared", v.Var.Name)
+			}
+
+			return &Expr{
+				Type: typ,
+				Var:  VarName(v.Var.Name),
+			}, nil
 		}
+	case expr.FuncCall != nil:
+		fc, err := b.toFuncCall(expr.FuncCall, locals)
+		if err != nil {
+			return nil, err
+		}
+
+		returnType, ok := b.funcs[expr.FuncCall.Name]
+		if !ok {
+			return nil, fmt.Errorf("function %s not declared", expr.FuncCall.Name)
+		}
+
+		return &Expr{
+			Type:     returnType,
+			FuncCall: fc,
+		}, nil
 	}
 
 	panic("invalid expression")
+}
+
+func (b *builder) toFuncCall(call *ast.FuncCall, locals map[ast.Identifier]Type) (*FuncCall, error) {
+	var args []*Expr
+	for _, e := range call.Args {
+		if e.Val != nil && e.Val.Var != nil {
+			typ, ok := locals[e.Val.Var.Name]
+			if !ok {
+				return nil, fmt.Errorf("variable %s not declared", e.Val.Var.Name)
+			}
+
+			if typ.Kind == KindArray {
+				// need to convert to a pointer to the array for func calls
+				arg := &Expr{
+					Type: Type{
+						Kind:    KindPointer,
+						SubType: &typ,
+					},
+					AddressOf: VarName(e.Val.Var.Name),
+				}
+
+				args = append(args, arg)
+				continue
+			}
+		}
+
+		arg, err := b.toExpr(e, locals)
+		if err != nil {
+			return nil, err
+		}
+
+		args = append(args, arg)
+	}
+
+	return &FuncCall{
+		Func: FuncName(call.Name),
+		Args: args,
+	}, nil
 }
 
 func int32Type() Type {

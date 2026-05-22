@@ -1,4 +1,4 @@
 int main() {
-    char x[] = {'H', 'i'};
-    print(x);
+    char x[2] = {'H', 'i'};
+    print(1, x, 2);
 }
