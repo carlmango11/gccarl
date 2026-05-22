@@ -30,7 +30,6 @@ type Value struct {
 type Parser struct {
 	grammar map[grammar.RuleName]*grammar.Rule
 	debug   bool
-	nodes   []string
 
 	cursors []*Cursor
 }
@@ -47,7 +46,7 @@ func New(r io.Reader, debug bool) (*Parser, error) {
 	}, nil
 }
 
-func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
+func (p *Parser) Parse(r *tokens.Reader, outDir, packageName string) error {
 	top := &Node{
 		Key: RuleKey{
 			Rule:   "main",
@@ -78,7 +77,7 @@ func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
 				break
 			}
 
-			return nil, err
+			return err
 		}
 
 		if p.debug {
@@ -86,21 +85,26 @@ func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
 		}
 
 		if len(p.cursors) == 0 {
-			return nil, fmt.Errorf("expected at least one cursor")
+			return fmt.Errorf("expected at least one cursor")
 		}
 
 		p.handleToken(token)
 	}
 
 	if len(p.cursors) != 1 {
-		return nil, fmt.Errorf("expected 1 cursor but got %d", len(p.cursors))
+		return fmt.Errorf("expected 1 cursor but got %d", len(p.cursors))
 	}
 
 	if !p.cursors[0].terminalState() {
-		return nil, fmt.Errorf("last cursor did not terminate: %v", p.cursors[0])
+		return fmt.Errorf("last cursor did not terminate: %v", p.cursors[0])
 	}
 
-	return p.cursors[0].Top, nil
+	g := &Generator{
+		grammar:     p.grammar,
+		packageName: packageName,
+	}
+
+	return g.generate(p.cursors[0].Top, outDir)
 }
 
 func (p *Parser) debugf(format string, args ...any) {

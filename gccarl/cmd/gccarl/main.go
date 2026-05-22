@@ -16,10 +16,10 @@ import (
 	"github.com/carlmango11/gccarl/gccarl/tokens"
 )
 
-//go:embed grammar.txt
+//go:embed ../../input/grammar.txt
 var grammar string
 
-//go:embed tokens.txt
+//go:embed ../../input/tokens.txt
 var tokenDef string
 
 //go:embed lib.asm
