@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"github.com/carlmango11/gccarl/gccarl/tokens"
@@ -60,11 +61,102 @@ var tabChars = map[string]bool{
 	"\t": true,
 }
 
-func Parse(input io.Reader) (map[RuleName]*Rule, error) {
+var tokenRegex = regexp.MustCompile(`(?:[^\s()]*\((?:[^()]|\([^()]*\))*\)\??|[^\s]+)`)
+
+func Parse(input io.Reader) (map[RuleName][]*Option, error) {
+	ruleText, err := parse(input)
+	if err != nil {
+		return nil, err
+	}
+
+	rules := make(map[RuleName][]*Option)
+
+	for ruleName, options := range ruleText {
+		for _, line := range options {
+			bits := strings.Split(line, ":")
+
+			if len(bits) != 2 {
+				return nil, fmt.Errorf("invalid syntax: %s", line)
+			}
+
+			label := bits[0]
+			def := bits[1]
+
+			matches := tokenRegex.FindAllString(def, -1)
+
+			var parts []*Part
+			for _, m := range matches {
+				var card Cardinality
+
+				if strings.HasSuffix(m, "*") {
+					card = CardMultiple
+					m = m[:len(m)-1]
+				} else if strings.HasSuffix(m, "?") {
+					card = CardZeroOrOne
+					m = m[:len(m)-1]
+				}
+
+				part := &Part{
+					Cardinality: card,
+				}
+
+				bits = strings.Split(m, "=")
+
+				if len(bits) == 2 {
+					var inlineParts []*Part
+					for _, b := range strings.Split(bits[1], " ") {
+						inlinePart := &Part{
+							Cardinality: CardSingle,
+						}
+
+						if strings.ToUpper(b) == b {
+							inlinePart.Token = tokens.Name(b)
+						} else {
+							inlinePart.Rule = RuleName(b)
+						}
+					}
+
+					rules[RuleName(bits[0])] = []*Option{
+						{
+							Name:  OptionName(bits[0]),
+							Parts: inlineParts,
+						},
+					}
+
+					part.Rule = RuleName(bits[0])
+				} else {
+					if strings.ToUpper(bits[0]) == bits[0] {
+						part.Token = tokens.Name(bits[0])
+					} else {
+						part.Rule = RuleName(bits[0])
+					}
+
+					parts = append(parts, part)
+				}
+			}
+
+			option := &Option{
+				Name:  OptionName(label),
+				Parts: parts,
+			}
+
+			rules[RuleName(ruleName)] = append(rules[RuleName(ruleName)], option)
+		}
+	}
+
+	err = validate(rules)
+	if err != nil {
+		return nil, err
+	}
+
+	return rules, nil
+}
+
+func parse(input io.Reader) (map[string][]string, error) {
 	sc := bufio.NewScanner(input)
 
-	rules := map[RuleName]*Rule{}
-	var ruleName RuleName
+	rules := map[string][]string{}
+	var ruleName string
 
 	for sc.Scan() {
 		line := sc.Text()
@@ -74,51 +166,22 @@ func Parse(input io.Reader) (map[RuleName]*Rule, error) {
 
 		if tabChars[line[0:1]] {
 			line = strings.TrimSpace(line)
-			bits := strings.Split(line, ":")
-
-			if len(bits) != 2 {
-				return nil, fmt.Errorf("invalid syntax: %s", line)
-			}
-
-			label := bits[0]
-			tokenStrs := strings.Split(bits[1], " ")
-
-			if len(tokenStrs) == 1 && tokenStrs[0] == "" {
-				tokenStrs = nil
-			}
-
-			tokens := make([]*Part, len(tokenStrs))
-			for i, tokenStr := range tokenStrs {
-				tokens[i] = parseToken(tokenStr)
-			}
-
-			option := &Option{
-				Name:  OptionName(label),
-				Parts: tokens,
-			}
-
-			rules[ruleName].Options = append(rules[ruleName].Options, option)
+			rules[ruleName] = append(rules[ruleName], line)
 		} else {
-			ruleName = RuleName(line[:len(line)-1])
-			rules[ruleName] = &Rule{}
+			ruleName = line[:len(line)-1]
 		}
-	}
-
-	err := validate(rules)
-	if err != nil {
-		return nil, err
 	}
 
 	return rules, nil
 }
 
-func validate(rules map[RuleName]*Rule) error {
-	for ruleName, rule := range rules {
-		if len(rule.Options) == 0 {
+func validate(rules map[RuleName][]*Option) error {
+	for ruleName, options := range rules {
+		if len(options) == 0 {
 			return fmt.Errorf("no options for rule %q", ruleName)
 		}
 
-		for _, option := range rule.Options {
+		for _, option := range options {
 			if len(option.Parts) == 0 {
 				return fmt.Errorf("no tokens for rule %q, option %q", ruleName, option.Name)
 			}
@@ -137,28 +200,4 @@ func validate(rules map[RuleName]*Rule) error {
 	}
 
 	return nil
-}
-
-func parseToken(s string) *Part {
-	var card Cardinality
-
-	if strings.HasSuffix(s, "*") {
-		card = CardMultiple
-		s = s[:len(s)-1]
-	} else if strings.HasSuffix(s, "?") {
-		card = CardZeroOrOne
-		s = s[:len(s)-1]
-	}
-
-	t := &Part{
-		Cardinality: card,
-	}
-
-	if strings.ToUpper(s) == s {
-		t.Token = tokens.Name(s)
-	} else {
-		t.Rule = RuleName(s)
-	}
-
-	return t
 }

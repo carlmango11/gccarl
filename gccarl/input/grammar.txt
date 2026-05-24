@@ -1,28 +1,19 @@
 main:
-  main:dec-def*
+    main:dec-def*
 
 dec-def:
-    func-def:type IDEN LPAREN params-def? RPAREN LBRACE control* return? RBRACE
+    func-def:type IDEN LPAREN params-def? RPAREN LBRACE line* ret=(RETURN expr SEMI)? RBRACE
     dec-assign:dec-assign
 
 line:
     control:control
-    statement:statement-comma
+    statement:statement? (COMMA statement)*
 
 control:
-    if:IF LPAREN expr RPAREN LBRACE statement-comma* RBRACE
-
-return:
-    return:RETURN expr SEMI
-
-statement-comma:
-    statement:statement SEMI
+    if:IF LPAREN expr RPAREN LBRACE line* RBRACE
 
 params-def:
-    params:param-def comma-param-def*
-
-comma-param-def:
-    param:COMMA param-def
+    params:param-def? (COMMA param-def)*
     
 param-def:
     param:type variable
@@ -33,16 +24,10 @@ value:
     str:STR
     char:CHAR
     cast:LPAREN type RPAREN value
-    comp-lit:composite-literal
-
-comma-expr:
-    comma-expr:COMMA expr
+    comp-lit:LBRACE expr? (COMMA expr)* RBRACE
 
 variable:
-    variable:IDEN array-index*
-
-array-index:
-    array-index:LSQUARE NUM? RSQUARE
+    variable:IDEN (LSQUARE NUM? RSQUARE)*
 
 expr:
     sub-expr:sub-expr
@@ -51,11 +36,10 @@ expr:
 sub-expr:
     value:value
     parens:LPAREN expr RPAREN
-    func-call:IDEN LPAREN params? RPAREN
+    func-call:IDEN LPAREN expr? (COMMA expr)* RPAREN
 
 comp-expr:
-    add:sub-expr PLUS expr
-    sub:sub-expr MINUS expr
+    op:sub-expr (PLUS | MINUS | DIVIDE | MULTIPLY | EEQUALS) expr
     is-equal:sub-expr EEQUALS expr
 
 statement:
@@ -66,18 +50,6 @@ statement:
 
 dec-assign:
     standard:type variable EQUALS expr
-
-composite-literal:
-    array-val:LBRACE comp-entries? RBRACE
-
-comp-entries:
-    entries:expr comma-expr*
-
-params:
-    params:expr comma-expr*
-
-comma-expr:
-    comma-expr:COMMA expr
 
 type:
     int:INT_TYPE
