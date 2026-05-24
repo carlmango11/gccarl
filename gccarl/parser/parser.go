@@ -34,7 +34,9 @@ type Parser struct {
 	cursors []*Cursor
 }
 
-func New(r io.Reader, debug bool) (*Parser, error) {
+func New(r io.Reader, debugParam bool) (*Parser, error) {
+	debug = debugParam
+
 	gr, err := grammar.Parse(r)
 	if err != nil {
 		return nil, err
@@ -80,7 +82,7 @@ func (p *Parser) Parse(r *tokens.Reader, outDir, packageName string) error {
 			return err
 		}
 
-		if p.debug {
+		if debug {
 			fmt.Printf("token: %v\n", token)
 		}
 
@@ -107,8 +109,8 @@ func (p *Parser) Parse(r *tokens.Reader, outDir, packageName string) error {
 	return g.generate(p.cursors[0].Top, outDir)
 }
 
-func (p *Parser) debugf(format string, args ...any) {
-	if p.debug {
+func debugf(format string, args ...any) {
+	if debug {
 		fmt.Printf(format+"\n", args...)
 	}
 }
@@ -117,14 +119,14 @@ func (p *Parser) handleToken(token *tokens.Token) {
 	cursors := p.advance(p.cursors)
 
 	for _, c := range cursors {
-		p.debugf("handling %v with %v", token.Name, c)
+		debugf("handling %v with %v", token.Name, c)
 	}
 
 	var nextCursors []*Cursor
 	for _, c := range cursors {
 		ok := c.Apply(token)
 		if ok {
-			p.debugf("applied %v to %v", token.Name, c)
+			debugf("applied %v to %v", token.Name, c)
 			nextCursors = append(nextCursors, c)
 		}
 	}

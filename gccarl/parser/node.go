@@ -3,6 +3,7 @@ package parser
 import "encoding/json"
 
 type Node struct {
+	ID     int
 	Key    RuleKey
 	Values []*Value
 	parent *Node

@@ -14,28 +14,37 @@ import (
 //go:embed template_go.txt
 var typesTemplate string
 
+var debug bool = true
+
 type Generator struct {
 	packageName string
 	grammar     map[grammar.RuleName]*grammar.Rule
 	nodeC       int
 	ast         strings.Builder
 	types       strings.Builder
+	astNodes    strings.Builder
 }
 
 func (g *Generator) generate(n *Node, outDir string) error {
 	g.generateTypes()
 	g.generateAST(n)
 
-	outDir += outDir + "/" + g.packageName + "/"
-	typesFile := outDir + "/types.go"
-	astFile := outDir + "/ast.go"
+	outDir = outDir + "/" + g.packageName + "/"
 
-	err := g.writeFile(g.types.String(), typesFile)
+	err := os.MkdirAll(outDir, 0755)
 	if err != nil {
 		return err
 	}
 
-	err = g.writeFile(g.ast.String(), astFile)
+	typesFile := outDir + "/types.go"
+	astFile := outDir + "/ast.go"
+
+	err = g.writeFile(g.types.String(), typesFile)
+	if err != nil {
+		return err
+	}
+
+	err = g.writeFile(g.astNodes.String()+"\n"+g.ast.String(), astFile)
 	if err != nil {
 		return err
 	}
@@ -44,11 +53,6 @@ func (g *Generator) generate(n *Node, outDir string) error {
 }
 
 func (g *Generator) writeFile(output, fileName string) error {
-	err := os.MkdirAll(fileName, 0755)
-	if err != nil {
-		return err
-	}
-
 	astF, err := os.Create(fileName)
 	if err != nil {
 		return err
@@ -67,20 +71,32 @@ func (g *Generator) writeFile(output, fileName string) error {
 func (g *Generator) generateAST(n *Node) {
 	g.ast.WriteString("package " + g.packageName)
 
+	g.generateNode(n)
+}
+
+func (g *Generator) generateNode(n *Node) {
+	n.ID = g.nodeC
+	g.nodeC++
+
 	for _, v := range n.Values {
-		if v.Node == nil {
-			g.ast.WriteString(fmt.Sprintf("\t%s %s", v.Token.Name, v.Token.Name))
-		} else {
+		if v.Node != nil {
 			g.generateNode(v.Node)
 		}
 	}
-}
 
-func (g *Generator) generateNode(n *Node) string {
-	g.ast.WriteString(fmt.Sprintf("var n%d = &%v {", g.nodeC, kebabToCamel(string(n.Key.Rule))))
-	g.nodeC++
+	g.ast.WriteString(fmt.Sprintf("\nvar n%v = &%v {\n", n.ID, kebabToCamel(string(n.Key.Rule))))
+	g.ast.WriteString(fmt.Sprintf("\tType: %s,\n", typeEnumField(n.Key.Rule, n.Key.Option)))
+	g.ast.WriteString(fmt.Sprintf("\t%s: &%v{\n", optionField(n.Key.Option), optionStruct(n.Key.Rule, n.Key.Option)))
 
-	return ""
+	for _, v := range n.Values {
+		if v.Node != nil {
+			g.ast.WriteString(fmt.Sprintf("\t\t%v: n%v,\n", optionRuleFieldName(v.Node.Key.Rule), v.Node.ID))
+		} else {
+			g.ast.WriteString(fmt.Sprintf("\t\t%v: %q,\n", v.Token.Name, v.Token.Val))
+		}
+	}
+
+	g.ast.WriteString("\t},\n}\n")
 }
 
 func (g *Generator) generateTypes() {
@@ -101,42 +117,65 @@ func (g *Generator) generateTypes() {
 		}
 	}
 
-	g.types.WriteString("\n" + generateTokens(tks))
-	g.types.WriteString("\n" + generateOptionTypes(optionTypes))
-
 	for name, rule := range g.grammar {
 		s := g.generateRuleType(name, rule.Options)
 		g.types.WriteString("\n" + s)
 	}
+
+	g.types.WriteString("\n" + generateTokens(tks))
+	g.types.WriteString("\n" + generateOptionTypes(optionTypes))
 }
 
 func generateOptionTypes(types map[RuleKey][]*grammar.Part) string {
 	var sb strings.Builder
 
 	for rk, parts := range types {
-		ruleName := kebabToCamel(string(rk.Rule))
-		optionName := kebabToCamel(string(rk.Option))
-
-		sb.WriteString(fmt.Sprintf("type %s%s struct {\n", ruleName, optionName))
-
-		for _, part := range parts {
-			card := ""
-			if part.Cardinality == grammar.CardMultiple {
-				card = "[]"
-			}
-
-			if part.Token != "" {
-				sb.WriteString(fmt.Sprintf("\t%s %s\n", part.Token, part.Token))
-			} else {
-				sb.WriteString(fmt.Sprintf("\t%s %s*%s%s\n", ruleName, card, ruleName, optionName))
-			}
-		}
-
-		sb.WriteString("}\n\n")
+		output := generateOptionType(rk, parts)
+		sb.WriteString(output)
 	}
 
-	sb.WriteString("\n}")
+	sb.WriteString("\n")
 	return sb.String()
+}
+
+func optionStruct(r grammar.RuleName, o grammar.OptionName) string {
+	ruleName := kebabToCamel(string(r))
+	optionName := kebabToCamel(string(o))
+
+	return fmt.Sprintf("%s_%sOption", ruleName, optionName)
+}
+
+func generateOptionType(rk RuleKey, parts []*grammar.Part) string {
+	var sb strings.Builder
+
+	structName := optionStruct(rk.Rule, rk.Option)
+
+	sb.WriteString(fmt.Sprintf("type %s struct {\n", structName))
+
+	for _, part := range parts {
+		card := ""
+		if part.Cardinality == grammar.CardMultiple {
+			card = "[]"
+		}
+
+		if part.Token != "" {
+			sb.WriteString(fmt.Sprintf("\t%s %s\n", part.Token, part.Token))
+		} else {
+			ruleCodeName := optionRuleFieldName(part.Rule)
+			sb.WriteString(fmt.Sprintf("\t%s %s*%s\n", ruleCodeName, card, ruleCodeName))
+		}
+	}
+
+	sb.WriteString("}\n\n")
+	out := sb.String()
+
+	debugf("generated option %q:\n%s", structName, out)
+
+	return out
+}
+
+func optionRuleFieldName(r grammar.RuleName) string {
+	return kebabToCamel(string(r))
 }
 
 func generateTokens(tks map[tokens.Name]bool) string {
@@ -154,57 +193,35 @@ func (g *Generator) generateRuleType(rule grammar.RuleName, options []*grammar.O
 
 	text := strings.ReplaceAll(typesTemplate, "{{name}}", ruleName)
 
-	var enums, fields, optionTypes strings.Builder
+	var enums, fields strings.Builder
 
 	for _, o := range options {
 		optionName := kebabToCamel(string(o.Name))
 
-		enums.WriteString(fmt.Sprintf("\n\t%sType%s %sType = \"%s\"", ruleName, optionName, ruleName, o.Name))
-		fields.WriteString(fmt.Sprintf("\n\t%s *%s%s", optionName, ruleName, optionName))
-
-		optionTypes.WriteString("\n" + optionType(o, ruleName, optionName))
+		enums.WriteString(fmt.Sprintf("\n\t%s %s = \"%s\"", typeEnumField(rule, o.Name), typeEnumType(rule), o.Name))
+		fields.WriteString(fmt.Sprintf("\n\t%s *%s", optionName, optionStruct(rule, o.Name)))
 	}
 
 	text = strings.ReplaceAll(text, "{{type-enums}}", enums.String())
 	text = strings.ReplaceAll(text, "{{fields}}", fields.String())
-	text += optionTypes.String()
-
-	for _, o := range options {
-		ruleOption := ruleName + kebabToCamel(string(o.Name))
-
-		text += fmt.Sprintf("\ntype %s struct {", ruleOption)
-
-		for _, p := range o.Parts {
-			card := ""
-			if p.Cardinality == grammar.CardMultiple {
-				card = "[]"
-			}
-
-			text += fmt.Sprintf("\t%v %s*%s", p.Token, card, p.Token)
-		}
-	}
 
 	return text
 }
 
-func optionType(option *grammar.Option, rule, optionName string) string {
-	text := fmt.Sprintf("type %s%s struct {", rule, optionName)
-
-	for _, p := range option.Parts {
-		brackets := ""
-		if p.Cardinality == grammar.CardMultiple {
-			brackets = "[]"
-		}
-
-		if p.Token != "" {
-			text += fmt.Sprintf("\n\t%s %s%s", p.Token, brackets, p.Token)
-		} else {
-			text += fmt.Sprintf("\n\t%s %s*%s", rule, brackets, rule)
+func (g *Generator) isMultiple(key RuleKey) bool {
+	for _, o := range g.grammar[key.Rule].Options {
+		if o.Name == key.Option {
+			return o.
 		}
 	}
+}
 
-	text += "\n}"
-	return text
+func typeEnumField(rule grammar.RuleName, option grammar.OptionName) string {
+	return fmt.Sprintf("%sType%s", kebabToCamel(string(rule)), kebabToCamel(string(option)))
+}
+
+func typeEnumType(rule grammar.RuleName) string {
+	return fmt.Sprintf("%sType", kebabToCamel(string(rule)))
 }
 
 func kebabToCamel(s string) string {
@@ -221,4 +238,8 @@ func kebabToCamel(s string) string {
 	}
 
 	return strings.Join(parts, "")
+}
+
+func optionField(o grammar.OptionName) string {
+	return kebabToCamel(string(o))
 }
