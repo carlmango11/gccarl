@@ -1,5 +1,8 @@
 
 package ast
+
+var MainNode = n0
+
 var n2 = &Type {
 	Type: TypeTypeInt,
 	Int: &Type_IntOption{
@@ -85,7 +88,9 @@ var n1 = &DecDef {
 		LPAREN: "(",
 		RPAREN: ")",
 		LBRACE: "{",
-		Control: n3,
+		Control: []*Control {
+			n3,
+		},
 		RBRACE: "}",
 	},
 }
@@ -93,6 +98,8 @@ var n1 = &DecDef {
 var n0 = &Main {
 	Type: MainTypeMain,
 	Main: &Main_MainOption{
-		DecDef: n1,
+		DecDef: []*DecDef {
+			n1,
+		},
 	},
 }

@@ -29,7 +29,8 @@ func (c *Cursor) Apply(token *tokens.Token) bool {
 	}
 
 	c.Current.Values = append(c.Current.Values, &Value{
-		Token: token,
+		Cardinality: nextPart.Cardinality,
+		Token:       token,
 	})
 
 	c.advance()
@@ -150,7 +151,8 @@ func (c *Cursor) branchOptions() []*Cursor {
 		}
 
 		cloned.Current.Values = append(cloned.Current.Values, &Value{
-			Node: newNode,
+			Cardinality: nextPart.Cardinality, // todo redundant
+			Node:        newNode,
 		})
 
 		cloned.Current = newNode

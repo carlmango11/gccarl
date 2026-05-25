@@ -23,8 +23,41 @@ type Index struct {
 }
 
 type Value struct {
-	Node  *Node         `json:"node,omitempty"`
-	Token *tokens.Token `json:"token,omitempty"`
+	Cardinality grammar.Cardinality
+	Node        *Node         `json:"node,omitempty"`
+	Token       *tokens.Token `json:"token,omitempty"`
+}
+
+func (v *Value) fieldName() string {
+	if v.Node == nil {
+		return string(v.Token.Name)
+	} else {
+		return optionRuleFieldName(v.Node.Key.Rule)
+	}
+}
+
+func (v *Value) EqualType(o *Value) bool {
+	if v.Token != nil {
+		if o.Token == nil {
+			return false
+		}
+
+		return v.Token.Name == o.Token.Name
+	}
+
+	if o.Node == nil {
+		return false
+	}
+
+	return v.Node.Key == o.Node.Key
+}
+
+func (v *Value) typeName() string {
+	if v.Node != nil {
+		return "*" + optionRuleFieldName(v.Node.Key.Rule)
+	} else {
+		return string(v.Token.Name)
+	}
 }
 
 type Parser struct {

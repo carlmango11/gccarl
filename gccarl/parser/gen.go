@@ -70,6 +70,7 @@ func (g *Generator) writeFile(output, fileName string) error {
 
 func (g *Generator) generateAST(n *Node) {
 	g.ast.WriteString("package " + g.packageName)
+	g.ast.WriteString("\n\nvar MainNode = n0\n")
 
 	g.generateNode(n)
 }
@@ -88,15 +89,69 @@ func (g *Generator) generateNode(n *Node) {
 	g.ast.WriteString(fmt.Sprintf("\tType: %s,\n", typeEnumField(n.Key.Rule, n.Key.Option)))
 	g.ast.WriteString(fmt.Sprintf("\t%s: &%v{\n", optionField(n.Key.Option), optionStruct(n.Key.Rule, n.Key.Option)))
 
-	for _, v := range n.Values {
-		if v.Node != nil {
-			g.ast.WriteString(fmt.Sprintf("\t\t%v: n%v,\n", optionRuleFieldName(v.Node.Key.Rule), v.Node.ID))
+	g.writeValues(n)
+
+	g.ast.WriteString("\t},\n}\n")
+}
+
+type nodeGroups struct {
+	singleVal *Value
+	vs        []*Value
+}
+
+func toGroups(vals []*Value) []*nodeGroups {
+	var g []*nodeGroups
+	var last *Value
+
+	for _, v := range vals {
+		if v.Cardinality == grammar.CardMultiple {
+			if last != nil && v.EqualType(last) {
+				g[len(g)-1].vs = append(g[len(g)-1].vs, last)
+			} else {
+				g = append(g, &nodeGroups{vs: []*Value{v}})
+			}
 		} else {
-			g.ast.WriteString(fmt.Sprintf("\t\t%v: %q,\n", v.Token.Name, v.Token.Val))
+			g = append(g, &nodeGroups{
+				singleVal: v,
+			})
+		}
+
+		last = v
+	}
+
+	return g
+}
+
+func (g *Generator) writeValues(n *Node) {
+	for _, group := range toGroups(n.Values) {
+		if group.singleVal != nil {
+			g.writeValue(group.singleVal)
+		} else {
+			g.writeNValues(group.vs)
+		}
+	}
+}
+
+func (g *Generator) writeNValues(vals []*Value) {
+	g.ast.WriteString(fmt.Sprintf("\t\t%s: []%s {\n", vals[0].fieldName(), vals[0].typeName()))
+
+	for _, v := range vals {
+		if v.Node != nil {
+			g.ast.WriteString(fmt.Sprintf("\t\t\tn%d,\n", v.Node.ID))
+		} else {
+			g.ast.WriteString(fmt.Sprintf("\t\t\t%q,\n", v.Token.Val))
 		}
 	}
 
-	g.ast.WriteString("\t},\n}\n")
+	g.ast.WriteString("\t\t},\n")
+}
+
+func (g *Generator) writeValue(val *Value) {
+	if val.Node != nil {
+		g.ast.WriteString(fmt.Sprintf("\t\t%v: n%v,\n", val.fieldName(), val.Node.ID))
+	} else {
+		g.ast.WriteString(fmt.Sprintf("\t\t%v: %q,\n", val.fieldName(), val.Token.Val))
+	}
 }
 
 func (g *Generator) generateTypes() {
@@ -206,14 +261,6 @@ func (g *Generator) generateRuleType(rule grammar.RuleName, options []*grammar.O
 	text = strings.ReplaceAll(text, "{{fields}}", fields.String())
 
 	return text
-}
-
-func (g *Generator) isMultiple(key RuleKey) bool {
-	for _, o := range g.grammar[key.Rule].Options {
-		if o.Name == key.Option {
-			return o.
-		}
-	}
 }
 
 func typeEnumField(rule grammar.RuleName, option grammar.OptionName) string {
