@@ -2,7 +2,7 @@ main:
   main:dec-def*
 
 dec-def:
-    func-def:type IDEN LPAREN params-def? RPAREN LBRACE control* return? RBRACE
+    func-def:type IDEN LPAREN params-def? RPAREN LBRACE line* return? RBRACE
     dec-assign:dec-assign
 
 line:

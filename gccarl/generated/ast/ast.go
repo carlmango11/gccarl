@@ -10,73 +10,80 @@ var n2 = &Type {
 	},
 }
 
-var n8 = &Variable {
+var n9 = &Variable {
 	Type: VariableTypeVariable,
 	Variable: &Variable_VariableOption{
 		IDEN: "x",
 	},
 }
 
-var n7 = &Value {
+var n8 = &Value {
 	Type: ValueTypeVariable,
 	Variable: &Value_VariableOption{
-		Variable: n8,
+		Variable: n9,
 	},
 }
 
-var n6 = &SubExpr {
+var n7 = &SubExpr {
 	Type: SubExprTypeValue,
 	Value: &SubExpr_ValueOption{
-		Value: n7,
+		Value: n8,
 	},
 }
 
-var n11 = &Value {
+var n12 = &Value {
 	Type: ValueTypeInt,
 	Int: &Value_IntOption{
 		NUM: "4",
 	},
 }
 
-var n10 = &SubExpr {
+var n11 = &SubExpr {
 	Type: SubExprTypeValue,
 	Value: &SubExpr_ValueOption{
-		Value: n11,
+		Value: n12,
 	},
 }
 
-var n9 = &Expr {
+var n10 = &Expr {
 	Type: ExprTypeSubExpr,
 	SubExpr: &Expr_SubExprOption{
-		SubExpr: n10,
+		SubExpr: n11,
 	},
 }
 
-var n5 = &CompExpr {
+var n6 = &CompExpr {
 	Type: CompExprTypeIsEqual,
 	IsEqual: &CompExpr_IsEqualOption{
-		SubExpr: n6,
+		SubExpr: n7,
 		EEQUALS: "==",
-		Expr: n9,
+		Expr: n10,
 	},
 }
 
-var n4 = &Expr {
+var n5 = &Expr {
 	Type: ExprTypeComp,
 	Comp: &Expr_CompOption{
-		CompExpr: n5,
+		CompExpr: n6,
 	},
 }
 
-var n3 = &Control {
+var n4 = &Control {
 	Type: ControlTypeIf,
 	If: &Control_IfOption{
 		IF: "if",
 		LPAREN: "(",
-		Expr: n4,
+		Expr: n5,
 		RPAREN: ")",
 		LBRACE: "{",
 		RBRACE: "}",
+	},
+}
+
+var n3 = &Line {
+	Type: LineTypeControl,
+	Control: &Line_ControlOption{
+		Control: n4,
 	},
 }
 
@@ -88,7 +95,7 @@ var n1 = &DecDef {
 		LPAREN: "(",
 		RPAREN: ")",
 		LBRACE: "{",
-		Control: []*Control {
+		Line: []*Line {
 			n3,
 		},
 		RBRACE: "}",
