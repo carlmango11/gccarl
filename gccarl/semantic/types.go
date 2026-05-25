@@ -18,6 +18,7 @@ const (
 	PrimInt32
 	PrimChar
 	PrimBool
+	PrimFloat32
 )
 
 func (p PrimitiveType) Size() int {
@@ -88,15 +89,8 @@ func (t Type) Equals(t2 Type) bool {
 }
 
 func (t Type) IsIntParamType() bool {
-	switch t.Kind {
-	case KindPrimitive:
-		switch t.Prim {
-		case PrimInt32:
-			return true
-		}
-	}
-
-	panic("unset primitive type")
+	fl := t.Kind == KindPrimitive && t.Prim == PrimFloat32
+	return !fl
 }
 
 type Program struct {

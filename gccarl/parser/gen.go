@@ -106,7 +106,7 @@ func toGroups(vals []*Value) []*nodeGroups {
 	for _, v := range vals {
 		if v.Cardinality == grammar.CardMultiple {
 			if last != nil && v.EqualType(last) {
-				g[len(g)-1].vs = append(g[len(g)-1].vs, last)
+				g[len(g)-1].vs = append(g[len(g)-1].vs, v)
 			} else {
 				g = append(g, &nodeGroups{vs: []*Value{v}})
 			}

@@ -5,20 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/carlmango11/gccarl/gccarl/compiler"
 	"github.com/carlmango11/gccarl/gccarl/generated/ast"
-	"github.com/carlmango11/gccarl/gccarl/parser"
 	"github.com/carlmango11/gccarl/gccarl/semantic"
-	"github.com/carlmango11/gccarl/gccarl/tokens"
 )
-
-//go:embed grammar.txt
-var grammar string
-
-//go:embed tokens.txt
-var tokenDef string
 
 //go:embed lib.asm
 var libASM string
@@ -38,24 +29,6 @@ func main() {
 	}
 
 	defer textF.Close()
-
-	tk, err := tokens.New(strings.NewReader(tokenDef), textF)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	parser, err := parser.New(strings.NewReader(grammar), true)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	err = parser.Parse(tk, "../../generated", "ast")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
 
 	program, err := semantic.Build(ast.MainNode)
 	if err != nil {

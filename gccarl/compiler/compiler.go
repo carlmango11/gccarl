@@ -25,6 +25,8 @@ const (
 	RegRDI   Register = "rdi"
 	RegRSI   Register = "rsi"
 	RegRDX   Register = "rdx"
+	RegR10   Register = "r10"
+	RegAL    Register = "al"
 )
 
 type Instr string
@@ -72,10 +74,9 @@ func (c *Compiler) compile(prog *semantic.Program) (*Instrs, error) {
 	full.addInstr("_start:")
 
 	full.addInstr("\tcall main")
-	//c.instrs = append(c.instrs, callPrint...)
 	full.addInstr("\tcall exit")
+
 	full.instrs = append(full.instrs, exitRoutine...)
-	full.instrs = append(full.instrs, printRoutine...)
 
 	for _, fd := range prog.FuncDefs {
 		c.funcs[fd.Name] = &FuncDef{
@@ -144,11 +145,23 @@ func (c *Compiler) compileArrayAssign(instrs *Instrs, a *semantic.Assign, locals
 			}
 
 			offset := startOffset - Offset(v.Type.Size()*i)
-			instrs.addInstr("mov qword [rbp-%d], %s", offset, reg) // TODO needs to change for floats
+			instrs.addInstr("mov %s [rbp-%d], %s", typeInstrSize(v.Type), offset, reg) // TODO needs to change for floats
 		}
 	}
 
 	return nil
+}
+
+func typeInstrSize(t semantic.Type) string {
+	switch t.Kind {
+	case semantic.KindPrimitive:
+		switch t.Prim {
+		case semantic.PrimChar:
+			return "byte"
+		}
+	}
+
+	return "qword"
 }
 
 func (c *Compiler) compileStandardAssign(instrs *Instrs, a *semantic.Assign, locals *StackVars) error {
@@ -239,8 +252,8 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 				instrs.addInstr("mov %s, %d", RegRAX, e.Literal.Int32)
 				return RegRAX, nil
 			case semantic.PrimChar:
-				instrs.addInstr("mov %s, 0x%X", RegRAX, e.Literal.Char)
-				return RegRAX, nil
+				instrs.addInstr("mov byte %s, 0x%X", RegAL, e.Literal.Char)
+				return RegAL, nil
 			}
 		}
 	case e.Var != "":
@@ -276,7 +289,7 @@ func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If, locals *StackVars
 		}
 	}
 
-	instrs.addInstr("skip:")
+	instrs.addInstr("%v:", skip)
 
 	return nil
 }

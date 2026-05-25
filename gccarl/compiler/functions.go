@@ -14,23 +14,6 @@ var exitRoutine = []Instr{
 	"\tret",
 }
 
-var callPrint = []Instr{
-	"\tmov rdi, 1",
-	"\tlea rsi, [rel msg]",
-	"\tmov rdx, msg_size",
-	"\tcall print",
-}
-
-var printRoutine = []Instr{
-	"print:",
-	"\tpush rbp",
-	"\tmov rbp, rsp",
-	"\tmov rax, 1",
-	"\tsyscall",
-	"\tpop rbp",
-	"\tret",
-}
-
 var data = []Instr{
 	"section .data",
 	`msg db "Hello, world!", 0xA`,
@@ -60,6 +43,11 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 			if err != nil {
 				return nil, err
 			}
+		} else if l.Control != nil {
+			err := c.compileControl(body, l.Control, locals)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -84,8 +72,17 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	return funcInstrs, nil
 }
 
+func (c *Compiler) compileControl(instrs *Instrs, control *semantic.Control, locals *StackVars) error {
+	switch {
+	case control.If != nil:
+		return c.compileIf(instrs, control.If, locals)
+	}
+
+	panic("invalid control")
+}
+
 var paramRegisters = []Register{
-	RegRDI, RegRSI, RegRDX,
+	RegRDI, RegRSI, RegRDX, RegR10,
 }
 
 var intParamRegisters = []Register{

@@ -49,7 +49,7 @@ func (v *Value) EqualType(o *Value) bool {
 		return false
 	}
 
-	return v.Node.Key == o.Node.Key
+	return v.Node.Key.Rule == o.Node.Key.Rule
 }
 
 func (v *Value) typeName() string {

@@ -5,40 +5,25 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/carlmango11/gccarl/gccarl/parser"
 	"github.com/carlmango11/gccarl/gccarl/tokens"
 )
 
+//go:embed grammar.txt
+var grammar string
+
+//go:embed tokens.txt
+var tokenDef string
+
 func main() {
-	var outputDir, tokenDefFile, grammarFile, textFile, packageName string
 	var debug bool
 
-	flag.StringVar(&packageName, "p", "", "generated package name")
-	flag.StringVar(&outputDir, "o", "", "output directory")
-	flag.StringVar(&tokenDefFile, "tk", "", "token definition file")
-	flag.StringVar(&grammarFile, "g", "", "grammar file")
-	flag.StringVar(&textFile, "t", "", "program text file")
 	flag.BoolVar(&debug, "d", false, "enable debug logging")
 	flag.Parse()
 
-	tokenFile, err := os.Open(tokenDefFile)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	defer tokenFile.Close()
-
-	grammarF, err := os.Open(grammarFile)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	defer grammarF.Close()
-
-	textF, err := os.Open(textFile)
+	textF, err := os.Open(flag.Args()[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
@@ -46,29 +31,21 @@ func main() {
 
 	defer textF.Close()
 
-	tk, err := tokens.New(tokenFile, textF)
+	tk, err := tokens.New(strings.NewReader(tokenDef), textF)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
-	parser, err := parser.New(grammarF, true)
+	parser, err := parser.New(strings.NewReader(grammar), true)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
-	err = parser.Parse(tk, outputDir, packageName)
+	err = parser.Parse(tk, "generated", "ast")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-
-	astOutput, err := os.Create(outputDir + "/ast.json")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	defer astOutput.Close()
 }
