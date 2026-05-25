@@ -9,6 +9,8 @@ import (
 type Size int
 
 const (
+	Size8  = 1
+	Size32 = 4
 	Size64 = 8
 )
 
@@ -28,6 +30,19 @@ const (
 	RegR10   Register = "r10"
 	RegAL    Register = "al"
 )
+
+func raxSized(s Size) Register {
+	switch s {
+	case Size64:
+		return RegRAX
+	case Size8:
+		return RegAL
+	case Size32:
+		return RegEAX
+	default:
+		panic(fmt.Sprintf("raxSized: unknown size: %d", s))
+	}
+}
 
 type Instr string
 type DataLabel string
@@ -184,32 +199,6 @@ func (c *Compiler) compileStandardAssign(instrs *Instrs, a *semantic.Assign, loc
 	return nil
 }
 
-//func (c *Compiler) compileVal(v *semantic.Value, locals *Vars, target Register) (ast.RawType, error) {
-//	switch {
-//	case v.Int != nil:
-//		return c.addInstr(nil, "mov %s, %d", target, *v.Int), ast.TypeInt, nil
-//	case v.Char != nil:
-//		return c.addInstr(nil, "mov %s, 0x%X", target, *v.Char), ast.TypeChar, nil
-//	case v.Var != nil:
-//		var idx int
-//		if v.Var.Index != nil {
-//			idx = *v.Var.Index
-//		}
-//
-//		offset, ok := locals.ArrayOffset(v.Var.Name, idx)
-//		if !ok {
-//			return nil, fmt.Errorf("undefined variable: %s", v.Var.Name)
-//		}
-//
-//		return c.addInstr(nil, "mov %s, [rbp-%d]", target, offset), nil
-//	case v.Array != nil:
-//		// TODO: types
-//		return c.compileArray(v.Array, ast.TypeInt, locals, target)
-//	}
-//
-//	panic("missing value type")
-//}
-
 func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Register, error) {
 	switch {
 	case e.IsEqual != nil:
@@ -229,9 +218,9 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 		}
 
 		if addr.IsStack() {
-			instrs.addInstr("lea %s, [rbp-%d]", RegRAX, addr.stack)
+			instrs.addInstr("lea %s, [rbp-%d] ; addressOf", RegRAX, addr.stack)
 		} else {
-			instrs.addInstr("lea %s, [rel %s]", RegRAX, addr.label)
+			instrs.addInstr("lea %s, [rel %s] ; addressOf", RegRAX, addr.label)
 		}
 
 		return RegRAX, nil
@@ -242,10 +231,6 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 
 	case e.Literal != nil:
 		switch e.Type.Kind {
-		//case e.Add != nil:
-		//	return c.compileAdd(e.Add, locals, target)
-		//case e.Val != nil:
-		//	return c.compileVal(e.Val, locals, target)
 		case semantic.KindPrimitive:
 			switch e.Type.Prim {
 			case semantic.PrimInt32:
@@ -257,12 +242,12 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 			}
 		}
 	case e.Var != "":
-		offset, ok := locals.Offset(e.Var)
+		addr, ok := locals.Address(e.Var)
 		if !ok {
 			return RegUnset, fmt.Errorf("undefined variable: %s", e.Var)
 		}
 
-		instrs.addInstr("mov %s, [rbp-%d]", RegRAX, offset)
+		instrs.moveVarRAX(e.Type, addr)
 		return RegRAX, nil
 	}
 
@@ -306,7 +291,7 @@ func (c *Compiler) compileIsEqual(instrs *Instrs, e *semantic.IsEqual, locals *S
 	}
 
 	offset := locals.Add(8)
-	instrs.addInstr("mov qword [rbp-%d], %s", offset, reg)
+	instrs.addInstr("mov %s [rbp-%d], %s", typeInstrSize(e.Left.Type), offset, reg)
 
 	reg, err = c.compileExpr(instrs, e.Right, locals)
 	if err != nil {
@@ -316,37 +301,6 @@ func (c *Compiler) compileIsEqual(instrs *Instrs, e *semantic.IsEqual, locals *S
 	instrs.addInstr("cmp [rbp-%d], %s", offset, reg)
 	return nil
 }
-
-//func (c *Compiler) compileAdd(a *semantic.AddExpr, locals *Vars, target Register) (ast.RawType, error) {
-//	var all []Instr
-//
-//	output1, typ1, err := c.compileExpr(a.Expr2, locals, target)
-//	if err != nil {
-//		return nil, ast.TypeUnset, err
-//	}
-//
-//	all = append(all, output1...)
-//
-//	output2, typ2, err := c.compileExpr(a.Expr1, locals, RegEBX)
-//	if err != nil {
-//		return nil, ast.TypeUnset, err
-//	}
-//
-//	all = append(all, output2...)
-//
-//	return c.addInstr(all, "add %s, %s", target, RegEBX), nil
-//}
-
-//func (c *Compiler) compileVarDec(vd *ast.DecAssign, locals *Vars) error {
-//	switch typeSize(vd.Type) {
-//	case 1:
-//		return compile1Assign(vd.Var, vd.Expr, locals)
-//	case 8:
-//		return compile8Assign(vd.Var, vd.Expr, locals)
-//	default:
-//		panic(fmt.Sprintf("unhandled assignment type: %s", vd.Type))
-//	}
-//}
 
 type Instrs struct {
 	instrs []Instr
@@ -363,13 +317,25 @@ func (i *Instrs) addInstrsIndent(inner *Instrs) {
 	}
 }
 
+func (i *Instrs) moveVarRAX(t semantic.Type, a Address) {
+	if a.IsStack() {
+		i.addInstr("mov %s, [rbp-%d]", raxSized(Size(t.Size())), a.stack) // todo shitty types
+	} else {
+		panic("unreachable")
+	}
+}
+
+func (i *Instrs) addComment(format string, args ...any) {
+	i.addInstr("; "+format, args...)
+}
+
 func returnRegister(t semantic.Type) Register {
 	switch t.Kind {
 	case semantic.KindVoid:
 		return RegUnset
 	case semantic.KindPrimitive:
 		switch t.Prim {
-		case semantic.PrimInt32:
+		case semantic.PrimInt32, semantic.PrimChar:
 			return RegRAX
 		}
 	case semantic.KindArray:

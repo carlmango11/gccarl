@@ -74,7 +74,7 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 
 			decAssign := s.DecAssign.DecAssign.Standard
 
-			err := b.declareVar(locals, decAssign.Type, decAssign.Variable)
+			err := b.declareVar(locals, decAssign.Type, decAssign.Variable, false)
 			if err != nil {
 				return nil, err
 			}
@@ -94,7 +94,7 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 				return nil, err
 			}
 
-			err = b.declareVar(locals, astParam.Param.Type, astParam.Param.Variable)
+			err = b.declareVar(locals, astParam.Param.Type, astParam.Param.Variable, true)
 			if err != nil {
 				return nil, err
 			}
@@ -174,13 +174,13 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 	}, nil
 }
 
-func (b *builder) declareVar(vars map[ast.IDEN]Type, astType *ast.Type, v *ast.Variable) error {
+func (b *builder) declareVar(vars map[ast.IDEN]Type, astType *ast.Type, v *ast.Variable, isParam bool) error {
 	_, ok := vars[v.Variable.IDEN]
 	if ok {
 		return fmt.Errorf("variable %s already declared", v.Variable.IDEN)
 	}
 
-	typ, err := b.toType(astType, v)
+	typ, err := b.toType(astType, v, isParam)
 	if err != nil {
 		return err
 	}
@@ -189,49 +189,64 @@ func (b *builder) declareVar(vars map[ast.IDEN]Type, astType *ast.Type, v *ast.V
 	return nil
 }
 
-func (b *builder) toType(typ *ast.Type, v *ast.Variable) (Type, error) {
+func (b *builder) toType(typ *ast.Type, v *ast.Variable, isParam bool) (Type, error) {
 	if len(v.Variable.ArrayIndex) > 0 {
-		var size int
-
-		sizeStr := v.Variable.ArrayIndex[0].ArrayIndex.NUM
-
-		if sizeStr != "" {
-			var err error
-			size, err = strconv.Atoi(string(sizeStr))
-			if err != nil {
-				panic("invalid size: " + sizeStr)
-			}
+		if isParam {
+			// arrays decay to pointers in params
+			return Type{
+				Kind: KindPointer,
+				Prim: astTypeToPrim(typ),
+			}, nil
+		} else {
+			return b.toArrayType(typ, v)
 		}
-
-		v.Variable.ArrayIndex = v.Variable.ArrayIndex[1:]
-		sub, err := b.toType(typ, v)
-		if err != nil {
-			return Type{}, err
-		}
-
-		return Type{
-			Kind:      KindArray,
-			SubType:   &sub,
-			ArraySize: size,
-		}, nil
 	}
 
-	kind := KindPrimitive
+	return Type{
+		Kind: KindPrimitive,
+		Prim: astTypeToPrim(typ),
+	}, nil
+}
 
-	var prim PrimitiveType
+func astTypeToPrim(typ *ast.Type) PrimitiveType {
 	switch typ.Type {
 	case ast.TypeTypeInt:
-		prim = PrimInt32
+		return PrimInt32
 	case ast.TypeTypeChar:
-		prim = PrimChar
+		return PrimChar
 	default:
 		// custom
 		panic("impl")
 	}
+}
+
+func (b *builder) toArrayType(typ *ast.Type, v *ast.Variable) (Type, error) {
+	var size int
+
+	sizeStr := v.Variable.ArrayIndex[0].ArrayIndex.NUM
+
+	if sizeStr != "" {
+		var err error
+		size, err = strconv.Atoi(string(sizeStr))
+		if err != nil {
+			panic("invalid size: " + sizeStr)
+		}
+	}
+
+	copyVar := *v
+	copyVarOption := *v.Variable
+	copyVar.Variable = &copyVarOption
+	copyVar.Variable.ArrayIndex = copyVar.Variable.ArrayIndex[1:]
+
+	sub, err := b.toType(typ, &copyVar, false)
+	if err != nil {
+		return Type{}, err
+	}
 
 	return Type{
-		Kind: kind,
-		Prim: prim,
+		Kind:      KindArray,
+		SubType:   &sub,
+		ArraySize: size,
 	}, nil
 }
 
@@ -256,7 +271,7 @@ func (b *builder) toReturnType(i *ast.Type) (Type, error) {
 }
 
 func (b *builder) toParamDec(p *ast.ParamDef) (*ParamDef, error) {
-	typ, err := b.toType(p.Param.Type, p.Param.Variable)
+	typ, err := b.toType(p.Param.Type, p.Param.Variable, true)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +326,7 @@ func (b *builder) toDecAssign(vars map[ast.IDEN]Type, a *ast.DecAssign_StandardO
 		}
 	}
 
-	indexable := v.Kind == KindPointer
+	indexable := v.Kind == KindPointer || v.Kind == KindArray
 	if len(a.Variable.Variable.ArrayIndex) > 0 && !indexable {
 		return nil, fmt.Errorf("variable %s is not indexable", a.Variable.Variable.IDEN)
 	}

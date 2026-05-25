@@ -10,26 +10,15 @@ type Main struct {
 	Main *Main_MainOption
 }
 
-type StatementCommaType string
+type ReturnType string
 
 const (
-	StatementCommaTypeStatement StatementCommaType = "statement"
+	ReturnTypeReturn ReturnType = "return"
 )
 
-type StatementComma struct {
-	Type StatementCommaType
-	Statement *StatementComma_StatementOption
-}
-
-type CommaParamDefType string
-
-const (
-	CommaParamDefTypeParam CommaParamDefType = "param"
-)
-
-type CommaParamDef struct {
-	Type CommaParamDefType
-	Param *CommaParamDef_ParamOption
+type Return struct {
+	Type ReturnType
+	Return *Return_ReturnOption
 }
 
 type ParamDefType string
@@ -43,26 +32,19 @@ type ParamDef struct {
 	Param *ParamDef_ParamOption
 }
 
-type CommaExprType string
+type CompExprType string
 
 const (
-	CommaExprTypeCommaExpr CommaExprType = "comma-expr"
+	CompExprTypeAdd CompExprType = "add"
+	CompExprTypeSub CompExprType = "sub"
+	CompExprTypeIsEqual CompExprType = "is-equal"
 )
 
-type CommaExpr struct {
-	Type CommaExprType
-	CommaExpr *CommaExpr_CommaExprOption
-}
-
-type CompEntriesType string
-
-const (
-	CompEntriesTypeEntries CompEntriesType = "entries"
-)
-
-type CompEntries struct {
-	Type CompEntriesType
-	Entries *CompEntries_EntriesOption
+type CompExpr struct {
+	Type CompExprType
+	Add *CompExpr_AddOption
+	Sub *CompExpr_SubOption
+	IsEqual *CompExpr_IsEqualOption
 }
 
 type TypeType string
@@ -82,15 +64,28 @@ type Type struct {
 	Pointer *Type_PointerOption
 }
 
-type ControlType string
+type LineType string
 
 const (
-	ControlTypeIf ControlType = "if"
+	LineTypeControl LineType = "control"
+	LineTypeStatement LineType = "statement"
 )
 
-type Control struct {
-	Type ControlType
-	If *Control_IfOption
+type Line struct {
+	Type LineType
+	Control *Line_ControlOption
+	Statement *Line_StatementOption
+}
+
+type StatementCommaType string
+
+const (
+	StatementCommaTypeStatement StatementCommaType = "statement"
+)
+
+type StatementComma struct {
+	Type StatementCommaType
+	Statement *StatementComma_StatementOption
 }
 
 type ParamsDefType string
@@ -104,28 +99,47 @@ type ParamsDef struct {
 	Params *ParamsDef_ParamsOption
 }
 
-type VariableType string
+type ValueType string
 
 const (
-	VariableTypeVariable VariableType = "variable"
+	ValueTypeInt ValueType = "int"
+	ValueTypeVariable ValueType = "variable"
+	ValueTypeStr ValueType = "str"
+	ValueTypeChar ValueType = "char"
+	ValueTypeCast ValueType = "cast"
+	ValueTypeCompLit ValueType = "comp-lit"
 )
 
-type Variable struct {
-	Type VariableType
-	Variable *Variable_VariableOption
+type Value struct {
+	Type ValueType
+	Int *Value_IntOption
+	Variable *Value_VariableOption
+	Str *Value_StrOption
+	Char *Value_CharOption
+	Cast *Value_CastOption
+	CompLit *Value_CompLitOption
 }
 
-type ExprType string
+type CommaExprType string
 
 const (
-	ExprTypeSubExpr ExprType = "sub-expr"
-	ExprTypeComp ExprType = "comp"
+	CommaExprTypeCommaExpr CommaExprType = "comma-expr"
 )
 
-type Expr struct {
-	Type ExprType
-	SubExpr *Expr_SubExprOption
-	Comp *Expr_CompOption
+type CommaExpr struct {
+	Type CommaExprType
+	CommaExpr *CommaExpr_CommaExprOption
+}
+
+type ArrayIndexType string
+
+const (
+	ArrayIndexTypeArrayIndex ArrayIndexType = "array-index"
+)
+
+type ArrayIndex struct {
+	Type ArrayIndexType
+	ArrayIndex *ArrayIndex_ArrayIndexOption
 }
 
 type StatementType string
@@ -156,6 +170,43 @@ type DecAssign struct {
 	Standard *DecAssign_StandardOption
 }
 
+type DecDefType string
+
+const (
+	DecDefTypeFuncDef DecDefType = "func-def"
+	DecDefTypeDecAssign DecDefType = "dec-assign"
+)
+
+type DecDef struct {
+	Type DecDefType
+	FuncDef *DecDef_FuncDefOption
+	DecAssign *DecDef_DecAssignOption
+}
+
+type ControlType string
+
+const (
+	ControlTypeIf ControlType = "if"
+)
+
+type Control struct {
+	Type ControlType
+	If *Control_IfOption
+}
+
+type ExprType string
+
+const (
+	ExprTypeSubExpr ExprType = "sub-expr"
+	ExprTypeComp ExprType = "comp"
+)
+
+type Expr struct {
+	Type ExprType
+	SubExpr *Expr_SubExprOption
+	Comp *Expr_CompOption
+}
+
 type CompositeLiteralType string
 
 const (
@@ -178,49 +229,26 @@ type Params struct {
 	Params *Params_ParamsOption
 }
 
-type DecDefType string
+type CommaParamDefType string
 
 const (
-	DecDefTypeFuncDef DecDefType = "func-def"
-	DecDefTypeDecAssign DecDefType = "dec-assign"
+	CommaParamDefTypeParam CommaParamDefType = "param"
 )
 
-type DecDef struct {
-	Type DecDefType
-	FuncDef *DecDef_FuncDefOption
-	DecAssign *DecDef_DecAssignOption
+type CommaParamDef struct {
+	Type CommaParamDefType
+	Param *CommaParamDef_ParamOption
 }
 
-type ReturnType string
+type VariableType string
 
 const (
-	ReturnTypeReturn ReturnType = "return"
+	VariableTypeVariable VariableType = "variable"
 )
 
-type Return struct {
-	Type ReturnType
-	Return *Return_ReturnOption
-}
-
-type ValueType string
-
-const (
-	ValueTypeInt ValueType = "int"
-	ValueTypeVariable ValueType = "variable"
-	ValueTypeStr ValueType = "str"
-	ValueTypeChar ValueType = "char"
-	ValueTypeCast ValueType = "cast"
-	ValueTypeCompLit ValueType = "comp-lit"
-)
-
-type Value struct {
-	Type ValueType
-	Int *Value_IntOption
-	Variable *Value_VariableOption
-	Str *Value_StrOption
-	Char *Value_CharOption
-	Cast *Value_CastOption
-	CompLit *Value_CompLitOption
+type Variable struct {
+	Type VariableType
+	Variable *Variable_VariableOption
 }
 
 type SubExprType string
@@ -238,73 +266,108 @@ type SubExpr struct {
 	FuncCall *SubExpr_FuncCallOption
 }
 
-type LineType string
+type CompEntriesType string
 
 const (
-	LineTypeControl LineType = "control"
-	LineTypeStatement LineType = "statement"
+	CompEntriesTypeEntries CompEntriesType = "entries"
 )
 
-type Line struct {
-	Type LineType
-	Control *Line_ControlOption
-	Statement *Line_StatementOption
-}
-
-type ArrayIndexType string
-
-const (
-	ArrayIndexTypeArrayIndex ArrayIndexType = "array-index"
-)
-
-type ArrayIndex struct {
-	Type ArrayIndexType
-	ArrayIndex *ArrayIndex_ArrayIndexOption
-}
-
-type CompExprType string
-
-const (
-	CompExprTypeAdd CompExprType = "add"
-	CompExprTypeSub CompExprType = "sub"
-	CompExprTypeIsEqual CompExprType = "is-equal"
-)
-
-type CompExpr struct {
-	Type CompExprType
-	Add *CompExpr_AddOption
-	Sub *CompExpr_SubOption
-	IsEqual *CompExpr_IsEqualOption
+type CompEntries struct {
+	Type CompEntriesType
+	Entries *CompEntries_EntriesOption
 }
 
 
-type CHAR string
-type IDEN string
-type SEMI string
-type COMMA string
-type EQUALS string
-type LPAREN string
-type RPAREN string
-type LSQUARE string
 type RSQUARE string
-type CHAR_TYPE string
-type LBRACE string
-type RETURN string
-type STR string
-type PLUS string
 type MINUS string
-type ASTERISKS string
+type CHAR_TYPE string
+type COMMA string
+type LBRACE string
 type IF string
-type RBRACE string
+type RETURN string
+type IDEN string
 type NUM string
+type STR string
+type CHAR string
+type LPAREN string
+type RBRACE string
+type SEMI string
 type EEQUALS string
 type INT_TYPE string
+type RPAREN string
+type EQUALS string
+type PLUS string
+type ASTERISKS string
+type LSQUARE string
+type Return_ReturnOption struct {
+	RETURN RETURN
+	Expr *Expr
+	SEMI SEMI
+}
+
+type ParamDef_ParamOption struct {
+	Type *Type
+	Variable *Variable
+}
+
+type Line_ControlOption struct {
+	Control *Control
+}
+
+type Statement_VarDecOption struct {
+	Type *Type
+	Variable *Variable
+}
+
+type DecDef_DecAssignOption struct {
+	DecAssign *DecAssign
+}
+
+type Expr_CompOption struct {
+	CompExpr *CompExpr
+}
+
 type Type_IntOption struct {
 	INT_TYPE INT_TYPE
 }
 
-type Type_CharOption struct {
-	CHAR_TYPE CHAR_TYPE
+type Statement_AssignOption struct {
+	Variable *Variable
+	EQUALS EQUALS
+	Expr *Expr
+}
+
+type Params_ParamsOption struct {
+	Expr *Expr
+	CommaExpr []*CommaExpr
+}
+
+type CompExpr_AddOption struct {
+	SubExpr *SubExpr
+	PLUS PLUS
+	Expr *Expr
+}
+
+type Type_CustomOption struct {
+	IDEN IDEN
+}
+
+type Type_PointerOption struct {
+	ASTERISKS ASTERISKS
+	Type *Type
+}
+
+type ParamsDef_ParamsOption struct {
+	ParamDef *ParamDef
+	CommaParamDef []*CommaParamDef
+}
+
+type Value_IntOption struct {
+	NUM NUM
+}
+
+type Value_CharOption struct {
+	CHAR CHAR
 }
 
 type Control_IfOption struct {
@@ -315,6 +378,67 @@ type Control_IfOption struct {
 	LBRACE LBRACE
 	StatementComma []*StatementComma
 	RBRACE RBRACE
+}
+
+type Statement_ExprOption struct {
+	Expr *Expr
+}
+
+type DecAssign_StandardOption struct {
+	Type *Type
+	Variable *Variable
+	EQUALS EQUALS
+	Expr *Expr
+}
+
+type Value_VariableOption struct {
+	Variable *Variable
+}
+
+type Value_StrOption struct {
+	STR STR
+}
+
+type Variable_VariableOption struct {
+	IDEN IDEN
+	ArrayIndex []*ArrayIndex
+}
+
+type CompEntries_EntriesOption struct {
+	Expr *Expr
+	CommaExpr []*CommaExpr
+}
+
+type CompExpr_IsEqualOption struct {
+	SubExpr *SubExpr
+	EEQUALS EEQUALS
+	Expr *Expr
+}
+
+type Line_StatementOption struct {
+	StatementComma *StatementComma
+}
+
+type CommaParamDef_ParamOption struct {
+	COMMA COMMA
+	ParamDef *ParamDef
+}
+
+type SubExpr_ValueOption struct {
+	Value *Value
+}
+
+type SubExpr_FuncCallOption struct {
+	IDEN IDEN
+	LPAREN LPAREN
+	Params *Params
+	RPAREN RPAREN
+}
+
+type CompExpr_SubOption struct {
+	SubExpr *SubExpr
+	MINUS MINUS
+	Expr *Expr
 }
 
 type DecDef_FuncDefOption struct {
@@ -329,131 +453,10 @@ type DecDef_FuncDefOption struct {
 	RBRACE RBRACE
 }
 
-type DecDef_DecAssignOption struct {
-	DecAssign *DecAssign
-}
-
-type Value_VariableOption struct {
-	Variable *Variable
-}
-
-type Main_MainOption struct {
-	DecDef []*DecDef
-}
-
-type Type_PointerOption struct {
-	ASTERISKS ASTERISKS
-	Type *Type
-}
-
-type Expr_SubExprOption struct {
-	SubExpr *SubExpr
-}
-
-type Statement_VarDecOption struct {
-	Type *Type
-	Variable *Variable
-}
-
-type SubExpr_FuncCallOption struct {
-	IDEN IDEN
-	LPAREN LPAREN
-	Params *Params
-	RPAREN RPAREN
-}
-
-type Line_ControlOption struct {
-	Control *Control
-}
-
-type CompExpr_SubOption struct {
-	SubExpr *SubExpr
-	MINUS MINUS
-	Expr *Expr
-}
-
-type Value_IntOption struct {
-	NUM NUM
-}
-
-type SubExpr_ValueOption struct {
-	Value *Value
-}
-
-type Expr_CompOption struct {
-	CompExpr *CompExpr
-}
-
-type DecAssign_StandardOption struct {
-	Type *Type
-	Variable *Variable
-	EQUALS EQUALS
-	Expr *Expr
-}
-
-type Variable_VariableOption struct {
-	IDEN IDEN
-	ArrayIndex []*ArrayIndex
-}
-
-type Value_StrOption struct {
-	STR STR
-}
-
-type Value_CharOption struct {
-	CHAR CHAR
-}
-
-type Line_StatementOption struct {
-	StatementComma *StatementComma
-}
-
-type ArrayIndex_ArrayIndexOption struct {
-	LSQUARE LSQUARE
-	NUM NUM
-	RSQUARE RSQUARE
-}
-
-type Type_CustomOption struct {
-	IDEN IDEN
-}
-
-type Params_ParamsOption struct {
-	Expr *Expr
-	CommaExpr []*CommaExpr
-}
-
-type Return_ReturnOption struct {
-	RETURN RETURN
-	Expr *Expr
-	SEMI SEMI
-}
-
-type CompExpr_AddOption struct {
-	SubExpr *SubExpr
-	PLUS PLUS
-	Expr *Expr
-}
-
-type CompExpr_IsEqualOption struct {
-	SubExpr *SubExpr
-	EEQUALS EEQUALS
-	Expr *Expr
-}
-
-type CommaParamDef_ParamOption struct {
-	COMMA COMMA
-	ParamDef *ParamDef
-}
-
 type CompositeLiteral_ArrayValOption struct {
 	LBRACE LBRACE
 	CompEntries *CompEntries
 	RBRACE RBRACE
-}
-
-type Value_CompLitOption struct {
-	CompositeLiteral *CompositeLiteral
 }
 
 type SubExpr_ParensOption struct {
@@ -462,33 +465,13 @@ type SubExpr_ParensOption struct {
 	RPAREN RPAREN
 }
 
+type Main_MainOption struct {
+	DecDef []*DecDef
+}
+
 type StatementComma_StatementOption struct {
 	Statement *Statement
 	SEMI SEMI
-}
-
-type CommaExpr_CommaExprOption struct {
-	COMMA COMMA
-	Expr *Expr
-}
-
-type ParamsDef_ParamsOption struct {
-	ParamDef *ParamDef
-	CommaParamDef []*CommaParamDef
-}
-
-type Statement_DecAssignOption struct {
-	DecAssign *DecAssign
-}
-
-type Statement_AssignOption struct {
-	Variable *Variable
-	EQUALS EQUALS
-	Expr *Expr
-}
-
-type Statement_ExprOption struct {
-	Expr *Expr
 }
 
 type Value_CastOption struct {
@@ -498,14 +481,31 @@ type Value_CastOption struct {
 	Value *Value
 }
 
-type ParamDef_ParamOption struct {
-	Type *Type
-	Variable *Variable
+type Value_CompLitOption struct {
+	CompositeLiteral *CompositeLiteral
 }
 
-type CompEntries_EntriesOption struct {
+type CommaExpr_CommaExprOption struct {
+	COMMA COMMA
 	Expr *Expr
-	CommaExpr []*CommaExpr
+}
+
+type ArrayIndex_ArrayIndexOption struct {
+	LSQUARE LSQUARE
+	NUM NUM
+	RSQUARE RSQUARE
+}
+
+type Type_CharOption struct {
+	CHAR_TYPE CHAR_TYPE
+}
+
+type Statement_DecAssignOption struct {
+	DecAssign *DecAssign
+}
+
+type Expr_SubExprOption struct {
+	SubExpr *SubExpr
 }
 
 

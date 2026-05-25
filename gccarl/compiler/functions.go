@@ -126,6 +126,7 @@ func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall, locals *S
 		offset := locals.Add(8) // TODO: other sizes
 		paramOffsets[i] = offset
 
+		instrs.addComment("move expr %v for arg %d for func call", expr.Type, i)
 		instrs.addInstr("mov [rbp-%d], %s", offset, resultReg)
 	}
 
@@ -136,6 +137,7 @@ func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall, locals *S
 
 		argReg := paramRegisters[i]
 
+		instrs.addComment("move arg %d for func call", i)
 		instrs.addInstr("mov %s, [rbp-%d]", argReg, paramOffsets[i])
 	}
 

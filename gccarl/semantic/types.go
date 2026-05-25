@@ -50,12 +50,18 @@ type Type struct {
 	Custom    TypeName
 }
 
+func (t Type) String() string {
+	return fmt.Sprintf("[%v/%v]", t.Kind, t.Prim)
+}
+
 func (t Type) Size() int {
 	switch t.Kind {
 	case KindPrimitive:
 		return t.Prim.Size()
 	case KindArray:
 		return t.ArraySize * (*t.SubType).Size()
+	case KindPointer:
+		return 8
 	}
 	panic(fmt.Sprintf("unknown type %d", t))
 }

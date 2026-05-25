@@ -3,7 +3,6 @@ SRC := $(wildcard gccarl/*)
 LD := x86_64-elf-ld
 
 $(BUILDDIR)/basic: $(BUILDDIR)/basic.o
-	#clang -arch x86_64 build/basic.o -o build/basic
 	$(LD) -o $(BUILDDIR)/basic $(BUILDDIR)/basic.o
 
 $(BUILDDIR):
@@ -11,6 +10,9 @@ $(BUILDDIR):
 
 $(BUILDDIR)/gccarl: $(BUILDDIR) $(SRC)
 	go build -o $(BUILDDIR)/gccarl gccarl/cmd/gccarl/main.go
+
+$(BUILDDIR)/parser: $(BUILDDIR) $(SRC)
+	go build -o $(BUILDDIR)/gccarl gccarl/cmd/parser/main.go
 
 $(BUILDDIR)/basic.asm: $(BUILDDIR)/gccarl
 	$(BUILDDIR)/gccarl -o $(BUILDDIR)/basic.asm samples/basic.c
