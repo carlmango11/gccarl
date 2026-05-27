@@ -21,7 +21,7 @@ func (a Address) IsStack() bool {
 
 type StackVars struct {
 	vars map[semantic.VarName]*Var
-	size int
+	size semantic.Size
 }
 
 func newStackVars() *StackVars {
@@ -30,7 +30,7 @@ func newStackVars() *StackVars {
 	}
 }
 
-func (lv *StackVars) Add(size int) Offset {
+func (lv *StackVars) Add(size semantic.Size) Offset {
 	offset := Offset(lv.size + size)
 
 	lv.size += size
@@ -38,7 +38,7 @@ func (lv *StackVars) Add(size int) Offset {
 	return offset
 }
 
-func (lv *StackVars) AddNamed(name semantic.VarName, size int) Offset {
+func (lv *StackVars) AddNamed(name semantic.VarName, size semantic.Size) Offset {
 	offset := Offset(lv.size + size)
 
 	lv.vars[name] = &Var{
@@ -91,6 +91,6 @@ func (lv *StackVars) Address(id semantic.VarName) (Address, bool) {
 //	return offset, true
 //}
 
-func (lv *StackVars) Size() int {
+func (lv *StackVars) Size() semantic.Size {
 	return lv.size
 }

@@ -68,15 +68,17 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 		case ast.LineTypeStatement:
 			s := l.Statement.StatementComma.Statement.Statement
 
-			if s.DecAssign == nil {
-				continue
-			}
-
-			decAssign := s.DecAssign.DecAssign.Standard
-
-			err := b.declareVar(locals, decAssign.Type, decAssign.Variable, false)
-			if err != nil {
-				return nil, err
+			if s.DecAssign != nil {
+				decAssign := s.DecAssign.DecAssign.Standard
+				err := b.declareVar(locals, decAssign.Type, decAssign.Variable, false)
+				if err != nil {
+					return nil, err
+				}
+			} else if s.VarDec != nil {
+				err := b.declareVar(locals, s.VarDec.Type, s.VarDec.Variable, false)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -127,7 +129,9 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 						return nil, err
 					}
 
-					ss = append(ss, state)
+					if state != nil {
+						ss = append(ss, state)
+					}
 				}
 
 				lines = append(lines, &Line{
@@ -143,6 +147,10 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 			s, err := b.toStatement(locals, l.Statement.StatementComma.Statement.Statement)
 			if err != nil {
 				return nil, err
+			}
+
+			if s == nil {
+				continue
 			}
 
 			lines = append(lines, &Line{
@@ -293,16 +301,9 @@ func (b *builder) toStatement(vars map[ast.IDEN]Type, s *ast.Statement) (*Statem
 		return &Statement{
 			Assign: a,
 		}, nil
-
-	//case ast.StatementTypeAssign:
-	//	a, err := b.toAssign(vars, s.Assign)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	return &Statement{
-	//		Assign: a,
-	//	}, nil
+	case ast.StatementTypeVarDec:
+		// handled in the normal local func vars
+		return nil, nil
 	case ast.StatementTypeExpr:
 		expr, err := b.toExpr(s.Expr.Expr, vars)
 		if err != nil {
@@ -314,7 +315,7 @@ func (b *builder) toStatement(vars map[ast.IDEN]Type, s *ast.Statement) (*Statem
 		}, nil
 	}
 
-	panic("invalid statement")
+	panic("invalid statement: " + s.Type)
 }
 
 func (b *builder) toDecAssign(vars map[ast.IDEN]Type, a *ast.DecAssign_StandardOption) (*Assign, error) {
@@ -442,11 +443,28 @@ func (b *builder) fromSubExpr(sub *ast.SubExpr, locals map[ast.IDEN]Type) (*Expr
 				},
 			}, nil
 		case ast.ValueTypeVariable:
-			name := v.Value.Variable.Variable.Variable.IDEN
+			vr := v.Value.Variable.Variable.Variable
+			name := vr.IDEN
 
 			typ, ok := locals[name]
 			if !ok {
 				return nil, fmt.Errorf("variable %s not declared", name)
+			}
+
+			if len(vr.ArrayIndex) > 0 {
+				// TODO: handle nested
+				i, err := strconv.Atoi(string(vr.ArrayIndex[0].ArrayIndex.NUM))
+				if err != nil {
+					return nil, err
+				}
+
+				return &Expr{
+					Type: *typ.SubType,
+					ArrayVar: &IndexedVar{
+						Index: i,
+						Name:  VarName(name),
+					},
+				}, nil
 			}
 
 			return &Expr{

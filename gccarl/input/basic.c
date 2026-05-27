@@ -1,16 +1,15 @@
-
 char read_char() {
-    char c[1] = {' '};
+    char c[1];
     do_syscall(0, 0, c, 1);
+
+    return c[0];
 }
 
 int main() {
-    char c[1] = {' '};
-    do_syscall(0, 0, c, 1);
-
     char msg[3] = {'Y','E','S'};
+    char read = read_char();
 
-    if (c[0] == 'x') {
+    if (read == 'x') {
         print(msg, 3);
     }
 }
