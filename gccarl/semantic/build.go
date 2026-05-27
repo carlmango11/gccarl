@@ -107,63 +107,13 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 
 	var lines []*Line
 	for _, l := range f.Line {
-		switch l.Type {
-		case ast.LineTypeControl:
-			c := l.Control.Control
-
-			switch c.Type {
-			case ast.ControlTypeIf:
-				expr, err := b.toExpr(c.If.Expr, locals)
-				if err != nil {
-					return nil, err
-				}
-
-				if expr.Type.Prim != PrimBool {
-					return nil, fmt.Errorf("if condition must be a boolean")
-				}
-
-				var ss []*Statement
-				for _, n := range c.If.StatementComma {
-					state, err := b.toStatement(locals, n.Statement.Statement)
-					if err != nil {
-						return nil, err
-					}
-
-					if state != nil {
-						ss = append(ss, state)
-					}
-				}
-
-				lines = append(lines, &Line{
-					Control: &Control{
-						If: &If{
-							Condition:  expr,
-							Statements: ss,
-						},
-					},
-				})
-			}
-		case ast.LineTypeStatement:
-			s, err := b.toStatement(locals, l.Statement.StatementComma.Statement.Statement)
-			if err != nil {
-				return nil, err
-			}
-
-			if s == nil {
-				continue
-			}
-
-			lines = append(lines, &Line{
-				Statement: s,
-			})
-		}
-	}
-
-	var returnExpr *Expr
-	if f.Return != nil {
-		returnExpr, err = b.toExpr(f.Return.Return.Expr, locals)
+		line, err := b.toLine(locals, l)
 		if err != nil {
 			return nil, err
+		}
+
+		if line != nil {
+			lines = append(lines, line)
 		}
 	}
 
@@ -178,8 +128,60 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 		Locals:     localsCast,
 		Params:     paramDefs,
 		Lines:      lines,
-		ReturnExpr: returnExpr,
 	}, nil
+}
+
+func (b *builder) toLine(locals map[ast.IDEN]Type, l *ast.Line) (*Line, error) {
+	switch l.Type {
+	case ast.LineTypeControl:
+		c := l.Control.Control
+
+		switch c.Type {
+		case ast.ControlTypeIf:
+			expr, err := b.toExpr(c.If.Expr, locals)
+			if err != nil {
+				return nil, err
+			}
+
+			if expr.Type.Prim != PrimBool {
+				return nil, fmt.Errorf("if condition must be a boolean")
+			}
+
+			var ll []*Line
+			for _, l := range c.If.Line {
+				line, err := b.toLine(locals, l)
+				if err != nil {
+					return nil, err
+				}
+
+				ll = append(ll, line)
+			}
+
+			return &Line{
+				Control: &Control{
+					If: &If{
+						Condition: expr,
+						Lines:     ll,
+					},
+				},
+			}, nil
+		}
+	case ast.LineTypeStatement:
+		s, err := b.toStatement(locals, l.Statement.StatementComma.Statement.Statement)
+		if err != nil {
+			return nil, err
+		}
+
+		if s == nil {
+			return nil, nil
+		}
+
+		return &Line{
+			Statement: s,
+		}, nil
+	}
+
+	panic("unreachable")
 }
 
 func (b *builder) declareVar(vars map[ast.IDEN]Type, astType *ast.Type, v *ast.Variable, isParam bool) error {
@@ -304,6 +306,15 @@ func (b *builder) toStatement(vars map[ast.IDEN]Type, s *ast.Statement) (*Statem
 	case ast.StatementTypeVarDec:
 		// handled in the normal local func vars
 		return nil, nil
+	case ast.StatementTypeReturn:
+		expr, err := b.toExpr(s.Return.Expr, vars)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Statement{
+			Return: expr,
+		}, nil
 	case ast.StatementTypeExpr:
 		expr, err := b.toExpr(s.Expr.Expr, vars)
 		if err != nil {
@@ -563,10 +574,10 @@ func (b *builder) toFuncCall(call *ast.SubExpr_FuncCallOption, locals map[ast.ID
 	}, nil
 }
 
-func (b *builder) toControl(locals map[ast.Identifier]Type, c *ast.Control) (*Control, error) {
+func (b *builder) toControl(locals map[ast.IDEN]Type, c *ast.Control) (*Control, error) {
 	switch {
 	case c.If != nil:
-		expr, err := b.toExpr(c.If.Condition, locals)
+		expr, err := b.toExpr(c.If.Expr, locals)
 		if err != nil {
 			return nil, err
 		}
@@ -575,20 +586,20 @@ func (b *builder) toControl(locals map[ast.Identifier]Type, c *ast.Control) (*Co
 			return nil, fmt.Errorf("if condition must be a boolean")
 		}
 
-		var ss []*Statement
-		for _, n := range c.If.Statements {
-			state, err := b.toStatement(locals, n)
+		var ll []*Line
+		for _, n := range c.If.Line {
+			l, err := b.toLine(locals, n)
 			if err != nil {
 				return nil, err
 			}
 
-			ss = append(ss, state)
+			ll = append(ll, l)
 		}
 
 		return &Control{
 			If: &If{
-				Condition:  expr,
-				Statements: ss,
+				Condition: expr,
+				Lines:     ll,
 			},
 		}, nil
 	}

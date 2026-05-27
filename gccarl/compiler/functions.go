@@ -35,27 +35,10 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	c.handleParamsDef(body, f.Params, locals)
 
 	for _, l := range f.Lines {
-		if l.Statement != nil {
-			err := c.compileStatement(body, l.Statement, locals)
-			if err != nil {
-				return nil, err
-			}
-		} else if l.Control != nil {
-			err := c.compileControl(body, l.Control, locals)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	if f.ReturnExpr != nil {
-		loc, err := c.compileExpr(body, f.ReturnExpr, locals)
+		err := c.compileLine(body, l, locals)
 		if err != nil {
 			return nil, err
 		}
-
-		retReg := returnRegister(f.ReturnExpr.Type)
-		body.movLocToReg(f.ReturnExpr.Type.Size(), loc, retReg)
 	}
 
 	stackSize := locals.Size()

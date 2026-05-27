@@ -120,6 +120,16 @@ func (c *Compiler) addDataSection(prog *semantic.Program, full *Instrs) {
 	}
 }
 
+func (c *Compiler) compileLine(instrs *Instrs, l *semantic.Line, locals *StackVars) error {
+	switch {
+	case l.Control != nil:
+		return c.compileControl(instrs, l.Control, locals)
+	case l.Statement != nil:
+		return c.compileStatement(instrs, l.Statement, locals)
+	}
+	panic("invalid")
+}
+
 func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, locals *StackVars) error {
 	switch {
 	case s.Assign != nil:
@@ -127,6 +137,16 @@ func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, local
 	case s.Expr != nil:
 		_, err := c.compileExpr(instrs, s.Expr, locals)
 		return err
+	case s.Return != nil:
+		loc, err := c.compileExpr(instrs, s.Return, locals)
+		if err != nil {
+			return err
+		}
+
+		retReg := returnRegister(s.Return.Type)
+		instrs.movLocToReg(s.Return.Type.Size(), loc, retReg)
+
+		return nil
 	}
 
 	panic("missing statement type")
@@ -278,8 +298,8 @@ func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If, locals *StackVars
 	skip := c.newLabel("skip")
 	instrs.addInstr("jne %s", skip)
 
-	for _, s := range ifs.Statements {
-		err := c.compileStatement(instrs, s, locals)
+	for _, l := range ifs.Lines {
+		err := c.compileLine(instrs, l, locals)
 		if err != nil {
 			return err
 		}

@@ -111,9 +111,8 @@ type FuncDef struct {
 	Name       FuncName
 	Params     []*ParamDef
 	//TypeDefs []
-	Locals     map[VarName]Type
-	Lines      []*Line
-	ReturnExpr *Expr
+	Locals map[VarName]Type
+	Lines  []*Line
 }
 
 type Line struct {
@@ -128,11 +127,12 @@ type Control struct {
 type Statement struct {
 	Assign *Assign
 	Expr   *Expr
+	Return *Expr
 }
 
 type If struct {
-	Condition  *Expr
-	Statements []*Statement
+	Condition *Expr
+	Lines     []*Line
 }
 
 type StringID int
@@ -140,15 +140,6 @@ type StringID int
 type IsEqual struct {
 	Left  *Expr
 	Right *Expr
-}
-
-type Line struct {
-	Statement *Statement
-	Control   *Control
-}
-
-type Control struct {
-	If *If
 }
 
 type Expr struct {
