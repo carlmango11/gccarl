@@ -6,26 +6,34 @@ import (
 	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
-type Size int
+type LocationType int
 
 const (
-	Size64 = 8
+	LTUnset LocationType = iota
+	LTOffset
+	LTRegister
+	LTLabel
 )
 
-type Register string
+type Location struct {
+	Type     LocationType
+	Offset   Offset
+	Register Register
+	Label    DataLabel
+}
 
-const (
-	RegUnset Register = ""
-	RegEAX   Register = "eax"
-	RegEBX   Register = "ebx"
-	RegEDI   Register = "edi"
-	RegESI   Register = "esi"
-	RegEDX   Register = "edx"
-	RegRAX   Register = "rax"
-	RegRDI   Register = "rdi"
-	RegRSI   Register = "rsi"
-	RegRDX   Register = "rdx"
-)
+func raxSized(s semantic.Size) Register {
+	switch s {
+	case semantic.Size64:
+		return RegRAX
+	case semantic.Size8:
+		return RegAL
+	case semantic.Size32:
+		return RegEAX
+	default:
+		panic(fmt.Sprintf("raxSized: unknown size: %d", s))
+	}
+}
 
 type Instr string
 type DataLabel string
@@ -42,7 +50,14 @@ type Compiler struct {
 
 func New() *Compiler {
 	return &Compiler{
-		funcs: make(map[semantic.FuncName]*FuncDef),
+		funcs: map[semantic.FuncName]*FuncDef{
+			"do_syscall": {
+				ReturnType: semantic.Type{
+					Kind: semantic.KindPrimitive,
+					Prim: semantic.PrimInt64,
+				},
+			},
+		},
 	}
 }
 
@@ -72,17 +87,18 @@ func (c *Compiler) compile(prog *semantic.Program) (*Instrs, error) {
 	full.addInstr("_start:")
 
 	full.addInstr("\tcall main")
-	//c.instrs = append(c.instrs, callPrint...)
 	full.addInstr("\tcall exit")
+
 	full.instrs = append(full.instrs, exitRoutine...)
-	full.instrs = append(full.instrs, printRoutine...)
 
 	for _, fd := range prog.FuncDefs {
 		c.funcs[fd.Name] = &FuncDef{
 			ReturnType: fd.ReturnType,
 			Params:     fd.Params,
 		}
+	}
 
+	for _, fd := range prog.FuncDefs {
 		funcInstrs, err := c.compileFuncDef(fd)
 		if err != nil {
 			return nil, err
@@ -136,13 +152,15 @@ func (c *Compiler) compileArrayAssign(instrs *Instrs, a *semantic.Assign, locals
 		}
 
 		for i, v := range a.Expr.CompLiteral {
-			reg, err := c.compileExpr(instrs, v, locals)
+			reg, err := c.compileExprToReg(instrs, v, locals)
 			if err != nil {
 				return err
 			}
 
-			offset := startOffset - Offset(v.Type.Size()*i)
-			instrs.addInstr("mov qword [rbp-%d], %s", offset, reg) // TODO needs to change for floats
+			o := Offset(v.Type.Size()) * Offset(i)
+			offset := startOffset - o
+
+			instrs.movFromReg(a.Expr.Type.SubType.Size(), reg, offset)
 		}
 	}
 
@@ -155,74 +173,93 @@ func (c *Compiler) compileStandardAssign(instrs *Instrs, a *semantic.Assign, loc
 		return fmt.Errorf("undefined variable: %s", a.Name)
 	}
 
-	outputReg, err := c.compileExpr(instrs, a.Expr, locals)
+	reg, err := c.compileExprToReg(instrs, a.Expr, locals)
 	if err != nil {
 		return err
 	}
 
-	if outputReg != RegUnset {
-		instrs.addInstr(`mov qword [rbp-%d], %s`, toOffset, outputReg)
-	} else {
-		instrs.addInstr("mov qword [rbp-%d], %s", toOffset, RegRAX)
-	}
+	instrs.movFromReg(a.Expr.Type.Size(), reg, toOffset)
 
 	return nil
 }
 
-func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Register, error) {
+func (c *Compiler) compileExprToReg(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Register, error) {
+	loc, err := c.compileExpr(instrs, e, locals)
+	if err != nil {
+		return RegUnset, err
+	}
+
+	switch loc.Type {
+	case LTRegister:
+		return loc.Register, nil
+	case LTOffset:
+		instrs.movLocToReg(e.Type.Size(), loc, accumulator(e.Type))
+		return accumulator(e.Type), nil
+	default:
+		panic("invalid")
+	}
+}
+
+func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Location, error) {
 	switch {
 	case e.IsEqual != nil:
 		err := c.compileIsEqual(instrs, e.IsEqual, locals)
-		return RegUnset, err
+		return Location{}, err
 	case e.FuncCall != nil:
-		err := c.functionCall(instrs, e.FuncCall, locals)
-		if err != nil {
-			return RegUnset, err
-		}
-
-		return returnRegister(e.Type), nil
+		return c.functionCall(instrs, e.FuncCall, locals)
 	case e.AddressOf != "":
 		addr, ok := locals.Address(e.AddressOf)
 		if !ok {
-			return RegUnset, fmt.Errorf("undefined variable: %s", e.Var)
+			return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
 		}
 
 		if addr.IsStack() {
-			instrs.addInstr("lea %s, [rbp-%d]", RegRAX, addr.stack)
+			instrs.addInstr("lea %s, [rbp-%d] ; addressOf", RegRAX, addr.stack)
 		} else {
-			instrs.addInstr("lea %s, [rel %s]", RegRAX, addr.label)
+			instrs.addInstr("lea %s, [rel %s] ; addressOf", RegRAX, addr.label)
 		}
 
-		return RegRAX, nil
+		return Location{
+			Type:     LTRegister,
+			Register: RegRAX,
+		}, nil
 
-	case e.StringID != 0:
-		instrs.addInstr("lea %s, [rel %s]", RegRAX, c.stringLabel(e.StringID))
-		return RegRAX, nil
+	//case e.StringID != 0:
+	//	instrs.addInstr("lea %s, [rel %s]", RegRAX, c.stringLabel(e.StringID))
+	//	return Location{}, nil
+	//	return RegRAX, nil
 
 	case e.Literal != nil:
 		switch e.Type.Kind {
-		//case e.Add != nil:
-		//	return c.compileAdd(e.Add, locals, target)
-		//case e.Val != nil:
-		//	return c.compileVal(e.Val, locals, target)
 		case semantic.KindPrimitive:
 			switch e.Type.Prim {
 			case semantic.PrimInt32:
-				instrs.addInstr("mov %s, %d", RegRAX, e.Literal.Int32)
-				return RegRAX, nil
+				instrs.movInt32ToReg(e.Literal.Int32, RegEAX)
+				return regLocation(RegEAX), nil
 			case semantic.PrimChar:
-				instrs.addInstr("mov %s, 0x%X", RegRAX, e.Literal.Char)
-				return RegRAX, nil
+				instrs.movByteToReg(e.Literal.Char, RegAL)
+				return regLocation(RegAL), nil // todo return lit
 			}
 		}
 	case e.Var != "":
-		offset, ok := locals.Offset(e.Var)
+		addr, ok := locals.Address(e.Var)
 		if !ok {
-			return RegUnset, fmt.Errorf("undefined variable: %s", e.Var)
+			return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
 		}
 
-		instrs.addInstr("mov %s, [rbp-%d]", RegRAX, offset)
-		return RegRAX, nil
+		return offsetLoc(addr.stack), nil
+	case e.ArrayVar != nil:
+		offset, ok := locals.Offset(e.ArrayVar.Name)
+		if !ok {
+			return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
+		}
+
+		offset += Offset(e.ArrayVar.Index) * Offset(e.Type.Size())
+
+		return Location{
+			Type:   LTOffset,
+			Offset: offset,
+		}, nil
 	}
 
 	panic(fmt.Sprintf("unknown expr type: %+v", e))
@@ -248,7 +285,7 @@ func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If, locals *StackVars
 		}
 	}
 
-	instrs.addInstr("skip:")
+	instrs.addInstr("%v:", skip)
 
 	return nil
 }
@@ -259,76 +296,31 @@ func (c *Compiler) newLabel(prefix string) string {
 }
 
 func (c *Compiler) compileIsEqual(instrs *Instrs, e *semantic.IsEqual, locals *StackVars) error {
-	reg, err := c.compileExpr(instrs, e.Left, locals)
+	leftExprLoc, err := c.compileExpr(instrs, e.Left, locals)
 	if err != nil {
 		return err
 	}
 
-	offset := locals.Add(8)
-	instrs.addInstr("mov qword [rbp-%d], %s", offset, reg)
+	size := e.Left.Type.Size()
 
-	reg, err = c.compileExpr(instrs, e.Right, locals)
+	if leftExprLoc.Type == LTRegister {
+		rightLoc, err := c.compileExpr(instrs, e.Right, locals)
+		if err != nil {
+			return err
+		}
+
+		instrs.cmp(size, leftExprLoc.Register, rightLoc)
+		return nil
+	}
+
+	rightReg, err := c.compileExprToReg(instrs, e.Right, locals)
 	if err != nil {
 		return err
 	}
 
-	instrs.addInstr("cmp [rbp-%d], %s", offset, reg)
+	instrs.cmp(size, rightReg, leftExprLoc)
+
 	return nil
-}
-
-func (c *Compiler) compileControl(instrs *Instrs, control *semantic.Control, locals *StackVars) error {
-	switch {
-	case control.If != nil:
-		return c.compileIf(instrs, control.If, locals)
-	}
-
-	panic("invalid control")
-}
-
-//func (c *Compiler) compileAdd(a *semantic.AddExpr, locals *Vars, target Register) (ast.RawType, error) {
-//	var all []Instr
-//
-//	output1, typ1, err := c.compileExpr(a.Expr2, locals, target)
-//	if err != nil {
-//		return nil, ast.TypeUnset, err
-//	}
-//
-//	all = append(all, output1...)
-//
-//	output2, typ2, err := c.compileExpr(a.Expr1, locals, RegEBX)
-//	if err != nil {
-//		return nil, ast.TypeUnset, err
-//	}
-//
-//	all = append(all, output2...)
-//
-//	return c.addInstr(all, "add %s, %s", target, RegEBX), nil
-//}
-
-//func (c *Compiler) compileVarDec(vd *ast.DecAssign, locals *Vars) error {
-//	switch typeSize(vd.Type) {
-//	case 1:
-//		return compile1Assign(vd.Var, vd.Expr, locals)
-//	case 8:
-//		return compile8Assign(vd.Var, vd.Expr, locals)
-//	default:
-//		panic(fmt.Sprintf("unhandled assignment type: %s", vd.Type))
-//	}
-//}
-
-type Instrs struct {
-	instrs []Instr
-}
-
-func (i *Instrs) addInstr(format string, args ...any) {
-	instr := fmt.Sprintf(format, args...)
-	i.instrs = append(i.instrs, Instr(instr))
-}
-
-func (i *Instrs) addInstrsIndent(inner *Instrs) {
-	for _, instr := range inner.instrs {
-		i.instrs = append(i.instrs, "\t"+instr)
-	}
 }
 
 func returnRegister(t semantic.Type) Register {
@@ -338,11 +330,60 @@ func returnRegister(t semantic.Type) Register {
 	case semantic.KindPrimitive:
 		switch t.Prim {
 		case semantic.PrimInt32:
+			return RegEAX
+		case semantic.PrimInt64:
 			return RegRAX
+		case semantic.PrimChar:
+			return RegAL
 		}
 	case semantic.KindArray:
 		panic("array cannot be returned")
 	}
 
 	panic("unset type")
+}
+
+func accumulator(t semantic.Type) Register {
+	switch t.Kind {
+	case semantic.KindPrimitive:
+		switch t.Prim {
+		case semantic.PrimChar:
+			return RegAL
+		case semantic.PrimInt32:
+			return RegEAX
+		case semantic.PrimInt64:
+			return RegRAX
+		}
+	}
+
+	panic("unset")
+}
+
+func typeInstrSize(s semantic.Size) string {
+	switch s {
+	case 1:
+		return "byte"
+	case 2:
+		return "word"
+	case 4:
+		return "dword"
+	case 8:
+		return "qword"
+	}
+
+	panic("invalid")
+}
+
+func offsetLoc(o Offset) Location {
+	return Location{
+		Type:   LTOffset,
+		Offset: o,
+	}
+}
+
+func locAccumulator(t semantic.Type) Location {
+	return Location{
+		Type:     LTRegister,
+		Register: accumulator(t),
+	}
 }

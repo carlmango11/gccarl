@@ -1,9 +1,13 @@
 do_syscall:
-    movq rdi, rax
-    movq rsi, rdi
-    movq rdx, rsi
-    movq rcx, rdx
-    movq r8, r10
-    movq r9, r8
+	push rbp
+	mov rbp, rsp
+
+    mov rax, rdi
+    mov rdi, rsi
+    mov rsi, rdx
+    mov rdx, r10
     syscall
+
+	mov rsp, rbp
+	pop rbp
     ret

@@ -31,17 +31,22 @@ type Reader struct {
 	i      int
 }
 
-func New(tokenDefText, text string) (*Reader, error) {
-	tokenDefs, err := parseTokenDefs(tokenDefText)
+func New(tokenDef, textR io.Reader) (*Reader, error) {
+	tokenDefs, err := parseTokenDefs(tokenDef)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Reader{tokens: tokenDefs, text: text}, nil
+	text, err := io.ReadAll(textR)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Reader{tokens: tokenDefs, text: string(text)}, nil
 }
 
-func parseTokenDefs(r string) ([]*TokenDef, error) {
-	sc := bufio.NewScanner(strings.NewReader(r))
+func parseTokenDefs(r io.Reader) ([]*TokenDef, error) {
+	sc := bufio.NewScanner(r)
 
 	var defs []*TokenDef
 

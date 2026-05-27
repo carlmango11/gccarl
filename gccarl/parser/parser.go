@@ -23,19 +23,53 @@ type Index struct {
 }
 
 type Value struct {
-	Node  *Node         `json:"node,omitempty"`
-	Token *tokens.Token `json:"token,omitempty"`
+	Cardinality grammar.Cardinality
+	Node        *Node         `json:"node,omitempty"`
+	Token       *tokens.Token `json:"token,omitempty"`
+}
+
+func (v *Value) fieldName() string {
+	if v.Node == nil {
+		return string(v.Token.Name)
+	} else {
+		return optionRuleFieldName(v.Node.Key.Rule)
+	}
+}
+
+func (v *Value) EqualType(o *Value) bool {
+	if v.Token != nil {
+		if o.Token == nil {
+			return false
+		}
+
+		return v.Token.Name == o.Token.Name
+	}
+
+	if o.Node == nil {
+		return false
+	}
+
+	return v.Node.Key.Rule == o.Node.Key.Rule
+}
+
+func (v *Value) typeName() string {
+	if v.Node != nil {
+		return "*" + optionRuleFieldName(v.Node.Key.Rule)
+	} else {
+		return string(v.Token.Name)
+	}
 }
 
 type Parser struct {
 	grammar map[grammar.RuleName]*grammar.Rule
 	debug   bool
-	nodes   []string
 
 	cursors []*Cursor
 }
 
-func New(r io.Reader, debug bool) (*Parser, error) {
+func New(r io.Reader, debugParam bool) (*Parser, error) {
+	debug = debugParam
+
 	gr, err := grammar.Parse(r)
 	if err != nil {
 		return nil, err
@@ -47,7 +81,7 @@ func New(r io.Reader, debug bool) (*Parser, error) {
 	}, nil
 }
 
-func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
+func (p *Parser) Parse(r *tokens.Reader, outDir, packageName string) error {
 	top := &Node{
 		Key: RuleKey{
 			Rule:   "main",
@@ -78,33 +112,38 @@ func (p *Parser) Parse(r *tokens.Reader) (*Node, error) {
 				break
 			}
 
-			return nil, err
+			return err
 		}
 
-		if p.debug {
+		if debug {
 			fmt.Printf("token: %v\n", token)
 		}
 
 		if len(p.cursors) == 0 {
-			return nil, fmt.Errorf("expected at least one cursor")
+			return fmt.Errorf("expected at least one cursor")
 		}
 
 		p.handleToken(token)
 	}
 
 	if len(p.cursors) != 1 {
-		return nil, fmt.Errorf("expected 1 cursor but got %d", len(p.cursors))
+		return fmt.Errorf("expected 1 cursor but got %d", len(p.cursors))
 	}
 
 	if !p.cursors[0].terminalState() {
-		return nil, fmt.Errorf("last cursor did not terminate: %v", p.cursors[0])
+		return fmt.Errorf("last cursor did not terminate: %v", p.cursors[0])
 	}
 
-	return p.cursors[0].Top, nil
+	g := &Generator{
+		grammar:     p.grammar,
+		packageName: packageName,
+	}
+
+	return g.generate(p.cursors[0].Top, outDir)
 }
 
-func (p *Parser) debugf(format string, args ...any) {
-	if p.debug {
+func debugf(format string, args ...any) {
+	if debug {
 		fmt.Printf(format+"\n", args...)
 	}
 }
@@ -113,14 +152,14 @@ func (p *Parser) handleToken(token *tokens.Token) {
 	cursors := p.advance(p.cursors)
 
 	for _, c := range cursors {
-		p.debugf("handling %v with %v", token.Name, c)
+		debugf("handling %v with %v", token.Name, c)
 	}
 
 	var nextCursors []*Cursor
 	for _, c := range cursors {
 		ok := c.Apply(token)
 		if ok {
-			p.debugf("applied %v to %v", token.Name, c)
+			debugf("applied %v to %v", token.Name, c)
 			nextCursors = append(nextCursors, c)
 		}
 	}

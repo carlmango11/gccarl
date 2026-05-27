@@ -2,11 +2,9 @@ package semantic
 
 import (
 	"fmt"
-
-	"github.com/carlmango11/gccarl/gccarl/ast"
 )
 
-type VarName ast.Identifier
+type VarName string
 
 type TypeName string
 type FuncName string
@@ -16,14 +14,16 @@ type PrimitiveType int
 const (
 	PrimUnset PrimitiveType = iota
 	PrimInt32
+	PrimInt64
 	PrimChar
 	PrimBool
+	PrimFloat32
 )
 
-func (p PrimitiveType) Size() int {
+func (p PrimitiveType) Size() Size {
 	switch p {
 	case PrimInt32:
-		return 8
+		return 4
 	case PrimChar:
 		return 1
 	}
@@ -41,6 +41,14 @@ const (
 	KindPointer
 )
 
+type Size int
+
+const (
+	Size8  Size = 1
+	Size32 Size = 4
+	Size64 Size = 8
+)
+
 type Type struct {
 	Kind      Kind
 	Prim      PrimitiveType
@@ -49,12 +57,18 @@ type Type struct {
 	Custom    TypeName
 }
 
-func (t Type) Size() int {
+func (t Type) String() string {
+	return fmt.Sprintf("[%v/%v]", t.Kind, t.Prim)
+}
+
+func (t Type) Size() Size {
 	switch t.Kind {
 	case KindPrimitive:
 		return t.Prim.Size()
 	case KindArray:
-		return t.ArraySize * (*t.SubType).Size()
+		return Size(t.ArraySize) * (*t.SubType).Size()
+	case KindPointer:
+		return 8
 	}
 	panic(fmt.Sprintf("unknown type %d", t))
 }
@@ -87,23 +101,9 @@ func (t Type) Equals(t2 Type) bool {
 	return true
 }
 
-func (t Type) IsIntParamType() bool {
-	switch t.Kind {
-	case KindPrimitive:
-		switch t.Prim {
-		case PrimInt32:
-			return true
-		}
-	}
-
-	panic("unset primitive type")
-}
-
 type Program struct {
 	Strings  []string
-	Imports  []*ast.Import
 	FuncDefs []*FuncDef
-	Dec      []*ast.Dec
 }
 
 type FuncDef struct {
@@ -135,11 +135,6 @@ type If struct {
 	Statements []*Statement
 }
 
-type Dec struct {
-	Name VarName
-	Type *Type
-}
-
 type StringID int
 
 type IsEqual struct {
@@ -147,8 +142,18 @@ type IsEqual struct {
 	Right *Expr
 }
 
+type Line struct {
+	Statement *Statement
+	Control   *Control
+}
+
+type Control struct {
+	If *If
+}
+
 type Expr struct {
-	Type        Type
+	Type Type
+
 	Add         *AddExpr
 	IsEqual     *IsEqual
 	FuncCall    *FuncCall

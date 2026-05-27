@@ -14,23 +14,6 @@ var exitRoutine = []Instr{
 	"\tret",
 }
 
-var callPrint = []Instr{
-	"\tmov rdi, 1",
-	"\tlea rsi, [rel msg]",
-	"\tmov rdx, msg_size",
-	"\tcall print",
-}
-
-var printRoutine = []Instr{
-	"print:",
-	"\tpush rbp",
-	"\tmov rbp, rsp",
-	"\tmov rax, 1",
-	"\tsyscall",
-	"\tpop rbp",
-	"\tret",
-}
-
 var data = []Instr{
 	"section .data",
 	`msg db "Hello, world!", 0xA`,
@@ -49,21 +32,16 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 		locals.AddNamed(name, typ.Size())
 	}
 
-	err := c.handleParamsDef(body, f.Params, locals)
-	if err != nil {
-		return nil, err
-	}
+	c.handleParamsDef(body, f.Params, locals)
 
-	for _, s := range f.Lines {
-		switch {
-		case s.Control != nil:
-			err := c.compileControl(body, s.Control, locals)
+	for _, l := range f.Lines {
+		if l.Statement != nil {
+			err := c.compileStatement(body, l.Statement, locals)
 			if err != nil {
 				return nil, err
 			}
-
-		case s.Statement != nil:
-			err := c.compileStatement(body, s.Statement, locals)
+		} else if l.Control != nil {
+			err := c.compileControl(body, l.Control, locals)
 			if err != nil {
 				return nil, err
 			}
@@ -71,10 +49,13 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	}
 
 	if f.ReturnExpr != nil {
-		_, err := c.compileExpr(body, f.ReturnExpr, locals)
+		loc, err := c.compileExpr(body, f.ReturnExpr, locals)
 		if err != nil {
 			return nil, err
 		}
+
+		retReg := returnRegister(f.ReturnExpr.Type)
+		body.movLocToReg(f.ReturnExpr.Type.Size(), loc, retReg)
 	}
 
 	stackSize := locals.Size()
@@ -91,64 +72,63 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	return funcInstrs, nil
 }
 
-var paramRegisters = []Register{
-	RegRDI, RegRSI, RegRDX,
-}
-
-var intParamRegisters = []Register{
-	RegEDI, RegESI, RegEDX,
-}
-
-func (c *Compiler) handleIntParam(instrs *Instrs, n int, name semantic.VarName, locals *StackVars) {
-	offset := locals.AddNamed(name, Size64)
-
-	if n >= len(paramRegisters) {
-		panic("not implemented")
+func (c *Compiler) compileControl(instrs *Instrs, control *semantic.Control, locals *StackVars) error {
+	switch {
+	case control.If != nil:
+		return c.compileIf(instrs, control.If, locals)
 	}
 
-	reg := paramRegisters[n]
-
-	instrs.addInstr("mov qword [rbp-%d], %s", offset, reg)
+	panic("invalid control")
 }
 
-func (c *Compiler) handleParamsDef(instrs *Instrs, ps []*semantic.ParamDef, locals *StackVars) error {
-	var standardC int
-
-	for _, p := range ps {
-		if p.Type.IsIntParamType() {
-			c.handleIntParam(instrs, standardC, p.Name, locals)
-			standardC++
-		}
+func (c *Compiler) handleParamsDef(instrs *Instrs, ps []*semantic.ParamDef, locals *StackVars) {
+	for i, p := range ps {
+		offset := locals.AddNamed(p.Name, p.Type.Size())
+		instrs.movFromReg(p.Type.Size(), paramReg[p.Type.Size()][i], offset)
 	}
-
-	return nil
 }
 
-func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall, locals *StackVars) error {
+func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall, locals *StackVars) (Location, error) {
 	paramOffsets := make([]Offset, len(fc.Args))
 
 	for i, expr := range fc.Args {
-		resultReg, err := c.compileExpr(instrs, expr, locals)
+		loc, err := c.compileExpr(instrs, expr, locals)
 		if err != nil {
-			return err
+			return Location{}, err
 		}
 
-		offset := locals.Add(8) // TODO: other sizes
-		paramOffsets[i] = offset
+		switch loc.Type {
+		case LTRegister:
+			offset := locals.Add(expr.Type.Size())
+			instrs.movFromReg(expr.Type.Size(), loc.Register, offset)
 
-		instrs.addInstr("mov [rbp-%d], %s", offset, resultReg)
+			paramOffsets[i] = offset
+		case LTOffset:
+			paramOffsets[i] = loc.Offset
+		}
 	}
 
 	for i := range len(fc.Args) {
-		if i >= len(paramRegisters) {
-			panic("not implemented")
-		}
+		instrs.addComment("move arg %d for call to %s", i, fc.Func)
 
-		argReg := paramRegisters[i]
-
-		instrs.addInstr("mov %s, [rbp-%d]", argReg, paramOffsets[i])
+		size := fc.Args[i].Type.Size()
+		instrs.movOffsetToReg(size, paramOffsets[i], paramReg[size][i])
 	}
 
 	instrs.addInstr("call %s", fc.Func)
-	return nil
+
+	retType := c.funcs[fc.Func].ReturnType
+	if retType.Kind == semantic.KindVoid {
+		return Location{}, nil
+	}
+
+	returnReg := returnRegister(retType)
+	return regLocation(returnReg), nil
+}
+
+func regLocation(reg Register) Location {
+	return Location{
+		Type:     LTRegister,
+		Register: reg,
+	}
 }

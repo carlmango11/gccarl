@@ -1,0 +1,8 @@
+type {{name}}Type string
+
+const ({{type-enums}}
+)
+
+type {{name}} struct {
+	Type {{name}}Type{{fields}}
+}

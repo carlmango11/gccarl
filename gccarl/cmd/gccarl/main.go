@@ -2,25 +2,14 @@ package main
 
 import (
 	_ "embed"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"os"
-	"strings"
 
-	"github.com/carlmango11/gccarl/gccarl/ast"
 	"github.com/carlmango11/gccarl/gccarl/compiler"
-	"github.com/carlmango11/gccarl/gccarl/parser"
+	"github.com/carlmango11/gccarl/gccarl/generated/ast"
 	"github.com/carlmango11/gccarl/gccarl/semantic"
-	"github.com/carlmango11/gccarl/gccarl/tokens"
 )
-
-//go:embed grammar.txt
-var grammar string
-
-//go:embed tokens.txt
-var tokenDef string
 
 //go:embed lib.asm
 var libASM string
@@ -28,65 +17,20 @@ var libASM string
 func main() {
 	var outputName string
 	var debug bool
-	flag.StringVar(&outputName, "o", "", "output file name")
+
+	flag.StringVar(&outputName, "o", "", "output file")
 	flag.BoolVar(&debug, "d", false, "enable debug logging")
 	flag.Parse()
 
-	input, err := os.Open(flag.Args()[0])
+	textF, err := os.Open(flag.Args()[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
-	defer input.Close()
+	defer textF.Close()
 
-	inputBytes, err := io.ReadAll(input)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	tk, err := tokens.New(tokenDef, string(inputBytes))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	parser, err := parser.New(strings.NewReader(grammar), true)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	parsed, err := parser.Parse(tk)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	astOutput, err := os.Create(outputName + ".ast")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	defer astOutput.Close()
-
-	astJSON, err := json.MarshalIndent(parsed, "", "\t")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	astOutput.Write(astJSON)
-
-	astProg, err := ast.Build(parsed)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
-	program, err := semantic.Build(astProg)
+	program, err := semantic.Build(ast.MainNode)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

@@ -11,80 +11,55 @@ import (
 func TestParse(t *testing.T) {
 	const grammar = `
 main:
-  a:imports* func*
+	a:imports* states=(statement COMMA)*
 
-imports:
-  b:"#include" IDEN NUM
-
-func:
-  c:"t1" "t3"?
-  d:"t2"`
+statement:
+	b:ADD NUM
+`
 
 	rules, err := Parse(strings.NewReader(grammar))
 	require.NoError(t, err)
 
-	expected := map[RuleName]*Rule{
+	expected := map[RuleName][]*Option{
 		"main": {
-			Options: []*Option{
-				{
-					Name: "a",
-					Parts: []*Part{
-						{
-							Type:        TTRule,
-							Rule:        "imports",
-							Cardinality: CardMultiple,
-						},
-						{
-							Type:        TTRule,
-							Rule:        "func",
-							Cardinality: CardMultiple,
-						},
+			{
+				Name: "a",
+				Parts: []*Part{
+					{
+						Rule:        "imports",
+						Cardinality: CardMultiple,
+					},
+					{
+						Rule:        "states",
+						Cardinality: CardMultiple,
 					},
 				},
 			},
 		},
-		"imports": {
-			Options: []*Option{
-				{
-					Name: "b",
-					Parts: []*Part{
-						{
-							Type:  TTLiteral,
-							Token: "#include",
-						},
-						{
-							Type: TTIdentifier,
-						},
-						{
-							Type: TTNumber,
-						},
+		"states": {
+			{
+				Name: "states",
+				Parts: []*Part{
+					{
+						Rule:        "statement",
+						Cardinality: CardSingle,
+					},
+					{
+						Token:       "COMMA",
+						Cardinality: CardSingle,
 					},
 				},
 			},
 		},
-		"func": {
-			Options: []*Option{
-				{
-					Name: "c",
-					Parts: []*Part{
-						{
-							Type:  TTLiteral,
-							Token: "t1",
-						},
-						{
-							Type:        TTLiteral,
-							Token:       "t3",
-							Cardinality: CardZeroOrOne,
-						},
+		"statement": {
+			{
+				Name: "b",
+				Parts: []*Part{
+					{
+						Token: "ADD",
 					},
-				},
-				{
-					Name: "d",
-					Parts: []*Part{
-						{
-							Type:  TTLiteral,
-							Token: "t2",
-						},
+					{
+						Token: "NUM",
 					},
 				},
 			},

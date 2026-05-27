@@ -2,20 +2,25 @@ package semantic
 
 import (
 	"fmt"
+	"strconv"
 
-	"github.com/carlmango11/gccarl/gccarl/ast"
+	"github.com/carlmango11/gccarl/gccarl/generated/ast"
 )
 
 type builder struct {
-	vars  map[ast.Identifier]PrimitiveType
-	funcs map[ast.Identifier]Type
+	vars  map[ast.IDEN]PrimitiveType
+	funcs map[ast.IDEN]Type
 	strs  []string
 }
 
-func Build(program *ast.Program) (*Program, error) {
+func Build(program *ast.Main) (*Program, error) {
 	b := &builder{
-		vars:  make(map[ast.Identifier]PrimitiveType),
-		funcs: make(map[ast.Identifier]Type),
+		vars: make(map[ast.IDEN]PrimitiveType),
+		funcs: map[ast.IDEN]Type{
+			"do_syscall": {
+				Kind: KindVoid,
+			},
+		},
 	}
 
 	b.funcs["print"] = Type{
@@ -25,84 +30,127 @@ func Build(program *ast.Program) (*Program, error) {
 	return b.build(program)
 }
 
-func (b *builder) build(p *ast.Program) (*Program, error) {
+func (b *builder) build(p *ast.Main) (*Program, error) {
 	var funcDecs []*FuncDef
-	for _, astF := range p.FuncDefs {
-		f, err := b.toFuncDef(astF)
-		if err != nil {
-			return nil, err
-		}
+	for _, dd := range p.Main.DecDef {
+		switch dd.Type {
+		case ast.DecDefTypeFuncDef:
+			f, err := b.toFuncDef(dd.FuncDef)
+			if err != nil {
+				return nil, err
+			}
 
-		funcDecs = append(funcDecs, f)
+			funcDecs = append(funcDecs, f)
+		}
 	}
 
 	return &Program{
-		Imports:  p.Imports,
 		FuncDefs: funcDecs,
 		Strings:  b.strs,
 	}, nil
 }
 
-func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
+func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 	// TODO func scoped types
 
-	returnType, err := b.toType(f.ReturnType)
+	returnType, err := b.toReturnType(f.Type)
 	if err != nil {
 		return nil, err
 	}
 
-	b.funcs[f.Name] = returnType
+	b.funcs[f.IDEN] = returnType
 
-	locals := map[ast.Identifier]Type{}
+	locals := map[ast.IDEN]Type{}
 
-	for _, l := range f.Lines {
-		switch {
-		case l.Control != nil:
-		case l.Statement != nil:
-			dec := l.Statement.Dec
-			if l.Statement.DecAssign != nil {
-				dec = l.Statement.DecAssign.Dec
-			}
+	for _, l := range f.Line {
+		switch l.Type {
+		case ast.LineTypeControl: // TODO
+		case ast.LineTypeStatement:
+			s := l.Statement.StatementComma.Statement.Statement
 
-			if dec == nil {
-				continue
-			}
-
-			err := b.declareVar(locals, dec)
-			if err != nil {
-				return nil, err
+			if s.DecAssign != nil {
+				decAssign := s.DecAssign.DecAssign.Standard
+				err := b.declareVar(locals, decAssign.Type, decAssign.Variable, false)
+				if err != nil {
+					return nil, err
+				}
+			} else if s.VarDec != nil {
+				err := b.declareVar(locals, s.VarDec.Type, s.VarDec.Variable, false)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
 
 	var paramDefs []*ParamDef
-	for _, astParam := range f.Params {
-		pd, err := b.toParamDec(astParam)
-		if err != nil {
-			return nil, err
+	if f.ParamsDef != nil {
+		ps := []*ast.ParamDef{f.ParamsDef.Params.ParamDef}
+		for _, x := range f.ParamsDef.Params.CommaParamDef {
+			ps = append(ps, x.Param.ParamDef)
 		}
 
-		paramDefs = append(paramDefs, pd)
-	}
-
-	var lines []*Line
-
-	for _, l := range f.Lines {
-		switch {
-		case l.Control != nil:
-			c, err := b.toControl(locals, l.Control)
+		for _, astParam := range ps {
+			pd, err := b.toParamDec(astParam)
 			if err != nil {
 				return nil, err
 			}
 
-			lines = append(lines, &Line{
-				Control: c,
-			})
-
-		case l.Statement != nil:
-			s, err := b.toStatement(locals, l.Statement)
+			err = b.declareVar(locals, astParam.Param.Type, astParam.Param.Variable, true)
 			if err != nil {
 				return nil, err
+			}
+
+			paramDefs = append(paramDefs, pd)
+		}
+	}
+
+	var lines []*Line
+	for _, l := range f.Line {
+		switch l.Type {
+		case ast.LineTypeControl:
+			c := l.Control.Control
+
+			switch c.Type {
+			case ast.ControlTypeIf:
+				expr, err := b.toExpr(c.If.Expr, locals)
+				if err != nil {
+					return nil, err
+				}
+
+				if expr.Type.Prim != PrimBool {
+					return nil, fmt.Errorf("if condition must be a boolean")
+				}
+
+				var ss []*Statement
+				for _, n := range c.If.StatementComma {
+					state, err := b.toStatement(locals, n.Statement.Statement)
+					if err != nil {
+						return nil, err
+					}
+
+					if state != nil {
+						ss = append(ss, state)
+					}
+				}
+
+				lines = append(lines, &Line{
+					Control: &Control{
+						If: &If{
+							Condition:  expr,
+							Statements: ss,
+						},
+					},
+				})
+			}
+		case ast.LineTypeStatement:
+			s, err := b.toStatement(locals, l.Statement.StatementComma.Statement.Statement)
+			if err != nil {
+				return nil, err
+			}
+
+			if s == nil {
+				continue
 			}
 
 			lines = append(lines, &Line{
@@ -112,8 +160,8 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 	}
 
 	var returnExpr *Expr
-	if f.ReturnExpr != nil {
-		returnExpr, err = b.toExpr(f.ReturnExpr, locals)
+	if f.Return != nil {
+		returnExpr, err = b.toExpr(f.Return.Return.Expr, locals)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +174,7 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 
 	return &FuncDef{
 		ReturnType: returnType,
-		Name:       FuncName(f.Name),
+		Name:       FuncName(f.IDEN),
 		Locals:     localsCast,
 		Params:     paramDefs,
 		Lines:      lines,
@@ -134,45 +182,90 @@ func (b *builder) toFuncDef(f *ast.FuncDef) (*FuncDef, error) {
 	}, nil
 }
 
-func (b *builder) declareVar(vars map[ast.Identifier]Type, dec *ast.Dec) error {
-	_, ok := vars[dec.Name]
+func (b *builder) declareVar(vars map[ast.IDEN]Type, astType *ast.Type, v *ast.Variable, isParam bool) error {
+	_, ok := vars[v.Variable.IDEN]
 	if ok {
-		return fmt.Errorf("variable %s already declared", dec.Name)
+		return fmt.Errorf("variable %s already declared", v.Variable.IDEN)
 	}
 
-	typ, err := b.toType(dec.Type)
+	typ, err := b.toType(astType, v, isParam)
 	if err != nil {
 		return err
 	}
 
-	vars[dec.Name] = typ
+	vars[v.Variable.IDEN] = typ
 	return nil
 }
 
-func (b *builder) toType(i *ast.TypeDef) (Type, error) {
-	if len(i.Arrays) > 0 {
-		size := i.Arrays[0].Size
-
-		i.Arrays = i.Arrays[1:]
-		sub, err := b.toType(i)
-		if err != nil {
-			return Type{}, err
+func (b *builder) toType(typ *ast.Type, v *ast.Variable, isParam bool) (Type, error) {
+	if len(v.Variable.ArrayIndex) > 0 {
+		if isParam {
+			// arrays decay to pointers in params
+			return Type{
+				Kind: KindPointer,
+				Prim: astTypeToPrim(typ),
+			}, nil
+		} else {
+			return b.toArrayType(typ, v)
 		}
-
-		return Type{
-			Kind:      KindArray,
-			SubType:   &sub,
-			ArraySize: size,
-		}, nil
 	}
 
+	return Type{
+		Kind: KindPrimitive,
+		Prim: astTypeToPrim(typ),
+	}, nil
+}
+
+func astTypeToPrim(typ *ast.Type) PrimitiveType {
+	switch typ.Type {
+	case ast.TypeTypeInt:
+		return PrimInt32
+	case ast.TypeTypeChar:
+		return PrimChar
+	default:
+		// custom
+		panic("impl")
+	}
+}
+
+func (b *builder) toArrayType(typ *ast.Type, v *ast.Variable) (Type, error) {
+	var size int
+
+	sizeStr := v.Variable.ArrayIndex[0].ArrayIndex.NUM
+
+	if sizeStr != "" {
+		var err error
+		size, err = strconv.Atoi(string(sizeStr))
+		if err != nil {
+			panic("invalid size: " + sizeStr)
+		}
+	}
+
+	copyVar := *v
+	copyVarOption := *v.Variable
+	copyVar.Variable = &copyVarOption
+	copyVar.Variable.ArrayIndex = copyVar.Variable.ArrayIndex[1:]
+
+	sub, err := b.toType(typ, &copyVar, false)
+	if err != nil {
+		return Type{}, err
+	}
+
+	return Type{
+		Kind:      KindArray,
+		SubType:   &sub,
+		ArraySize: size,
+	}, nil
+}
+
+func (b *builder) toReturnType(i *ast.Type) (Type, error) {
 	kind := KindPrimitive
 
 	var prim PrimitiveType
-	switch i.Type.Type {
-	case "int":
+	switch i.Type {
+	case ast.TypeTypeInt:
 		prim = PrimInt32
-	case "char":
+	case ast.TypeTypeChar:
 		prim = PrimChar
 	default:
 		// custom
@@ -186,34 +279,21 @@ func (b *builder) toType(i *ast.TypeDef) (Type, error) {
 }
 
 func (b *builder) toParamDec(p *ast.ParamDef) (*ParamDef, error) {
-	typ, err := b.toType(p.Type)
+	typ, err := b.toType(p.Param.Type, p.Param.Variable, true)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ParamDef{
 		Type: typ,
-		Name: VarName(p.Name),
+		Name: VarName(p.Param.Variable.Variable.IDEN),
 	}, nil
 }
 
-func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*Statement, error) {
-	switch {
-	case s.DecAssign != nil:
-		switch {
-		case s.DecAssign.Assign != nil:
-			a, err := b.toAssign(vars, s.DecAssign.Assign)
-			if err != nil {
-				return nil, err
-			}
-
-			return &Statement{
-				Assign: a,
-			}, nil
-		}
-
-	case s.Assign != nil:
-		a, err := b.toAssign(vars, s.Assign)
+func (b *builder) toStatement(vars map[ast.IDEN]Type, s *ast.Statement) (*Statement, error) {
+	switch s.Type {
+	case ast.StatementTypeDecAssign:
+		a, err := b.toDecAssign(vars, s.DecAssign.DecAssign.Standard)
 		if err != nil {
 			return nil, err
 		}
@@ -221,8 +301,11 @@ func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*
 		return &Statement{
 			Assign: a,
 		}, nil
-	case s.Expr != nil:
-		expr, err := b.toExpr(s.Expr, vars)
+	case ast.StatementTypeVarDec:
+		// handled in the normal local func vars
+		return nil, nil
+	case ast.StatementTypeExpr:
+		expr, err := b.toExpr(s.Expr.Expr, vars)
 		if err != nil {
 			return nil, err
 		}
@@ -232,21 +315,21 @@ func (b *builder) toStatement(vars map[ast.Identifier]Type, s *ast.Statement) (*
 		}, nil
 	}
 
-	panic("invalid statement")
+	panic("invalid statement: " + s.Type)
 }
 
-func (b *builder) toAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*Assign, error) {
-	v, ok := vars[a.Var.Name]
+func (b *builder) toDecAssign(vars map[ast.IDEN]Type, a *ast.DecAssign_StandardOption) (*Assign, error) {
+	v, ok := vars[a.Variable.Variable.IDEN]
 	if !ok {
-		v, ok = vars[a.Var.Name]
+		v, ok = vars[a.Variable.Variable.IDEN]
 		if !ok {
-			return nil, fmt.Errorf("variable %s not declared", a.Var.Name)
+			return nil, fmt.Errorf("variable %s not declared", a.Variable.Variable.IDEN)
 		}
 	}
 
-	indexable := v.Kind == KindPointer
-	if len(a.Var.Arrays) > 0 && !indexable {
-		return nil, fmt.Errorf("variable %s is not indexable", a.Var.Name)
+	indexable := v.Kind == KindPointer || v.Kind == KindArray
+	if len(a.Variable.Variable.ArrayIndex) > 0 && !indexable {
+		return nil, fmt.Errorf("variable %s is not indexable", a.Variable.Variable.IDEN)
 	}
 
 	expr, err := b.toExpr(a.Expr, vars)
@@ -266,19 +349,67 @@ func (b *builder) toAssign(vars map[ast.Identifier]Type, a *ast.Assign) (*Assign
 	}
 
 	return &Assign{
-		Name: VarName(a.Var.Name),
+		Name: VarName(a.Variable.Variable.IDEN),
 		Expr: expr,
 	}, nil
 }
 
-func (b *builder) toExpr(expr *ast.Expr, locals map[ast.Identifier]Type) (*Expr, error) {
-	switch {
-	case expr.Val != nil:
-		v := expr.Val
+func (b *builder) toExpr(expr *ast.Expr, locals map[ast.IDEN]Type) (*Expr, error) {
+	switch expr.Type {
+	case ast.ExprTypeComp:
+		compExpr := expr.Comp.CompExpr
 
-		switch {
-		case v.Str != nil:
-			b.strs = append(b.strs, *v.Str)
+		switch compExpr.Type {
+		case ast.CompExprTypeIsEqual:
+			e1, err := b.toExpr(compExpr.IsEqual.Expr, locals)
+			if err != nil {
+				return nil, err
+			}
+
+			e2, err := b.fromSubExpr(compExpr.IsEqual.SubExpr, locals)
+			if err != nil {
+				return nil, err
+			}
+
+			return &Expr{
+				Type: boolType(),
+				IsEqual: &IsEqual{
+					Left:  e1,
+					Right: e2,
+				},
+			}, nil
+		}
+	case ast.ExprTypeSubExpr:
+		return b.fromSubExpr(expr.SubExpr.SubExpr, locals)
+	}
+
+	panic("invalid expression: " + string(expr.Type))
+}
+
+func (b *builder) fromSubExpr(sub *ast.SubExpr, locals map[ast.IDEN]Type) (*Expr, error) {
+	switch sub.Type {
+	case ast.SubExprTypeFuncCall:
+		fc, err := b.toFuncCall(sub.FuncCall, locals)
+		if err != nil {
+			return nil, err
+		}
+
+		returnType, ok := b.funcs[sub.FuncCall.IDEN]
+		if !ok {
+			return nil, fmt.Errorf("function %s not declared", sub.FuncCall.IDEN)
+		}
+
+		return &Expr{
+			Type:     returnType,
+			FuncCall: fc,
+		}, nil
+	case ast.SubExprTypeValue:
+		v := sub.Value
+
+		switch v.Value.Type {
+		case ast.ValueTypeStr:
+			s := string(v.Value.Str.STR)
+			b.strs = append(b.strs, s)
 
 			return &Expr{
 				Type: Type{
@@ -287,37 +418,63 @@ func (b *builder) toExpr(expr *ast.Expr, locals map[ast.Identifier]Type) (*Expr,
 						Kind: KindPrimitive,
 						Prim: PrimChar,
 					},
-					ArraySize: len(*v.Str),
+					ArraySize: len(s),
 				},
 				StringID: StringID(len(b.strs)),
 			}, nil
-		case v.Int != nil:
+		case ast.ValueTypeInt:
 			// TODO other sizes
+			i, err := strconv.Atoi(string(v.Value.Int.NUM))
+			if err != nil {
+				return nil, err
+			}
+
 			return &Expr{
 				Type: int32Type(),
 				Literal: &Literal{
-					Int32: int32(*v.Int),
+					Int32: int32(i),
 				},
 			}, nil
-		case v.Char != nil:
+		case ast.ValueTypeChar:
 			return &Expr{
 				Type: charType(),
 				Literal: &Literal{
-					Char: *v.Char,
+					Char: v.Value.Char.CHAR[1],
 				},
 			}, nil
-		case v.Var != nil:
-			typ, ok := locals[v.Var.Name]
+		case ast.ValueTypeVariable:
+			vr := v.Value.Variable.Variable.Variable
+			name := vr.IDEN
+
+			typ, ok := locals[name]
 			if !ok {
-				return nil, fmt.Errorf("variable %s not declared", v.Var.Name)
+				return nil, fmt.Errorf("variable %s not declared", name)
+			}
+
+			if len(vr.ArrayIndex) > 0 {
+				// TODO: handle nested
+				i, err := strconv.Atoi(string(vr.ArrayIndex[0].ArrayIndex.NUM))
+				if err != nil {
+					return nil, err
+				}
+
+				return &Expr{
+					Type: *typ.SubType,
+					ArrayVar: &IndexedVar{
+						Index: i,
+						Name:  VarName(name),
+					},
+				}, nil
 			}
 
 			return &Expr{
 				Type: typ,
-				Var:  VarName(v.Var.Name),
+				Var:  VarName(name),
 			}, nil
-		case v.CompLit != nil:
-			exprs, err := b.toCompLit(v.CompLit, locals)
+		case ast.ValueTypeCompLit:
+			av := v.Value.CompLit.CompositeLiteral.ArrayVal
+
+			exprs, err := b.toCompLit(av, locals)
 			if err != nil {
 				return nil, err
 			}
@@ -330,30 +487,20 @@ func (b *builder) toExpr(expr *ast.Expr, locals map[ast.Identifier]Type) (*Expr,
 				CompLiteral: exprs,
 			}, nil
 		}
-	case expr.FuncCall != nil:
-		fc, err := b.toFuncCall(expr.FuncCall, locals)
-		if err != nil {
-			return nil, err
-		}
-
-		returnType, ok := b.funcs[expr.FuncCall.Name]
-		if !ok {
-			return nil, fmt.Errorf("function %s not declared", expr.FuncCall.Name)
-		}
-
-		return &Expr{
-			Type:     returnType,
-			FuncCall: fc,
-		}, nil
 	}
 
-	panic("invalid expression")
+	panic("invalid sub expression: " + string(sub.Type))
 }
 
-func (b *builder) toCompLit(lit []*ast.Expr, locals map[ast.Identifier]Type) ([]*Expr, error) {
+func (b *builder) toCompLit(av *ast.CompositeLiteral_ArrayValOption, locals map[ast.IDEN]Type) ([]*Expr, error) {
+	exprsNodes := []*ast.Expr{av.CompEntries.Entries.Expr}
+	for _, e := range av.CompEntries.Entries.CommaExpr {
+		exprsNodes = append(exprsNodes, e.CommaExpr.Expr)
+	}
+
 	var exprs []*Expr
 
-	for _, astExpr := range lit {
+	for _, astExpr := range exprsNodes {
 		expr, err := b.toExpr(astExpr, locals)
 		if err != nil {
 			return nil, err
@@ -367,13 +514,24 @@ func (b *builder) toCompLit(lit []*ast.Expr, locals map[ast.Identifier]Type) ([]
 	return exprs, nil
 }
 
-func (b *builder) toFuncCall(call *ast.FuncCall, locals map[ast.Identifier]Type) (*FuncCall, error) {
+func (b *builder) toFuncCall(call *ast.SubExpr_FuncCallOption, locals map[ast.IDEN]Type) (*FuncCall, error) {
+	var params []*ast.Expr
+	if call.Params != nil {
+		params = append(params, call.Params.Params.Expr)
+
+		for _, x := range call.Params.Params.CommaExpr {
+			params = append(params, x.CommaExpr.Expr)
+		}
+	}
+
 	var args []*Expr
-	for _, e := range call.Args {
-		if e.Val != nil && e.Val.Var != nil {
-			typ, ok := locals[e.Val.Var.Name]
+	for _, e := range params {
+		if e.Type == ast.ExprTypeSubExpr && e.SubExpr.SubExpr.Type == ast.SubExprTypeValue && e.SubExpr.SubExpr.Value.Value.Type == ast.ValueTypeVariable {
+			v := e.SubExpr.SubExpr.Value.Value.Variable.Variable.Variable
+
+			typ, ok := locals[v.IDEN]
 			if !ok {
-				return nil, fmt.Errorf("variable %s not declared", e.Val.Var.Name)
+				return nil, fmt.Errorf("variable %s not declared", v.IDEN)
 			}
 
 			if typ.Kind == KindArray {
@@ -383,7 +541,7 @@ func (b *builder) toFuncCall(call *ast.FuncCall, locals map[ast.Identifier]Type)
 						Kind:    KindPointer,
 						SubType: &typ,
 					},
-					AddressOf: VarName(e.Val.Var.Name),
+					AddressOf: VarName(v.IDEN),
 				}
 
 				args = append(args, arg)
@@ -400,7 +558,7 @@ func (b *builder) toFuncCall(call *ast.FuncCall, locals map[ast.Identifier]Type)
 	}
 
 	return &FuncCall{
-		Func: FuncName(call.Name),
+		Func: FuncName(call.IDEN),
 		Args: args,
 	}, nil
 }
@@ -440,6 +598,10 @@ func (b *builder) toControl(locals map[ast.Identifier]Type, c *ast.Control) (*Co
 
 func int32Type() Type {
 	return Type{Kind: KindPrimitive, Prim: PrimInt32}
+}
+
+func boolType() Type {
+	return Type{Kind: KindPrimitive, Prim: PrimBool}
 }
 
 func charType() Type {

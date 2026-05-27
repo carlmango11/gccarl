@@ -3,6 +3,7 @@ package parser
 import "encoding/json"
 
 type Node struct {
+	ID     int
 	Key    RuleKey
 	Values []*Value
 	parent *Node
@@ -26,14 +27,16 @@ func (n *Node) CloneDown() *Node {
 	for _, v := range n.Values {
 		if v.Node == nil {
 			vals = append(vals, &Value{
-				Token: v.Token,
+				Cardinality: v.Cardinality,
+				Token:       v.Token,
 			})
 		} else {
 			node := v.Node.CloneDown()
 			node.parent = clone
 
 			vals = append(vals, &Value{
-				Node: node,
+				Cardinality: v.Cardinality,
+				Node:        node,
 			})
 		}
 	}
