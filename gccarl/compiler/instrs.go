@@ -22,27 +22,31 @@ func (i *Instrs) addInstrsIndent(inner *Instrs) {
 }
 
 func (i *Instrs) movInt32ToReg(n int32, to Register) {
-	i.addInstr("mov %s, %d", to, n)
+	i.addInstr("mov %s, %d", to.Raw(4), n)
 }
 
 func (i *Instrs) movByteToReg(b byte, to Register) {
-	i.addInstr("mov %s, 0x%X", to, b)
+	i.addInstr("mov %s, 0x%X", to.Raw(1), b)
 }
 
 func (i *Instrs) movOffsetToReg(s semantic.Size, from Offset, to Register) {
-	i.addInstr("mov %s, %s", to, offsetOperand(s, from))
+	i.addInstr("mov %s, %s", to.Raw(s), offsetOperand(s, from))
 }
 
 func (i *Instrs) movLocToReg(s semantic.Size, from Location, to Register) {
+	i.addInstr("mov %s, %s", to.Raw(s), locOperand(s, from))
+}
+
+func (i *Instrs) movLocToStack(s semantic.Size, from Location, to Offset) {
 	i.addInstr("mov %s, %s", to, locOperand(s, from))
 }
 
 func (i *Instrs) movFromReg(s semantic.Size, from Register, to Offset) {
-	i.addInstr("mov %s, %s", offsetOperand(s, to), from)
+	i.addInstr("mov %s, %s", offsetOperand(s, to), from.Raw(s))
 }
 
-func (i *Instrs) cmp(t semantic.Size, reg Register, l2 Location) {
-	i.addInstr("cmp %s, %s", reg, locOperand(t, l2))
+func (i *Instrs) cmp(s semantic.Size, reg Register, l2 Location) {
+	i.addInstr("cmp %s, %s", reg.Raw(s), locOperand(s, l2))
 }
 
 func (i *Instrs) addComment(format string, args ...any) {
@@ -60,7 +64,7 @@ func locOperand(s semantic.Size, l Location) string {
 			panic("unset register in location")
 		}
 
-		return string(l.Register)
+		return string(l.Register.Raw(s))
 	case LTOffset:
 		return offsetOperand(s, l.Offset)
 	}

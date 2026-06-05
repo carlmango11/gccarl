@@ -11,6 +11,7 @@ line:
 
 control:
     if:IF LPAREN expr RPAREN LBRACE line* RBRACE else?
+    while:WHILE LPAREN expr RPAREN LBRACE line* RBRACE
 
 else:
     else:ELSE else-if? LBRACE line* RBRACE
@@ -57,9 +58,13 @@ sub-expr:
     func-call:IDEN LPAREN params? RPAREN
 
 comp-expr:
-    add:sub-expr PLUS expr
-    sub:sub-expr MINUS expr
-    is-equal:sub-expr EEQUALS expr
+    comp-expr:sub-expr operator expr
+
+operator:
+    less:LESS_THAN
+    equal:EEQUAL
+    plus:PLUS
+    minus:MINUS
 
 statement:
     dec-assign:dec-assign

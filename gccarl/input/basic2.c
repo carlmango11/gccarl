@@ -1,8 +1,13 @@
+char read_char() {
+    char c[1];
+    do_syscall(0, 0, c, 1);
+
+    return c[0];
+}
+
 int main() {
     char msg[2] = {'Y', 'E'};
-    if (3 < 5) {
-        print(msg, 2);
-    }
+    int n = 3 < 5;
 }
 
 int print(char msg[], int len) {

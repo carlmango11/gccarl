@@ -22,19 +22,6 @@ type Location struct {
 	Label    DataLabel
 }
 
-func raxSized(s semantic.Size) Register {
-	switch s {
-	case semantic.Size64:
-		return RegRAX
-	case semantic.Size8:
-		return RegAL
-	case semantic.Size32:
-		return RegEAX
-	default:
-		panic(fmt.Sprintf("raxSized: unknown size: %d", s))
-	}
-}
-
 type Instr string
 type DataLabel string
 
@@ -143,8 +130,7 @@ func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, local
 			return err
 		}
 
-		retReg := returnRegister(s.Return.Type)
-		instrs.movLocToReg(s.Return.Type.Size(), loc, retReg)
+		instrs.movLocToReg(s.Return.Type.Size(), loc, RegA)
 
 		return nil
 	}
@@ -213,8 +199,8 @@ func (c *Compiler) compileExprToReg(instrs *Instrs, e *semantic.Expr, locals *St
 	case LTRegister:
 		return loc.Register, nil
 	case LTOffset:
-		instrs.movLocToReg(e.Type.Size(), loc, accumulator(e.Type))
-		return accumulator(e.Type), nil
+		instrs.movLocToReg(e.Type.Size(), loc, RegA)
+		return RegA, nil
 	default:
 		panic("invalid")
 	}
@@ -222,9 +208,8 @@ func (c *Compiler) compileExprToReg(instrs *Instrs, e *semantic.Expr, locals *St
 
 func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Location, error) {
 	switch {
-	case e.IsEqual != nil:
-		err := c.compileIsEqual(instrs, e.IsEqual, locals)
-		return Location{}, err
+	case e.Compare != nil:
+		return c.compileCompare(instrs, e.Compare, locals)
 	case e.FuncCall != nil:
 		return c.functionCall(instrs, e.FuncCall, locals)
 	case e.AddressOf != "":
@@ -234,14 +219,14 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 		}
 
 		if addr.IsStack() {
-			instrs.addInstr("lea %s, [rbp-%d] ; addressOf", RegRAX, addr.stack)
+			instrs.addInstr("lea %s, [rbp-%d] ; addressOf", RegA.Raw(e.Type.Size()), addr.stack)
 		} else {
-			instrs.addInstr("lea %s, [rel %s] ; addressOf", RegRAX, addr.label)
+			instrs.addInstr("lea %s, [rel %s] ; addressOf", RegA.Raw(e.Type.Size()), addr.label)
 		}
 
 		return Location{
 			Type:     LTRegister,
-			Register: RegRAX,
+			Register: RegA,
 		}, nil
 
 	//case e.StringID != 0:
@@ -254,11 +239,11 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 		case semantic.KindPrimitive:
 			switch e.Type.Prim {
 			case semantic.PrimInt32:
-				instrs.movInt32ToReg(e.Literal.Int32, RegEAX)
-				return regLocation(RegEAX), nil
+				instrs.movInt32ToReg(e.Literal.Int32, RegA)
+				return regLocation(RegA), nil
 			case semantic.PrimChar:
-				instrs.movByteToReg(e.Literal.Char, RegAL)
-				return regLocation(RegAL), nil // todo return lit
+				instrs.movByteToReg(e.Literal.Char, RegA)
+				return regLocation(RegA), nil // todo return lit
 			}
 		}
 	case e.Var != "":
@@ -290,10 +275,15 @@ func (c *Compiler) stringLabel(id semantic.StringID) DataLabel {
 }
 
 func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If, locals *StackVars) error {
-	_, err := c.compileExpr(instrs, ifs.Condition, locals)
+	loc, err := c.compileExpr(instrs, ifs.Condition, locals)
 	if err != nil {
 		return err
 	}
+
+	instrs.movLocToReg(ifs.Condition.Type.Size(), loc, RegA)
+	instrs.addInstr("mov %s, 1", RawRBX)
+
+	instrs.addInstr("cmp %s, %s", RawRAX, RawRBX)
 
 	skip := c.newLabel("skip")
 	instrs.addInstr("jne %s", skip)
@@ -315,68 +305,67 @@ func (c *Compiler) newLabel(prefix string) string {
 	return fmt.Sprintf("%v_%d", prefix, c.labelC)
 }
 
-func (c *Compiler) compileIsEqual(instrs *Instrs, e *semantic.IsEqual, locals *StackVars) error {
-	leftExprLoc, err := c.compileExpr(instrs, e.Left, locals)
+func (c *Compiler) compileCompare(instrs *Instrs, e *semantic.CompareOpExpr, locals *StackVars) (Location, error) {
+	rightLoc, err := c.compileExpr(instrs, e.Right, locals)
+	if err != nil {
+		return Location{}, err
+	}
+
+	instrs.movLocToReg(e.Left.Type.Size(), rightLoc, RegD)
+
+	leftLoc, err := c.compileExpr(instrs, e.Left, locals)
+	if err != nil {
+		return Location{}, err
+	}
+
+	r10 := RegR10.Raw(e.Left.Type.Size())
+	instrs.addInstr("mov %s, 1", r10)
+
+	instrs.cmp(e.Left.Type.Size(), RegD, leftLoc)
+
+	jump := c.newLabel("jump")
+
+	switch e.Op {
+	case semantic.OpLessThan:
+		instrs.addInstr("jl %s", jump)
+	default:
+		panic("missing op")
+	}
+
+	instrs.addInstr("mov %s, 0", r10)
+	instrs.addInstr("%s:", jump)
+
+	return Location{
+		Type:     LTRegister,
+		Register: RegR10,
+	}, nil
+}
+
+func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While, locals *StackVars) error {
+	repeat := c.newLabel("repeat")
+	instrs.addInstr("%v:", repeat)
+
+	_, err := c.compileExpr(instrs, w.Condition, locals)
 	if err != nil {
 		return err
 	}
 
-	size := e.Left.Type.Size()
+	skip := c.newLabel("skip")
 
-	if leftExprLoc.Type == LTRegister {
-		rightLoc, err := c.compileExpr(instrs, e.Right, locals)
+	switch w.Condition.Add {
+
+	}
+	instrs.addInstr("jne %s", skip)
+
+	for _, l := range w.Lines {
+		err := c.compileLine(instrs, l, locals)
 		if err != nil {
 			return err
 		}
-
-		instrs.cmp(size, leftExprLoc.Register, rightLoc)
-		return nil
 	}
 
-	rightReg, err := c.compileExprToReg(instrs, e.Right, locals)
-	if err != nil {
-		return err
-	}
-
-	instrs.cmp(size, rightReg, leftExprLoc)
-
+	instrs.addInstr("%v:", skip)
 	return nil
-}
-
-func returnRegister(t semantic.Type) Register {
-	switch t.Kind {
-	case semantic.KindVoid:
-		return RegUnset
-	case semantic.KindPrimitive:
-		switch t.Prim {
-		case semantic.PrimInt32:
-			return RegEAX
-		case semantic.PrimInt64:
-			return RegRAX
-		case semantic.PrimChar:
-			return RegAL
-		}
-	case semantic.KindArray:
-		panic("array cannot be returned")
-	}
-
-	panic("unset type")
-}
-
-func accumulator(t semantic.Type) Register {
-	switch t.Kind {
-	case semantic.KindPrimitive:
-		switch t.Prim {
-		case semantic.PrimChar:
-			return RegAL
-		case semantic.PrimInt32:
-			return RegEAX
-		case semantic.PrimInt64:
-			return RegRAX
-		}
-	}
-
-	panic("unset")
 }
 
 func typeInstrSize(s semantic.Size) string {
@@ -398,12 +387,5 @@ func offsetLoc(o Offset) Location {
 	return Location{
 		Type:   LTOffset,
 		Offset: o,
-	}
-}
-
-func locAccumulator(t semantic.Type) Location {
-	return Location{
-		Type:     LTRegister,
-		Register: accumulator(t),
 	}
 }

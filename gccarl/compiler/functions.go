@@ -59,6 +59,8 @@ func (c *Compiler) compileControl(instrs *Instrs, control *semantic.Control, loc
 	switch {
 	case control.If != nil:
 		return c.compileIf(instrs, control.If, locals)
+	case control.While != nil:
+		return c.compileWhile(instrs, control.While, locals)
 	}
 
 	panic("invalid control")
@@ -67,7 +69,7 @@ func (c *Compiler) compileControl(instrs *Instrs, control *semantic.Control, loc
 func (c *Compiler) handleParamsDef(instrs *Instrs, ps []*semantic.ParamDef, locals *StackVars) {
 	for i, p := range ps {
 		offset := locals.AddNamed(p.Name, p.Type.Size())
-		instrs.movFromReg(p.Type.Size(), paramReg[p.Type.Size()][i], offset)
+		instrs.movFromReg(p.Type.Size(), paramReg[i], offset)
 	}
 }
 
@@ -95,7 +97,7 @@ func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall, locals *S
 		instrs.addComment("move arg %d for call to %s", i, fc.Func)
 
 		size := fc.Args[i].Type.Size()
-		instrs.movOffsetToReg(size, paramOffsets[i], paramReg[size][i])
+		instrs.movOffsetToReg(size, paramOffsets[i], paramReg[i])
 	}
 
 	instrs.addInstr("call %s", fc.Func)
@@ -105,8 +107,7 @@ func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall, locals *S
 		return Location{}, nil
 	}
 
-	returnReg := returnRegister(retType)
-	return regLocation(returnReg), nil
+	return regLocation(RegA), nil
 }
 
 func regLocation(reg Register) Location {

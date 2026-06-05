@@ -13,6 +13,11 @@ type builder struct {
 	strs  []string
 }
 
+var opType = map[ast.OperatorType]CompareOp{
+	ast.OperatorTypeLess:  OpLessThan,
+	ast.OperatorTypeEqual: OpEquals,
+}
+
 func Build(program *ast.Main) (*Program, error) {
 	b := &builder{
 		vars: make(map[ast.IDEN]PrimitiveType),
@@ -134,38 +139,14 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 func (b *builder) toLine(locals map[ast.IDEN]Type, l *ast.Line) (*Line, error) {
 	switch l.Type {
 	case ast.LineTypeControl:
-		c := l.Control.Control
-
-		switch c.Type {
-		case ast.ControlTypeIf:
-			expr, err := b.toExpr(c.If.Expr, locals)
-			if err != nil {
-				return nil, err
-			}
-
-			if expr.Type.Prim != PrimBool {
-				return nil, fmt.Errorf("if condition must be a boolean")
-			}
-
-			var ll []*Line
-			for _, l := range c.If.Line {
-				line, err := b.toLine(locals, l)
-				if err != nil {
-					return nil, err
-				}
-
-				ll = append(ll, line)
-			}
-
-			return &Line{
-				Control: &Control{
-					If: &If{
-						Condition: expr,
-						Lines:     ll,
-					},
-				},
-			}, nil
+		c, err := b.toControl(locals, l.Control.Control)
+		if err != nil {
+			return nil, err
 		}
+
+		return &Line{
+			Control: c,
+		}, nil
 	case ast.LineTypeStatement:
 		s, err := b.toStatement(locals, l.Statement.StatementComma.Statement.Statement)
 		if err != nil {
@@ -243,12 +224,7 @@ func (b *builder) toArrayType(typ *ast.Type, v *ast.Variable) (Type, error) {
 		}
 	}
 
-	copyVar := *v
-	copyVarOption := *v.Variable
-	copyVar.Variable = &copyVarOption
-	copyVar.Variable.ArrayIndex = copyVar.Variable.ArrayIndex[1:]
-
-	sub, err := b.toType(typ, &copyVar, false)
+	sub, err := b.subType(typ, v)
 	if err != nil {
 		return Type{}, err
 	}
@@ -258,6 +234,15 @@ func (b *builder) toArrayType(typ *ast.Type, v *ast.Variable) (Type, error) {
 		SubType:   &sub,
 		ArraySize: size,
 	}, nil
+}
+
+func (b *builder) subType(typ *ast.Type, v *ast.Variable) (Type, error) {
+	copyVar := *v
+	copyVarOption := *v.Variable
+	copyVar.Variable = &copyVarOption
+	copyVar.Variable.ArrayIndex = copyVar.Variable.ArrayIndex[1:]
+
+	return b.toType(typ, &copyVar, false)
 }
 
 func (b *builder) toReturnType(i *ast.Type) (Type, error) {
@@ -368,28 +353,26 @@ func (b *builder) toDecAssign(vars map[ast.IDEN]Type, a *ast.DecAssign_StandardO
 func (b *builder) toExpr(expr *ast.Expr, locals map[ast.IDEN]Type) (*Expr, error) {
 	switch expr.Type {
 	case ast.ExprTypeComp:
-		compExpr := expr.Comp.CompExpr
+		compExpr := expr.Comp.CompExpr.CompExpr
 
-		switch compExpr.Type {
-		case ast.CompExprTypeIsEqual:
-			e1, err := b.toExpr(compExpr.IsEqual.Expr, locals)
-			if err != nil {
-				return nil, err
-			}
-
-			e2, err := b.fromSubExpr(compExpr.IsEqual.SubExpr, locals)
-			if err != nil {
-				return nil, err
-			}
-
-			return &Expr{
-				Type: boolType(),
-				IsEqual: &IsEqual{
-					Left:  e1,
-					Right: e2,
-				},
-			}, nil
+		e1, err := b.toExpr(compExpr.Expr, locals)
+		if err != nil {
+			return nil, err
 		}
+
+		e2, err := b.fromSubExpr(compExpr.SubExpr, locals)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Expr{
+			Type: boolType(),
+			Compare: &CompareOpExpr{
+				Left:  e1,
+				Op:    opType[compExpr.Operator.Type],
+				Right: e2,
+			},
+		}, nil
 	case ast.ExprTypeSubExpr:
 		return b.fromSubExpr(expr.SubExpr.SubExpr, locals)
 	}
@@ -574,33 +557,107 @@ func (b *builder) toFuncCall(call *ast.SubExpr_FuncCallOption, locals map[ast.ID
 	}, nil
 }
 
-func (b *builder) toControl(locals map[ast.IDEN]Type, c *ast.Control) (*Control, error) {
-	switch {
-	case c.If != nil:
-		expr, err := b.toExpr(c.If.Expr, locals)
+func (b *builder) toIf(locals map[ast.IDEN]Type, i *ast.Control_IfOption) (*If, error) {
+	expr, err := b.toExpr(i.Expr, locals)
+	if err != nil {
+		return nil, err
+	}
+
+	if expr.Type.Prim != PrimBool {
+		return nil, fmt.Errorf("if condition must be a boolean")
+	}
+
+	var ifLines []*Line
+	for _, n := range i.Line {
+		l, err := b.toLine(locals, n)
 		if err != nil {
 			return nil, err
 		}
 
-		if expr.Type.Prim != PrimBool {
-			return nil, fmt.Errorf("if condition must be a boolean")
+		ifLines = append(ifLines, l)
+	}
+
+	var elseLines []*Line
+	var elseIfExpr *Expr
+
+	if i.Else != nil {
+		if i.Else.Else.ElseIf != nil {
+			elseIfN := i.Else.Else.ElseIf
+
+			var err error
+			elseIfExpr, err = b.toExpr(elseIfN.ElseIf.Expr, locals)
+			if err != nil {
+				return nil, err
+			}
+
+			if elseIfExpr.Type.Prim != PrimBool {
+				return nil, fmt.Errorf("if condition must be a boolean")
+			}
 		}
 
-		var ll []*Line
-		for _, n := range c.If.Line {
+		for _, n := range i.Else.Else.Line {
 			l, err := b.toLine(locals, n)
 			if err != nil {
 				return nil, err
 			}
 
-			ll = append(ll, l)
+			elseLines = append(elseLines, l)
+		}
+	}
+
+	return &If{
+		Condition: expr,
+		Lines:     ifLines,
+		ElseIf:    elseIfExpr,
+		ElseLines: elseLines,
+	}, nil
+}
+
+func (b *builder) toWhile(locals map[ast.IDEN]Type, w *ast.Control_WhileOption) (*While, error) {
+	expr, err := b.toExpr(w.Expr, locals)
+	if err != nil {
+		return nil, err
+	}
+
+	if expr.Type.Prim != PrimBool {
+		return nil, fmt.Errorf("if condition must be a boolean")
+	}
+
+	var lines []*Line
+	for _, n := range w.Line {
+		l, err := b.toLine(locals, n)
+		if err != nil {
+			return nil, err
+		}
+
+		lines = append(lines, l)
+	}
+
+	return &While{
+		Condition: expr,
+		Lines:     lines,
+	}, nil
+}
+
+func (b *builder) toControl(locals map[ast.IDEN]Type, c *ast.Control) (*Control, error) {
+	switch c.Type {
+	case ast.ControlTypeIf:
+		ifC, err := b.toIf(locals, c.If)
+		if err != nil {
+			return nil, err
 		}
 
 		return &Control{
-			If: &If{
-				Condition: expr,
-				Lines:     ll,
-			},
+			If: ifC,
+		}, nil
+	case ast.ControlTypeWhile:
+		w, err := b.toWhile(locals, c.While)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Control{
+			While: w,
 		}, nil
 	}
 

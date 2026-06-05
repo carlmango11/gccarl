@@ -26,4 +26,6 @@ EEQUALS: '=='
 INCLUDE: 'include'
 RETURN: 'return'
 IF: 'if'
-
+ELSE: 'else'
+WHILE: 'while'
+FOR: 'for'

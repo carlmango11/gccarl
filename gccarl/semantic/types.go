@@ -26,6 +26,8 @@ func (p PrimitiveType) Size() Size {
 		return 4
 	case PrimChar:
 		return 1
+	case PrimBool:
+		return 1
 	}
 
 	panic("unset primitive type")
@@ -121,7 +123,13 @@ type Line struct {
 }
 
 type Control struct {
-	If *If
+	If    *If
+	While *While
+}
+
+type While struct {
+	Condition *Expr
+	Lines     []*Line
 }
 
 type Statement struct {
@@ -133,12 +141,38 @@ type Statement struct {
 type If struct {
 	Condition *Expr
 	Lines     []*Line
+
+	ElseIf    *Expr
+	ElseLines []*Line
 }
 
 type StringID int
 
-type IsEqual struct {
+type CompareOp int
+
+const (
+	OpUnset CompareOp = iota
+	OpEquals
+	OpNotEquals
+	OpLessThan
+)
+
+type NumericOp int
+
+const (
+	NumOpUnset NumericOp = iota
+	NumOpAdd
+)
+
+type CompareOpExpr struct {
 	Left  *Expr
+	Op    CompareOp
+	Right *Expr
+}
+
+type NumericOpExpr struct {
+	Left  *Expr
+	Op    NumericOp
 	Right *Expr
 }
 
@@ -146,7 +180,7 @@ type Expr struct {
 	Type Type
 
 	Add         *AddExpr
-	IsEqual     *IsEqual
+	Compare     *CompareOpExpr
 	FuncCall    *FuncCall
 	Literal     *Literal
 	Var         VarName
