@@ -68,6 +68,8 @@ func (c *Compiler) compileControl(instrs *Instrs, control *semantic.Control, loc
 
 func (c *Compiler) handleParamsDef(instrs *Instrs, ps []*semantic.ParamDef, locals *StackVars) {
 	for i, p := range ps {
+		instrs.addComment("receive %s", p.Name)
+
 		offset := locals.AddNamed(p.Name, p.Type.Size())
 		instrs.movFromReg(p.Type.Size(), paramReg[i], offset)
 	}
@@ -93,8 +95,13 @@ func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall, locals *S
 		}
 	}
 
-	for i := range len(fc.Args) {
+	for i, expr := range fc.Args {
 		instrs.addComment("move arg %d for call to %s", i, fc.Func)
+
+		if expr.Type.Kind == semantic.KindArray {
+			instrs.addInstr("lea %s, [rbp-%d]", paramReg[i].Raw(8), paramOffsets[i])
+			continue
+		}
 
 		size := fc.Args[i].Type.Size()
 		instrs.movOffsetToReg(size, paramOffsets[i], paramReg[i])

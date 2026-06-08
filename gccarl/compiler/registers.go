@@ -9,6 +9,7 @@ const (
 	RegA
 	RegB
 	RegD
+	RegDI
 	RegSI
 	RegR10
 )
@@ -46,7 +47,7 @@ const (
 )
 
 var paramReg = []Register{
-	RegD, RegSI, RegD, RegR10,
+	RegDI, RegSI, RegD, RegR10,
 }
 
 var sizedReg = map[Register]map[semantic.Size]RawReg{
@@ -61,13 +62,18 @@ var sizedReg = map[Register]map[semantic.Size]RawReg{
 		8: RawR10,
 	},
 	RegD: {
-		1: RawRDX,
+		1: RawDL,
 		4: RawEDX,
-		8: RawDL,
+		8: RawRDX,
+	},
+	RegDI: {
+		1: RawDIL,
+		4: RawEDI,
+		8: RawRDI,
 	},
 	RegSI: {
-		1: RawRSI,
+		1: RawSIL,
 		4: RawESI,
-		8: RawSIL,
+		8: RawRSI,
 	},
 }

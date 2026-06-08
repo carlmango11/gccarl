@@ -1,8 +1,6 @@
 int main() {
     char msg[2] = {'Y', 'E'};
-    if (3 < 5) {
-        print(msg, 2);
-    }
+    print(msg, 2);
 }
 
 int print(char msg[], int len) {

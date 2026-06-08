@@ -185,7 +185,7 @@ type Expr struct {
 	Literal     *Literal
 	Var         VarName
 	AddressOf   VarName
-	ArrayVar    *IndexedVar
+	IndexedVar  *IndexedVar
 	Cast        *Cast
 	CompLiteral []*Expr
 	StringID    StringID

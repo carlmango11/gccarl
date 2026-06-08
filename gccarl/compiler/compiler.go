@@ -253,13 +253,13 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 		}
 
 		return offsetLoc(addr.stack), nil
-	case e.ArrayVar != nil:
-		offset, ok := locals.Offset(e.ArrayVar.Name)
+	case e.IndexedVar != nil:
+		offset, ok := locals.Offset(e.IndexedVar.Name)
 		if !ok {
 			return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
 		}
 
-		offset += Offset(e.ArrayVar.Index) * Offset(e.Type.Size())
+		offset += Offset(e.IndexedVar.Index) * Offset(e.Type.Size())
 
 		return Location{
 			Type:   LTOffset,

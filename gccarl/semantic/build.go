@@ -188,9 +188,9 @@ func (b *builder) toType(typ *ast.Type, v *ast.Variable, isParam bool) (Type, er
 				Kind: KindPointer,
 				Prim: astTypeToPrim(typ),
 			}, nil
-		} else {
-			return b.toArrayType(typ, v)
 		}
+
+		return b.toArrayType(typ, v)
 	}
 
 	return Type{
@@ -454,10 +454,21 @@ func (b *builder) fromSubExpr(sub *ast.SubExpr, locals map[ast.IDEN]Type) (*Expr
 
 				return &Expr{
 					Type: *typ.SubType,
-					ArrayVar: &IndexedVar{
+					IndexedVar: &IndexedVar{
 						Index: i,
 						Name:  VarName(name),
 					},
+				}, nil
+			}
+
+			if typ.Kind == KindArray {
+				// decay to pointer
+				return &Expr{
+					Type: Type{
+						Kind:    KindPointer,
+						SubType: typ.SubType,
+					},
+					AddressOf: VarName(name),
 				}, nil
 			}
 
@@ -520,29 +531,6 @@ func (b *builder) toFuncCall(call *ast.SubExpr_FuncCallOption, locals map[ast.ID
 
 	var args []*Expr
 	for _, e := range params {
-		if e.Type == ast.ExprTypeSubExpr && e.SubExpr.SubExpr.Type == ast.SubExprTypeValue && e.SubExpr.SubExpr.Value.Value.Type == ast.ValueTypeVariable {
-			v := e.SubExpr.SubExpr.Value.Value.Variable.Variable.Variable
-
-			typ, ok := locals[v.IDEN]
-			if !ok {
-				return nil, fmt.Errorf("variable %s not declared", v.IDEN)
-			}
-
-			if typ.Kind == KindArray {
-				// need to convert to a pointer to the array for func calls
-				arg := &Expr{
-					Type: Type{
-						Kind:    KindPointer,
-						SubType: &typ,
-					},
-					AddressOf: VarName(v.IDEN),
-				}
-
-				args = append(args, arg)
-				continue
-			}
-		}
-
 		arg, err := b.toExpr(e, locals)
 		if err != nil {
 			return nil, err
