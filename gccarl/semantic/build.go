@@ -13,9 +13,13 @@ type builder struct {
 	strs  []string
 }
 
-var opType = map[ast.OperatorType]CompareOp{
+var compareOp = map[ast.OperatorType]CompareOp{
 	ast.OperatorTypeLess:  OpLessThan,
 	ast.OperatorTypeEqual: OpEquals,
+}
+
+var numericalOps = map[ast.OperatorType]NumericOp{
+	ast.OperatorTypePlus: NumOpAdd,
 }
 
 func Build(program *ast.Main) (*Program, error) {
@@ -292,6 +296,15 @@ func (b *builder) toStatement(vars map[ast.IDEN]Type, s *ast.Statement) (*Statem
 		return &Statement{
 			Assign: a,
 		}, nil
+	case ast.StatementTypeAssign:
+		a, err := b.toAssign(vars, s.Assign.Variable, s.Assign.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Statement{
+			Assign: a,
+		}, nil
 	case ast.StatementTypeVarDec:
 		// handled in the normal local func vars
 		return nil, nil
@@ -319,29 +332,33 @@ func (b *builder) toStatement(vars map[ast.IDEN]Type, s *ast.Statement) (*Statem
 }
 
 func (b *builder) toDecAssign(vars map[ast.IDEN]Type, a *ast.DecAssign_StandardOption) (*Assign, error) {
-	v, ok := vars[a.Variable.Variable.IDEN]
+	return b.toAssign(vars, a.Variable, a.Expr)
+}
+
+func (b *builder) toAssign(vars map[ast.IDEN]Type, v *ast.Variable, e *ast.Expr) (*Assign, error) {
+	varType, ok := vars[v.Variable.IDEN]
 	if !ok {
-		v, ok = vars[a.Variable.Variable.IDEN]
+		varType, ok = vars[v.Variable.IDEN] // todo global
 		if !ok {
-			return nil, fmt.Errorf("variable %s not declared", a.Variable.Variable.IDEN)
+			return nil, fmt.Errorf("variable %s not declared", v.Variable.IDEN)
 		}
 	}
 
-	indexable := v.Kind == KindPointer || v.Kind == KindArray
-	if len(a.Variable.Variable.ArrayIndex) > 0 && !indexable {
-		return nil, fmt.Errorf("variable %s is not indexable", a.Variable.Variable.IDEN)
+	indexable := varType.Kind == KindPointer || varType.Kind == KindArray
+	if len(v.Variable.ArrayIndex) > 0 && !indexable {
+		return nil, fmt.Errorf("variable %s is not indexable", v.Variable.IDEN)
 	}
 
-	expr, err := b.toExpr(a.Expr, vars)
+	expr, err := b.toExpr(e, vars)
 	if err != nil {
 		return nil, err
 	}
 
-	if !v.Equals(expr.Type) {
-		if compatibleTypes(v, expr.Type) {
+	if !varType.Equals(expr.Type) {
+		if compatibleTypes(varType, expr.Type) {
 			expr = &Expr{
 				Cast: &Cast{
-					To:   v,
+					To:   varType,
 					Expr: expr,
 				},
 			}
@@ -349,7 +366,7 @@ func (b *builder) toDecAssign(vars map[ast.IDEN]Type, a *ast.DecAssign_StandardO
 	}
 
 	return &Assign{
-		Name: VarName(a.Variable.Variable.IDEN),
+		Name: VarName(v.Variable.IDEN),
 		Expr: expr,
 	}, nil
 }
@@ -369,11 +386,25 @@ func (b *builder) toExpr(expr *ast.Expr, locals map[ast.IDEN]Type) (*Expr, error
 			return nil, err
 		}
 
+		op, ok := compareOp[compExpr.Operator.Type]
+		if ok {
+			return &Expr{
+				Type: boolType(),
+				Compare: &CompareOpExpr{
+					Left:  e1,
+					Op:    op,
+					Right: e2,
+				},
+			}, nil
+		}
+
+		// todo: check for casts
+
 		return &Expr{
-			Type: boolType(),
-			Compare: &CompareOpExpr{
+			Type: e1.Type,
+			Numeric: &NumericOpExpr{
 				Left:  e1,
-				Op:    opType[compExpr.Operator.Type],
+				Op:    numericalOps[compExpr.Operator.Type],
 				Right: e2,
 			},
 		}, nil

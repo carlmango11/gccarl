@@ -210,6 +210,8 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 	switch {
 	case e.Compare != nil:
 		return c.compileCompare(instrs, e.Compare, locals)
+	case e.Numeric != nil:
+		return c.compileNumeric(instrs, e.Numeric, locals)
 	case e.FuncCall != nil:
 		return c.functionCall(instrs, e.FuncCall, locals)
 	case e.AddressOf != "":
@@ -341,20 +343,47 @@ func (c *Compiler) compileCompare(instrs *Instrs, e *semantic.CompareOpExpr, loc
 	}, nil
 }
 
+func (c *Compiler) compileNumeric(instrs *Instrs, n *semantic.NumericOpExpr, locals *StackVars) (Location, error) {
+	rightLoc, err := c.compileExpr(instrs, n.Right, locals)
+	if err != nil {
+		return Location{}, err
+	}
+
+	instrs.movLocToReg(n.Left.Type.Size(), rightLoc, RegD)
+
+	leftLoc, err := c.compileExpr(instrs, n.Left, locals)
+	if err != nil {
+		return Location{}, err
+	}
+
+	switch n.Op {
+	case semantic.NumOpAdd:
+		instrs.add(n.Left.Type.Size(), RegD, leftLoc)
+	default:
+		panic("missing op")
+	}
+
+	return Location{
+		Type:     LTRegister,
+		Register: RegD,
+	}, nil
+}
+
 func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While, locals *StackVars) error {
 	repeat := c.newLabel("repeat")
 	instrs.addInstr("%v:", repeat)
 
-	_, err := c.compileExpr(instrs, w.Condition, locals)
+	loc, err := c.compileExpr(instrs, w.Condition, locals)
 	if err != nil {
 		return err
 	}
 
+	instrs.movLocToReg(w.Condition.Type.Size(), loc, RegA)
+	instrs.addInstr("mov %s, 1", RawRBX)
+
+	instrs.addInstr("cmp %s, %s", RawRAX, RawRBX)
+
 	skip := c.newLabel("skip")
-
-	switch w.Condition.Add {
-
-	}
 	instrs.addInstr("jne %s", skip)
 
 	for _, l := range w.Lines {
@@ -363,6 +392,9 @@ func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While, locals *Stack
 			return err
 		}
 	}
+
+	instrs.addComment("start again")
+	instrs.addInstr("jmp %s", repeat)
 
 	instrs.addInstr("%v:", skip)
 	return nil

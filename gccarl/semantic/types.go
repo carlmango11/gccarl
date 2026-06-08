@@ -181,6 +181,7 @@ type Expr struct {
 
 	Add         *AddExpr
 	Compare     *CompareOpExpr
+	Numeric     *NumericOpExpr
 	FuncCall    *FuncCall
 	Literal     *Literal
 	Var         VarName

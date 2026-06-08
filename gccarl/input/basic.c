@@ -3,13 +3,18 @@ void read_str(char buf[]) {
 }
 
 int main() {
-    char msg[] = "hello";
+    char msg[] = "hello ";
 
     char c[20];
     read_str(c);
 
-    print(msg, 5);
-    print(c, 5);
+    int i = 0;
+
+    while (i < 3) {
+        print(msg, 6);
+        print(c, 20);
+        i = i + 1;
+    }
 }
 
 int print(char msg[], int len) {
