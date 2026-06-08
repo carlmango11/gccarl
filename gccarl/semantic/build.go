@@ -254,6 +254,10 @@ func (b *builder) toReturnType(i *ast.Type) (Type, error) {
 		prim = PrimInt32
 	case ast.TypeTypeChar:
 		prim = PrimChar
+	case ast.TypeTypeVoid:
+		return Type{
+			Kind: KindVoid,
+		}, nil
 	default:
 		// custom
 		panic("impl")
@@ -403,7 +407,7 @@ func (b *builder) fromSubExpr(sub *ast.SubExpr, locals map[ast.IDEN]Type) (*Expr
 		switch v.Value.Type {
 		case ast.ValueTypeStr:
 			s := string(v.Value.Str.STR)
-			b.strs = append(b.strs, s)
+			b.strs = append(b.strs, s[1:len(s)-1])
 
 			return &Expr{
 				Type: Type{

@@ -229,10 +229,8 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 			Register: RegA,
 		}, nil
 
-	//case e.StringID != 0:
-	//	instrs.addInstr("lea %s, [rel %s]", RegRAX, c.stringLabel(e.StringID))
-	//	return Location{}, nil
-	//	return RegRAX, nil
+	case e.StringID != 0:
+		panic("omg")
 
 	case e.Literal != nil:
 		switch e.Type.Kind {
@@ -328,6 +326,8 @@ func (c *Compiler) compileCompare(instrs *Instrs, e *semantic.CompareOpExpr, loc
 	switch e.Op {
 	case semantic.OpLessThan:
 		instrs.addInstr("jl %s", jump)
+	case semantic.OpEquals:
+		instrs.addInstr("je %s", jump)
 	default:
 		panic("missing op")
 	}

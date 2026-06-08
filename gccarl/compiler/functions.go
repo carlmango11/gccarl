@@ -14,12 +14,6 @@ var exitRoutine = []Instr{
 	"\tret",
 }
 
-var data = []Instr{
-	"section .data",
-	`msg db "Hello, world!", 0xA`,
-	"msg_size equ $ - msg",
-}
-
 func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	funcInstrs := &Instrs{}
 	funcInstrs.addInstr("push rbp")

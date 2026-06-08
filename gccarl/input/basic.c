@@ -1,6 +1,15 @@
+void read_str(char buf[]) {
+    do_syscall(0, 0, buf, 20);
+}
+
 int main() {
-    char msg[2] = {'Y', 'E'};
-    print(msg, 2);
+    char msg[] = "hello";
+
+    char c[20];
+    read_str(c);
+
+    print(msg, 5);
+    print(c, 5);
 }
 
 int print(char msg[], int len) {

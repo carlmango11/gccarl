@@ -62,7 +62,7 @@ comp-expr:
 
 operator:
     less:LESS_THAN
-    equal:EEQUAL
+    equal:EEQUALS
     plus:PLUS
     minus:MINUS
 
@@ -91,5 +91,6 @@ comma-expr:
 type:
     int:INT_TYPE
     char:CHAR_TYPE
+    void:VOID
     custom:IDEN
     pointer:ASTERISKS type

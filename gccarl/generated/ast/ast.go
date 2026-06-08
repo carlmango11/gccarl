@@ -4,263 +4,215 @@ package ast
 var MainNode = n0
 
 var n2 = &Type {
-	Type: TypeTypeInt,
-	Int: &Type_IntOption{
-		INT_TYPE: "int",
+	Type: TypeTypeVoid,
+	Void: &Type_VoidOption{
+		VOID: "void",
 	},
 }
 
-var n7 = &Type {
+var n5 = &Type {
 	Type: TypeTypeChar,
 	Char: &Type_CharOption{
 		CHAR_TYPE: "char",
 	},
 }
 
-var n9 = &ArrayIndex {
+var n7 = &ArrayIndex {
 	Type: ArrayIndexTypeArrayIndex,
 	ArrayIndex: &ArrayIndex_ArrayIndexOption{
 		LSQUARE: "[",
-		NUM: "2",
 		RSQUARE: "]",
 	},
 }
 
-var n8 = &Variable {
+var n6 = &Variable {
 	Type: VariableTypeVariable,
 	Variable: &Variable_VariableOption{
-		IDEN: "msg",
+		IDEN: "buf",
 		ArrayIndex: []*ArrayIndex {
-			n9,
+			n7,
 		},
 	},
 }
 
-var n17 = &Value {
-	Type: ValueTypeChar,
-	Char: &Value_CharOption{
-		CHAR: "'Y'",
+var n4 = &ParamDef {
+	Type: ParamDefTypeParam,
+	Param: &ParamDef_ParamOption{
+		Type: n5,
+		Variable: n6,
 	},
 }
 
-var n16 = &SubExpr {
-	Type: SubExprTypeValue,
-	Value: &SubExpr_ValueOption{
-		Value: n17,
+var n3 = &ParamsDef {
+	Type: ParamsDefTypeParams,
+	Params: &ParamsDef_ParamsOption{
+		ParamDef: n4,
 	},
 }
 
-var n15 = &Expr {
-	Type: ExprTypeSubExpr,
-	SubExpr: &Expr_SubExprOption{
-		SubExpr: n16,
-	},
-}
-
-var n21 = &Value {
-	Type: ValueTypeChar,
-	Char: &Value_CharOption{
-		CHAR: "'E'",
-	},
-}
-
-var n20 = &SubExpr {
-	Type: SubExprTypeValue,
-	Value: &SubExpr_ValueOption{
-		Value: n21,
-	},
-}
-
-var n19 = &Expr {
-	Type: ExprTypeSubExpr,
-	SubExpr: &Expr_SubExprOption{
-		SubExpr: n20,
-	},
-}
-
-var n18 = &CommaExpr {
-	Type: CommaExprTypeCommaExpr,
-	CommaExpr: &CommaExpr_CommaExprOption{
-		COMMA: ",",
-		Expr: n19,
-	},
-}
-
-var n14 = &CompEntries {
-	Type: CompEntriesTypeEntries,
-	Entries: &CompEntries_EntriesOption{
-		Expr: n15,
-		CommaExpr: []*CommaExpr {
-			n18,
-		},
-	},
-}
-
-var n13 = &CompositeLiteral {
-	Type: CompositeLiteralTypeArrayVal,
-	ArrayVal: &CompositeLiteral_ArrayValOption{
-		LBRACE: "{",
-		CompEntries: n14,
-		RBRACE: "}",
-	},
-}
-
-var n12 = &Value {
-	Type: ValueTypeCompLit,
-	CompLit: &Value_CompLitOption{
-		CompositeLiteral: n13,
-	},
-}
-
-var n11 = &SubExpr {
-	Type: SubExprTypeValue,
-	Value: &SubExpr_ValueOption{
-		Value: n12,
-	},
-}
-
-var n10 = &Expr {
-	Type: ExprTypeSubExpr,
-	SubExpr: &Expr_SubExprOption{
-		SubExpr: n11,
-	},
-}
-
-var n6 = &DecAssign {
-	Type: DecAssignTypeStandard,
-	Standard: &DecAssign_StandardOption{
-		Type: n7,
-		Variable: n8,
-		EQUALS: "=",
-		Expr: n10,
-	},
-}
-
-var n5 = &Statement {
-	Type: StatementTypeDecAssign,
-	DecAssign: &Statement_DecAssignOption{
-		DecAssign: n6,
-	},
-}
-
-var n4 = &StatementComma {
-	Type: StatementCommaTypeStatement,
-	Statement: &StatementComma_StatementOption{
-		Statement: n5,
-		SEMI: ";",
-	},
-}
-
-var n3 = &Line {
-	Type: LineTypeStatement,
-	Statement: &Line_StatementOption{
-		StatementComma: n4,
-	},
-}
-
-var n31 = &Variable {
-	Type: VariableTypeVariable,
-	Variable: &Variable_VariableOption{
-		IDEN: "msg",
-	},
-}
-
-var n30 = &Value {
-	Type: ValueTypeVariable,
-	Variable: &Value_VariableOption{
-		Variable: n31,
-	},
-}
-
-var n29 = &SubExpr {
-	Type: SubExprTypeValue,
-	Value: &SubExpr_ValueOption{
-		Value: n30,
-	},
-}
-
-var n28 = &Expr {
-	Type: ExprTypeSubExpr,
-	SubExpr: &Expr_SubExprOption{
-		SubExpr: n29,
-	},
-}
-
-var n35 = &Value {
+var n16 = &Value {
 	Type: ValueTypeInt,
 	Int: &Value_IntOption{
-		NUM: "2",
+		NUM: "0",
 	},
 }
 
-var n34 = &SubExpr {
+var n15 = &SubExpr {
 	Type: SubExprTypeValue,
 	Value: &SubExpr_ValueOption{
-		Value: n35,
+		Value: n16,
 	},
 }
 
-var n33 = &Expr {
+var n14 = &Expr {
 	Type: ExprTypeSubExpr,
 	SubExpr: &Expr_SubExprOption{
-		SubExpr: n34,
+		SubExpr: n15,
 	},
 }
 
-var n32 = &CommaExpr {
+var n20 = &Value {
+	Type: ValueTypeInt,
+	Int: &Value_IntOption{
+		NUM: "0",
+	},
+}
+
+var n19 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n20,
+	},
+}
+
+var n18 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n19,
+	},
+}
+
+var n17 = &CommaExpr {
 	Type: CommaExprTypeCommaExpr,
 	CommaExpr: &CommaExpr_CommaExprOption{
 		COMMA: ",",
-		Expr: n33,
+		Expr: n18,
 	},
 }
 
-var n27 = &Params {
+var n25 = &Variable {
+	Type: VariableTypeVariable,
+	Variable: &Variable_VariableOption{
+		IDEN: "buf",
+	},
+}
+
+var n24 = &Value {
+	Type: ValueTypeVariable,
+	Variable: &Value_VariableOption{
+		Variable: n25,
+	},
+}
+
+var n23 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n24,
+	},
+}
+
+var n22 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n23,
+	},
+}
+
+var n21 = &CommaExpr {
+	Type: CommaExprTypeCommaExpr,
+	CommaExpr: &CommaExpr_CommaExprOption{
+		COMMA: ",",
+		Expr: n22,
+	},
+}
+
+var n29 = &Value {
+	Type: ValueTypeInt,
+	Int: &Value_IntOption{
+		NUM: "20",
+	},
+}
+
+var n28 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n29,
+	},
+}
+
+var n27 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n28,
+	},
+}
+
+var n26 = &CommaExpr {
+	Type: CommaExprTypeCommaExpr,
+	CommaExpr: &CommaExpr_CommaExprOption{
+		COMMA: ",",
+		Expr: n27,
+	},
+}
+
+var n13 = &Params {
 	Type: ParamsTypeParams,
 	Params: &Params_ParamsOption{
-		Expr: n28,
+		Expr: n14,
 		CommaExpr: []*CommaExpr {
-			n32,
+			n17,
+			n21,
+			n26,
 		},
 	},
 }
 
-var n26 = &SubExpr {
+var n12 = &SubExpr {
 	Type: SubExprTypeFuncCall,
 	FuncCall: &SubExpr_FuncCallOption{
-		IDEN: "print",
+		IDEN: "do_syscall",
 		LPAREN: "(",
-		Params: n27,
+		Params: n13,
 		RPAREN: ")",
 	},
 }
 
-var n25 = &Expr {
+var n11 = &Expr {
 	Type: ExprTypeSubExpr,
 	SubExpr: &Expr_SubExprOption{
-		SubExpr: n26,
+		SubExpr: n12,
 	},
 }
 
-var n24 = &Statement {
+var n10 = &Statement {
 	Type: StatementTypeExpr,
 	Expr: &Statement_ExprOption{
-		Expr: n25,
+		Expr: n11,
 	},
 }
 
-var n23 = &StatementComma {
+var n9 = &StatementComma {
 	Type: StatementCommaTypeStatement,
 	Statement: &StatementComma_StatementOption{
-		Statement: n24,
+		Statement: n10,
 		SEMI: ";",
 	},
 }
 
-var n22 = &Line {
+var n8 = &Line {
 	Type: LineTypeStatement,
 	Statement: &Line_StatementOption{
-		StatementComma: n23,
+		StatementComma: n9,
 	},
 }
 
@@ -268,33 +220,33 @@ var n1 = &DecDef {
 	Type: DecDefTypeFuncDef,
 	FuncDef: &DecDef_FuncDefOption{
 		Type: n2,
-		IDEN: "main",
+		IDEN: "read_str",
 		LPAREN: "(",
+		ParamsDef: n3,
 		RPAREN: ")",
 		LBRACE: "{",
 		Line: []*Line {
-			n3,
-			n22,
+			n8,
 		},
 		RBRACE: "}",
 	},
 }
 
-var n37 = &Type {
+var n31 = &Type {
 	Type: TypeTypeInt,
 	Int: &Type_IntOption{
 		INT_TYPE: "int",
 	},
 }
 
-var n40 = &Type {
+var n36 = &Type {
 	Type: TypeTypeChar,
 	Char: &Type_CharOption{
 		CHAR_TYPE: "char",
 	},
 }
 
-var n42 = &ArrayIndex {
+var n38 = &ArrayIndex {
 	Type: ArrayIndexTypeArrayIndex,
 	ArrayIndex: &ArrayIndex_ArrayIndexOption{
 		LSQUARE: "[",
@@ -302,132 +254,266 @@ var n42 = &ArrayIndex {
 	},
 }
 
-var n41 = &Variable {
+var n37 = &Variable {
 	Type: VariableTypeVariable,
 	Variable: &Variable_VariableOption{
 		IDEN: "msg",
 		ArrayIndex: []*ArrayIndex {
-			n42,
+			n38,
 		},
 	},
 }
 
-var n39 = &ParamDef {
-	Type: ParamDefTypeParam,
-	Param: &ParamDef_ParamOption{
-		Type: n40,
-		Variable: n41,
+var n41 = &Value {
+	Type: ValueTypeStr,
+	Str: &Value_StrOption{
+		STR: "\"hello\"",
+	},
+}
+
+var n40 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n41,
+	},
+}
+
+var n39 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n40,
+	},
+}
+
+var n35 = &DecAssign {
+	Type: DecAssignTypeStandard,
+	Standard: &DecAssign_StandardOption{
+		Type: n36,
+		Variable: n37,
+		EQUALS: "=",
+		Expr: n39,
+	},
+}
+
+var n34 = &Statement {
+	Type: StatementTypeDecAssign,
+	DecAssign: &Statement_DecAssignOption{
+		DecAssign: n35,
+	},
+}
+
+var n33 = &StatementComma {
+	Type: StatementCommaTypeStatement,
+	Statement: &StatementComma_StatementOption{
+		Statement: n34,
+		SEMI: ";",
+	},
+}
+
+var n32 = &Line {
+	Type: LineTypeStatement,
+	Statement: &Line_StatementOption{
+		StatementComma: n33,
 	},
 }
 
 var n45 = &Type {
-	Type: TypeTypeInt,
-	Int: &Type_IntOption{
-		INT_TYPE: "int",
+	Type: TypeTypeChar,
+	Char: &Type_CharOption{
+		CHAR_TYPE: "char",
+	},
+}
+
+var n47 = &ArrayIndex {
+	Type: ArrayIndexTypeArrayIndex,
+	ArrayIndex: &ArrayIndex_ArrayIndexOption{
+		LSQUARE: "[",
+		NUM: "20",
+		RSQUARE: "]",
 	},
 }
 
 var n46 = &Variable {
 	Type: VariableTypeVariable,
 	Variable: &Variable_VariableOption{
-		IDEN: "len",
+		IDEN: "c",
+		ArrayIndex: []*ArrayIndex {
+			n47,
+		},
 	},
 }
 
-var n44 = &ParamDef {
-	Type: ParamDefTypeParam,
-	Param: &ParamDef_ParamOption{
+var n44 = &Statement {
+	Type: StatementTypeVarDec,
+	VarDec: &Statement_VarDecOption{
 		Type: n45,
 		Variable: n46,
 	},
 }
 
-var n43 = &CommaParamDef {
-	Type: CommaParamDefTypeParam,
-	Param: &CommaParamDef_ParamOption{
-		COMMA: ",",
-		ParamDef: n44,
+var n43 = &StatementComma {
+	Type: StatementCommaTypeStatement,
+	Statement: &StatementComma_StatementOption{
+		Statement: n44,
+		SEMI: ";",
 	},
 }
 
-var n38 = &ParamsDef {
-	Type: ParamsDefTypeParams,
-	Params: &ParamsDef_ParamsOption{
-		ParamDef: n39,
-		CommaParamDef: []*CommaParamDef {
-			n43,
-		},
+var n42 = &Line {
+	Type: LineTypeStatement,
+	Statement: &Line_StatementOption{
+		StatementComma: n43,
 	},
 }
 
-var n55 = &Value {
-	Type: ValueTypeInt,
-	Int: &Value_IntOption{
-		NUM: "1",
+var n57 = &Variable {
+	Type: VariableTypeVariable,
+	Variable: &Variable_VariableOption{
+		IDEN: "c",
 	},
 }
 
-var n54 = &SubExpr {
+var n56 = &Value {
+	Type: ValueTypeVariable,
+	Variable: &Value_VariableOption{
+		Variable: n57,
+	},
+}
+
+var n55 = &SubExpr {
 	Type: SubExprTypeValue,
 	Value: &SubExpr_ValueOption{
-		Value: n55,
+		Value: n56,
 	},
 }
 
-var n53 = &Expr {
+var n54 = &Expr {
 	Type: ExprTypeSubExpr,
 	SubExpr: &Expr_SubExprOption{
-		SubExpr: n54,
+		SubExpr: n55,
 	},
 }
 
-var n59 = &Value {
-	Type: ValueTypeInt,
-	Int: &Value_IntOption{
-		NUM: "1",
+var n53 = &Params {
+	Type: ParamsTypeParams,
+	Params: &Params_ParamsOption{
+		Expr: n54,
 	},
 }
 
-var n58 = &SubExpr {
-	Type: SubExprTypeValue,
-	Value: &SubExpr_ValueOption{
-		Value: n59,
+var n52 = &SubExpr {
+	Type: SubExprTypeFuncCall,
+	FuncCall: &SubExpr_FuncCallOption{
+		IDEN: "read_str",
+		LPAREN: "(",
+		Params: n53,
+		RPAREN: ")",
 	},
 }
 
-var n57 = &Expr {
+var n51 = &Expr {
 	Type: ExprTypeSubExpr,
 	SubExpr: &Expr_SubExprOption{
-		SubExpr: n58,
+		SubExpr: n52,
 	},
 }
 
-var n56 = &CommaExpr {
-	Type: CommaExprTypeCommaExpr,
-	CommaExpr: &CommaExpr_CommaExprOption{
-		COMMA: ",",
-		Expr: n57,
+var n50 = &Statement {
+	Type: StatementTypeExpr,
+	Expr: &Statement_ExprOption{
+		Expr: n51,
 	},
 }
 
-var n64 = &Variable {
+var n49 = &StatementComma {
+	Type: StatementCommaTypeStatement,
+	Statement: &StatementComma_StatementOption{
+		Statement: n50,
+		SEMI: ";",
+	},
+}
+
+var n48 = &Line {
+	Type: LineTypeStatement,
+	Statement: &Line_StatementOption{
+		StatementComma: n49,
+	},
+}
+
+var n67 = &Variable {
 	Type: VariableTypeVariable,
 	Variable: &Variable_VariableOption{
 		IDEN: "msg",
 	},
 }
 
-var n63 = &Value {
+var n66 = &Value {
 	Type: ValueTypeVariable,
 	Variable: &Value_VariableOption{
-		Variable: n64,
+		Variable: n67,
+	},
+}
+
+var n65 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n66,
+	},
+}
+
+var n64 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n65,
+	},
+}
+
+var n71 = &Value {
+	Type: ValueTypeInt,
+	Int: &Value_IntOption{
+		NUM: "5",
+	},
+}
+
+var n70 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n71,
+	},
+}
+
+var n69 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n70,
+	},
+}
+
+var n68 = &CommaExpr {
+	Type: CommaExprTypeCommaExpr,
+	CommaExpr: &CommaExpr_CommaExprOption{
+		COMMA: ",",
+		Expr: n69,
+	},
+}
+
+var n63 = &Params {
+	Type: ParamsTypeParams,
+	Params: &Params_ParamsOption{
+		Expr: n64,
+		CommaExpr: []*CommaExpr {
+			n68,
+		},
 	},
 }
 
 var n62 = &SubExpr {
-	Type: SubExprTypeValue,
-	Value: &SubExpr_ValueOption{
-		Value: n63,
+	Type: SubExprTypeFuncCall,
+	FuncCall: &SubExpr_FuncCallOption{
+		IDEN: "print",
+		LPAREN: "(",
+		Params: n63,
+		RPAREN: ")",
 	},
 }
 
@@ -438,112 +524,417 @@ var n61 = &Expr {
 	},
 }
 
-var n60 = &CommaExpr {
-	Type: CommaExprTypeCommaExpr,
-	CommaExpr: &CommaExpr_CommaExprOption{
-		COMMA: ",",
+var n60 = &Statement {
+	Type: StatementTypeExpr,
+	Expr: &Statement_ExprOption{
 		Expr: n61,
 	},
 }
 
-var n69 = &Variable {
+var n59 = &StatementComma {
+	Type: StatementCommaTypeStatement,
+	Statement: &StatementComma_StatementOption{
+		Statement: n60,
+		SEMI: ";",
+	},
+}
+
+var n58 = &Line {
+	Type: LineTypeStatement,
+	Statement: &Line_StatementOption{
+		StatementComma: n59,
+	},
+}
+
+var n81 = &Variable {
+	Type: VariableTypeVariable,
+	Variable: &Variable_VariableOption{
+		IDEN: "c",
+	},
+}
+
+var n80 = &Value {
+	Type: ValueTypeVariable,
+	Variable: &Value_VariableOption{
+		Variable: n81,
+	},
+}
+
+var n79 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n80,
+	},
+}
+
+var n78 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n79,
+	},
+}
+
+var n85 = &Value {
+	Type: ValueTypeInt,
+	Int: &Value_IntOption{
+		NUM: "5",
+	},
+}
+
+var n84 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n85,
+	},
+}
+
+var n83 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n84,
+	},
+}
+
+var n82 = &CommaExpr {
+	Type: CommaExprTypeCommaExpr,
+	CommaExpr: &CommaExpr_CommaExprOption{
+		COMMA: ",",
+		Expr: n83,
+	},
+}
+
+var n77 = &Params {
+	Type: ParamsTypeParams,
+	Params: &Params_ParamsOption{
+		Expr: n78,
+		CommaExpr: []*CommaExpr {
+			n82,
+		},
+	},
+}
+
+var n76 = &SubExpr {
+	Type: SubExprTypeFuncCall,
+	FuncCall: &SubExpr_FuncCallOption{
+		IDEN: "print",
+		LPAREN: "(",
+		Params: n77,
+		RPAREN: ")",
+	},
+}
+
+var n75 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n76,
+	},
+}
+
+var n74 = &Statement {
+	Type: StatementTypeExpr,
+	Expr: &Statement_ExprOption{
+		Expr: n75,
+	},
+}
+
+var n73 = &StatementComma {
+	Type: StatementCommaTypeStatement,
+	Statement: &StatementComma_StatementOption{
+		Statement: n74,
+		SEMI: ";",
+	},
+}
+
+var n72 = &Line {
+	Type: LineTypeStatement,
+	Statement: &Line_StatementOption{
+		StatementComma: n73,
+	},
+}
+
+var n30 = &DecDef {
+	Type: DecDefTypeFuncDef,
+	FuncDef: &DecDef_FuncDefOption{
+		Type: n31,
+		IDEN: "main",
+		LPAREN: "(",
+		RPAREN: ")",
+		LBRACE: "{",
+		Line: []*Line {
+			n32,
+			n42,
+			n48,
+			n58,
+			n72,
+		},
+		RBRACE: "}",
+	},
+}
+
+var n87 = &Type {
+	Type: TypeTypeInt,
+	Int: &Type_IntOption{
+		INT_TYPE: "int",
+	},
+}
+
+var n90 = &Type {
+	Type: TypeTypeChar,
+	Char: &Type_CharOption{
+		CHAR_TYPE: "char",
+	},
+}
+
+var n92 = &ArrayIndex {
+	Type: ArrayIndexTypeArrayIndex,
+	ArrayIndex: &ArrayIndex_ArrayIndexOption{
+		LSQUARE: "[",
+		RSQUARE: "]",
+	},
+}
+
+var n91 = &Variable {
+	Type: VariableTypeVariable,
+	Variable: &Variable_VariableOption{
+		IDEN: "msg",
+		ArrayIndex: []*ArrayIndex {
+			n92,
+		},
+	},
+}
+
+var n89 = &ParamDef {
+	Type: ParamDefTypeParam,
+	Param: &ParamDef_ParamOption{
+		Type: n90,
+		Variable: n91,
+	},
+}
+
+var n95 = &Type {
+	Type: TypeTypeInt,
+	Int: &Type_IntOption{
+		INT_TYPE: "int",
+	},
+}
+
+var n96 = &Variable {
 	Type: VariableTypeVariable,
 	Variable: &Variable_VariableOption{
 		IDEN: "len",
 	},
 }
 
-var n68 = &Value {
-	Type: ValueTypeVariable,
-	Variable: &Value_VariableOption{
-		Variable: n69,
+var n94 = &ParamDef {
+	Type: ParamDefTypeParam,
+	Param: &ParamDef_ParamOption{
+		Type: n95,
+		Variable: n96,
 	},
 }
 
-var n67 = &SubExpr {
-	Type: SubExprTypeValue,
-	Value: &SubExpr_ValueOption{
-		Value: n68,
-	},
-}
-
-var n66 = &Expr {
-	Type: ExprTypeSubExpr,
-	SubExpr: &Expr_SubExprOption{
-		SubExpr: n67,
-	},
-}
-
-var n65 = &CommaExpr {
-	Type: CommaExprTypeCommaExpr,
-	CommaExpr: &CommaExpr_CommaExprOption{
+var n93 = &CommaParamDef {
+	Type: CommaParamDefTypeParam,
+	Param: &CommaParamDef_ParamOption{
 		COMMA: ",",
-		Expr: n66,
+		ParamDef: n94,
 	},
 }
 
-var n52 = &Params {
-	Type: ParamsTypeParams,
-	Params: &Params_ParamsOption{
-		Expr: n53,
-		CommaExpr: []*CommaExpr {
-			n56,
-			n60,
-			n65,
+var n88 = &ParamsDef {
+	Type: ParamsDefTypeParams,
+	Params: &ParamsDef_ParamsOption{
+		ParamDef: n89,
+		CommaParamDef: []*CommaParamDef {
+			n93,
 		},
 	},
 }
 
-var n51 = &SubExpr {
+var n105 = &Value {
+	Type: ValueTypeInt,
+	Int: &Value_IntOption{
+		NUM: "1",
+	},
+}
+
+var n104 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n105,
+	},
+}
+
+var n103 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n104,
+	},
+}
+
+var n109 = &Value {
+	Type: ValueTypeInt,
+	Int: &Value_IntOption{
+		NUM: "1",
+	},
+}
+
+var n108 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n109,
+	},
+}
+
+var n107 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n108,
+	},
+}
+
+var n106 = &CommaExpr {
+	Type: CommaExprTypeCommaExpr,
+	CommaExpr: &CommaExpr_CommaExprOption{
+		COMMA: ",",
+		Expr: n107,
+	},
+}
+
+var n114 = &Variable {
+	Type: VariableTypeVariable,
+	Variable: &Variable_VariableOption{
+		IDEN: "msg",
+	},
+}
+
+var n113 = &Value {
+	Type: ValueTypeVariable,
+	Variable: &Value_VariableOption{
+		Variable: n114,
+	},
+}
+
+var n112 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n113,
+	},
+}
+
+var n111 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n112,
+	},
+}
+
+var n110 = &CommaExpr {
+	Type: CommaExprTypeCommaExpr,
+	CommaExpr: &CommaExpr_CommaExprOption{
+		COMMA: ",",
+		Expr: n111,
+	},
+}
+
+var n119 = &Variable {
+	Type: VariableTypeVariable,
+	Variable: &Variable_VariableOption{
+		IDEN: "len",
+	},
+}
+
+var n118 = &Value {
+	Type: ValueTypeVariable,
+	Variable: &Value_VariableOption{
+		Variable: n119,
+	},
+}
+
+var n117 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n118,
+	},
+}
+
+var n116 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n117,
+	},
+}
+
+var n115 = &CommaExpr {
+	Type: CommaExprTypeCommaExpr,
+	CommaExpr: &CommaExpr_CommaExprOption{
+		COMMA: ",",
+		Expr: n116,
+	},
+}
+
+var n102 = &Params {
+	Type: ParamsTypeParams,
+	Params: &Params_ParamsOption{
+		Expr: n103,
+		CommaExpr: []*CommaExpr {
+			n106,
+			n110,
+			n115,
+		},
+	},
+}
+
+var n101 = &SubExpr {
 	Type: SubExprTypeFuncCall,
 	FuncCall: &SubExpr_FuncCallOption{
 		IDEN: "do_syscall",
 		LPAREN: "(",
-		Params: n52,
+		Params: n102,
 		RPAREN: ")",
 	},
 }
 
-var n50 = &Expr {
+var n100 = &Expr {
 	Type: ExprTypeSubExpr,
 	SubExpr: &Expr_SubExprOption{
-		SubExpr: n51,
+		SubExpr: n101,
 	},
 }
 
-var n49 = &Statement {
+var n99 = &Statement {
 	Type: StatementTypeExpr,
 	Expr: &Statement_ExprOption{
-		Expr: n50,
+		Expr: n100,
 	},
 }
 
-var n48 = &StatementComma {
+var n98 = &StatementComma {
 	Type: StatementCommaTypeStatement,
 	Statement: &StatementComma_StatementOption{
-		Statement: n49,
+		Statement: n99,
 		SEMI: ";",
 	},
 }
 
-var n47 = &Line {
+var n97 = &Line {
 	Type: LineTypeStatement,
 	Statement: &Line_StatementOption{
-		StatementComma: n48,
+		StatementComma: n98,
 	},
 }
 
-var n36 = &DecDef {
+var n86 = &DecDef {
 	Type: DecDefTypeFuncDef,
 	FuncDef: &DecDef_FuncDefOption{
-		Type: n37,
+		Type: n87,
 		IDEN: "print",
 		LPAREN: "(",
-		ParamsDef: n38,
+		ParamsDef: n88,
 		RPAREN: ")",
 		LBRACE: "{",
 		Line: []*Line {
-			n47,
+			n97,
 		},
 		RBRACE: "}",
 	},
@@ -554,7 +945,8 @@ var n0 = &Main {
 	Main: &Main_MainOption{
 		DecDef: []*DecDef {
 			n1,
-			n36,
+			n30,
+			n86,
 		},
 	},
 }
