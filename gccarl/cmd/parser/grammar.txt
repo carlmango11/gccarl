@@ -10,7 +10,7 @@ line:
     statement:statement-comma
 
 control:
-    if:IF LPAREN expr RPAREN LBRACE block-or-line RBRACE else?
+    if:IF LPAREN expr RPAREN block-or-line else?
     while:WHILE LPAREN expr RPAREN LBRACE line* RBRACE
 
 block-or-line:

@@ -8,13 +8,10 @@ char read_char() {
 int main() {
     char ans = read_char();
 
-    if (ans == '1') {
+    if (ans == '1')
         print("was 1", 5);
-    } else if (ans == '2'){
+    else
         print("was 2", 5);
-    } else {
-        print("neither", 5);
-    }
 }
 
 int print(char msg[], int len) {
