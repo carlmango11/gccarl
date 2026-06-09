@@ -1,19 +1,19 @@
-void read_str(char buf[]) {
-    do_syscall(0, 0, buf, 20);
+char read_char() {
+    char c[1];
+    do_syscall(0, 0, c, 1);
+
+    return c[0];
 }
 
 int main() {
-    char msg[] = "hello ";
+    char ans = read_char();
 
-    char c[20];
-    read_str(c);
-
-    int i = 0;
-
-    while (i < 3) {
-        print(msg, 6);
-        print(c, 20);
-        i = i + 1;
+    if (ans == '1') {
+        print("was 1", 5);
+    } else if (ans == '2'){
+        print("was 2", 5);
+    } else {
+        print("neither", 5);
     }
 }
 

@@ -232,7 +232,10 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 		}, nil
 
 	case e.StringID != 0:
-		panic("omg")
+		return Location{
+			Type:  LTLabel,
+			Label: c.stringLabel(e.StringID),
+		}, nil
 
 	case e.Literal != nil:
 		switch e.Type.Kind {
@@ -285,8 +288,10 @@ func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If, locals *StackVars
 
 	instrs.addInstr("cmp %s, %s", RawRAX, RawRBX)
 
-	skip := c.newLabel("skip")
-	instrs.addInstr("jne %s", skip)
+	endIfLabel := c.newLabel("end_if")
+	elseLabel := c.newLabel("else")
+
+	instrs.addInstr("jne %s", elseLabel)
 
 	for _, l := range ifs.Lines {
 		err := c.compileLine(instrs, l, locals)
@@ -295,7 +300,20 @@ func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If, locals *StackVars
 		}
 	}
 
-	instrs.addInstr("%v:", skip)
+	// finished if clause, jump to end
+	instrs.addInstr("jmp %s", endIfLabel)
+
+	// else
+	instrs.addInstr("%s:", elseLabel)
+
+	for _, l := range ifs.ElseLines {
+		err := c.compileLine(instrs, l, locals)
+		if err != nil {
+			return err
+		}
+	}
+
+	instrs.addInstr("%v:", endIfLabel)
 
 	return nil
 }

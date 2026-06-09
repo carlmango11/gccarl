@@ -10,14 +10,15 @@ line:
     statement:statement-comma
 
 control:
-    if:IF LPAREN expr RPAREN LBRACE line* RBRACE else?
+    if:IF LPAREN expr RPAREN LBRACE block-or-line RBRACE else?
     while:WHILE LPAREN expr RPAREN LBRACE line* RBRACE
 
-else:
-    else:ELSE else-if? LBRACE line* RBRACE
+block-or-line:
+    block:LBRACE line* RBRACE
+    line:line
 
-else-if:
-    else-if:IF LPAREN expr RPAREN
+else:
+    else:ELSE block-or-line
 
 statement-comma:
     statement:statement SEMI

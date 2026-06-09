@@ -590,48 +590,19 @@ func (b *builder) toIf(locals map[ast.IDEN]Type, i *ast.Control_IfOption) (*If, 
 		return nil, fmt.Errorf("if condition must be a boolean")
 	}
 
-	var ifLines []*Line
-	for _, n := range i.Line {
-		l, err := b.toLine(locals, n)
-		if err != nil {
-			return nil, err
-		}
-
-		ifLines = append(ifLines, l)
+	ifLines, err := b.toLines(locals, i.BlockOrLine)
+	if err != nil {
+		return nil, err
 	}
 
-	var elseLines []*Line
-	var elseIfExpr *Expr
-
-	if i.Else != nil {
-		if i.Else.Else.ElseIf != nil {
-			elseIfN := i.Else.Else.ElseIf
-
-			var err error
-			elseIfExpr, err = b.toExpr(elseIfN.ElseIf.Expr, locals)
-			if err != nil {
-				return nil, err
-			}
-
-			if elseIfExpr.Type.Prim != PrimBool {
-				return nil, fmt.Errorf("if condition must be a boolean")
-			}
-		}
-
-		for _, n := range i.Else.Else.Line {
-			l, err := b.toLine(locals, n)
-			if err != nil {
-				return nil, err
-			}
-
-			elseLines = append(elseLines, l)
-		}
+	elseLines, err := b.toLines(locals, i.Else.Else.BlockOrLine)
+	if err != nil {
+		return nil, err
 	}
 
 	return &If{
 		Condition: expr,
 		Lines:     ifLines,
-		ElseIf:    elseIfExpr,
 		ElseLines: elseLines,
 	}, nil
 }
@@ -685,6 +656,32 @@ func (b *builder) toControl(locals map[ast.IDEN]Type, c *ast.Control) (*Control,
 	}
 
 	panic("invalid control")
+}
+
+func (b *builder) toLines(locals map[ast.IDEN]Type, e *ast.BlockOrLine) ([]*Line, error) {
+	switch e.Type {
+	case ast.BlockOrLineTypeLine:
+		l, err := b.toLine(locals, e.Line.Line)
+		if err != nil {
+			return nil, err
+		}
+
+		return []*Line{l}, nil
+	case ast.BlockOrLineTypeBlock:
+		var all []*Line
+		for _, n := range e.Block.Line {
+			l, err := b.toLine(locals, n)
+			if err != nil {
+				return nil, err
+			}
+
+			all = append(all, l)
+		}
+
+		return all, nil
+	}
+
+	panic("invalid block or lines")
 }
 
 func int32Type() Type {

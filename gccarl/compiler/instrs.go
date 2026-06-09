@@ -37,10 +37,6 @@ func (i *Instrs) movLocToReg(s semantic.Size, from Location, to Register) {
 	i.addInstr("mov %s, %s", to.Raw(s), locOperand(s, from))
 }
 
-func (i *Instrs) movLocToStack(s semantic.Size, from Location, to Offset) {
-	i.addInstr("mov %s, %s", to, locOperand(s, from))
-}
-
 func (i *Instrs) movFromReg(s semantic.Size, from Register, to Offset) {
 	i.addInstr("mov %s, %s", offsetOperand(s, to), from.Raw(s))
 }
@@ -61,6 +57,10 @@ func offsetOperand(s semantic.Size, o Offset) string {
 	return fmt.Sprintf("%s [rbp-%d]", typeInstrSize(s), o)
 }
 
+func labelOperand(l DataLabel) string {
+	return fmt.Sprintf("%s [rel %s]", typeInstrSize(8), l)
+}
+
 func locOperand(s semantic.Size, l Location) string {
 	switch l.Type {
 	case LTRegister:
@@ -71,6 +71,8 @@ func locOperand(s semantic.Size, l Location) string {
 		return string(l.Register.Raw(s))
 	case LTOffset:
 		return offsetOperand(s, l.Offset)
+	case LTLabel:
+		return labelOperand(l.Label)
 	}
 
 	panic("invalid")

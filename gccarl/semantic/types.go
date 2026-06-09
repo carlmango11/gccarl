@@ -141,8 +141,6 @@ type Statement struct {
 type If struct {
 	Condition *Expr
 	Lines     []*Line
-
-	ElseIf    *Expr
 	ElseLines []*Line
 }
 

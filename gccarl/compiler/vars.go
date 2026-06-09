@@ -78,19 +78,6 @@ func (lv *StackVars) Address(id semantic.VarName) (Address, bool) {
 	return v.address, true
 }
 
-//func (lv *Vars) ArrayOffset(id semantic.VarName, idx int) (Offset, bool) {
-//	v, ok := lv.vars[id]
-//	if !ok {
-//		return 0, false
-//	}
-//
-//	size := typeSize(v.typ)
-//	arrayOffset := size * idx
-//	offset := v.offset + Offset(arrayOffset)
-//
-//	return offset, true
-//}
-
 func (lv *StackVars) Size() semantic.Size {
 	return lv.size
 }

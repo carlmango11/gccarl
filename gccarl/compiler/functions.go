@@ -86,6 +86,12 @@ func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall, locals *S
 			paramOffsets[i] = offset
 		case LTOffset:
 			paramOffsets[i] = loc.Offset
+		case LTLabel:
+			offset := locals.Add(8) // pointer
+			instrs.movLocToReg(8, loc, RegA)
+			instrs.movFromReg(8, RegA, offset)
+
+			paramOffsets[i] = offset
 		}
 	}
 
