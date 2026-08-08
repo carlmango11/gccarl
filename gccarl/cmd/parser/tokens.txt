@@ -6,7 +6,9 @@ STR: "[^"]*"
 INT_TYPE: 'int'
 CHAR_TYPE: 'char'
 VOID: 'void'
+STRUCT: 'struct'
 
+AMPERSAND: '&'
 ASTERISKS: '*'
 HASH: '#'
 LESS_THAN: '<'

@@ -182,8 +182,7 @@ type Expr struct {
 	Numeric     *NumericOpExpr
 	FuncCall    *FuncCall
 	Literal     *Literal
-	Var         VarName
-	AddressOf   VarName
+	Var         *VarRead
 	IndexedVar  *IndexedVar
 	Cast        *Cast
 	CompLiteral []*Expr
@@ -215,8 +214,29 @@ type FuncCall struct {
 	Args []*Expr
 }
 
+type VarReadDirect struct {
+	Name  VarName
+	Index []int
+}
+
+type VarRead struct {
+	Direct    *VarReadDirect
+	Deref     *VarRead
+	AddressOf *VarReadDirect
+}
+
+type VarWrite struct {
+	Direct *VarWriteDirect
+	Deref  *VarWrite
+}
+
+type VarWriteDirect struct {
+	Name  VarName
+	Index []int
+}
+
 type Assign struct {
-	Name VarName
+	Var  VarWrite
 	Expr *Expr
 }
 

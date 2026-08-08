@@ -30,11 +30,11 @@ comma-param-def:
     param:COMMA param-def
 
 param-def:
-    param:type variable
+    param:type variable-def
 
 value:
     int:NUM
-    variable:variable
+    variable:variable-access
     str:STR
     char:CHAR
     cast:LPAREN type RPAREN value
@@ -43,10 +43,19 @@ value:
 comma-expr:
     comma-expr:COMMA expr
 
-variable:
-    variable:IDEN array-index*
+variable-access:
+    deref:ASTERISKS variable-access
+    address-of:AMPERSAND variable-access
+    variable:IDEN array-index-access*
 
-array-index:
+variable-def:
+    pointer:ASTERISKS variable-def
+    variable:IDEN array-index-def*
+
+array-index-access:
+    array-index:LSQUARE NUM RSQUARE
+
+array-index-def:
     array-index:LSQUARE NUM? RSQUARE
 
 expr:
@@ -69,13 +78,13 @@ operator:
 
 statement:
     dec-assign:dec-assign
-    var-dec:type variable
-    assign:variable EQUALS expr
+    var-dec:type variable-def
+    assign:variable-access EQUALS expr
     expr:expr
     return:RETURN expr
 
 dec-assign:
-    standard:type variable EQUALS expr
+    standard:type variable-def EQUALS expr
 
 composite-literal:
     array-val:LBRACE comp-entries? RBRACE
@@ -94,4 +103,4 @@ type:
     char:CHAR_TYPE
     void:VOID
     custom:IDEN
-    pointer:ASTERISKS type
+    struct:STRUCT IDEN

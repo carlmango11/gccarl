@@ -150,11 +150,11 @@ func (c *Compiler) compileAssign(instrs *Instrs, a *semantic.Assign, locals *Sta
 func (c *Compiler) compileArrayAssign(instrs *Instrs, a *semantic.Assign, locals *StackVars) error {
 	switch {
 	case a.Expr.StringID != 0:
-		locals.AddLabelled(a.Name, c.stringLabel(a.Expr.StringID))
+		locals.AddLabelled(a.Var.Direct.Name, c.stringLabel(a.Expr.StringID))
 	default:
-		startOffset, ok := locals.Offset(a.Name)
+		startOffset, ok := locals.Offset(a.Var.Direct.Name)
 		if !ok {
-			return fmt.Errorf("undefined variable %s", a.Name)
+			return fmt.Errorf("undefined variable %s", a.Var.Direct.Name)
 		}
 
 		for i, v := range a.Expr.CompLiteral {
@@ -174,9 +174,13 @@ func (c *Compiler) compileArrayAssign(instrs *Instrs, a *semantic.Assign, locals
 }
 
 func (c *Compiler) compileStandardAssign(instrs *Instrs, a *semantic.Assign, locals *StackVars) error {
-	toOffset, ok := locals.Offset(a.Name)
+	if a.Var.Deref != nil {
+		panic("handle deref")
+	}
+
+	toOffset, ok := locals.Offset(a.Var.Direct.Name)
 	if !ok {
-		return fmt.Errorf("undefined variable: %s", a.Name)
+		return fmt.Errorf("undefined variable: %s", a.Var.Direct.Name)
 	}
 
 	reg, err := c.compileExprToReg(instrs, a.Expr, locals)
@@ -214,23 +218,6 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 		return c.compileNumeric(instrs, e.Numeric, locals)
 	case e.FuncCall != nil:
 		return c.functionCall(instrs, e.FuncCall, locals)
-	case e.AddressOf != "":
-		addr, ok := locals.Address(e.AddressOf)
-		if !ok {
-			return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
-		}
-
-		if addr.IsStack() {
-			instrs.addInstr("lea %s, [rbp-%d] ; addressOf", RegA.Raw(e.Type.Size()), addr.stack)
-		} else {
-			instrs.addInstr("lea %s, [rel %s] ; addressOf", RegA.Raw(e.Type.Size()), addr.label)
-		}
-
-		return Location{
-			Type:     LTRegister,
-			Register: RegA,
-		}, nil
-
 	case e.StringID != 0:
 		return Location{
 			Type:  LTLabel,
@@ -249,13 +236,40 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 				return regLocation(RegA), nil // todo return lit
 			}
 		}
-	case e.Var != "":
-		addr, ok := locals.Address(e.Var)
-		if !ok {
-			return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
-		}
+	case e.Var != nil:
+		switch {
+		case e.Var.Direct != nil:
+			addr, ok := locals.Address(e.Var.Direct.Name)
+			if !ok {
+				return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
+			}
 
-		return offsetLoc(addr.stack), nil
+			return offsetLoc(addr.stack), nil
+
+		case e.Var.AddressOf != nil:
+			if len(e.Var.AddressOf.Index) > 0 {
+				panic("handle address of indexed array")
+			}
+
+			addr, ok := locals.Address(e.Var.AddressOf.Name)
+			if !ok {
+				return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
+			}
+
+			if addr.IsStack() {
+				instrs.addInstr("lea %s, [rbp-%d] ; addressOf", RegA.Raw(e.Type.Size()), addr.stack)
+			} else {
+				instrs.addInstr("lea %s, [rel %s] ; addressOf", RegA.Raw(e.Type.Size()), addr.label)
+			}
+
+			return Location{
+				Type:     LTRegister,
+				Register: RegA,
+			}, nil
+
+		default:
+			panic("unhandled var read case")
+		}
 	case e.IndexedVar != nil:
 		offset, ok := locals.Offset(e.IndexedVar.Name)
 		if !ok {

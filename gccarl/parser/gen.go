@@ -214,7 +214,7 @@ func generateOptionType(rk RuleKey, parts []*grammar.Part) string {
 		}
 
 		if part.Token != "" {
-			sb.WriteString(fmt.Sprintf("\t%s %s\n", part.Token, part.Token))
+			sb.WriteString(fmt.Sprintf("\t%s %s%s\n", part.Token, card, part.Token))
 		} else {
 			ruleCodeName := optionRuleFieldName(part.Rule)
 			sb.WriteString(fmt.Sprintf("\t%s %s*%s\n", ruleCodeName, card, ruleCodeName))

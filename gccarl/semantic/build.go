@@ -79,12 +79,12 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 
 			if s.DecAssign != nil {
 				decAssign := s.DecAssign.DecAssign.Standard
-				err := b.declareVar(locals, decAssign.Type, decAssign.Variable, false)
+				err := b.declareVar(locals, decAssign.Type, decAssign.VariableDef, false)
 				if err != nil {
 					return nil, err
 				}
 			} else if s.VarDec != nil {
-				err := b.declareVar(locals, s.VarDec.Type, s.VarDec.Variable, false)
+				err := b.declareVar(locals, s.VarDec.Type, s.VarDec.VariableDef, false)
 				if err != nil {
 					return nil, err
 				}
@@ -105,7 +105,7 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 				return nil, err
 			}
 
-			err = b.declareVar(locals, astParam.Param.Type, astParam.Param.Variable, true)
+			err = b.declareVar(locals, astParam.Param.Type, astParam.Param.VariableDef, true)
 			if err != nil {
 				return nil, err
 			}
@@ -169,23 +169,62 @@ func (b *builder) toLine(locals map[ast.IDEN]Type, l *ast.Line) (*Line, error) {
 	panic("unreachable")
 }
 
-func (b *builder) declareVar(vars map[ast.IDEN]Type, astType *ast.Type, v *ast.Variable, isParam bool) error {
-	_, ok := vars[v.Variable.IDEN]
-	if ok {
-		return fmt.Errorf("variable %s already declared", v.Variable.IDEN)
-	}
-
+func (b *builder) declareVar(vars map[ast.IDEN]Type, astType *ast.Type, v *ast.VariableDef, isParam bool) error {
 	typ, err := b.toType(astType, v, isParam)
 	if err != nil {
 		return err
 	}
 
-	vars[v.Variable.IDEN] = typ
+	varName := varDefName(v)
+
+	_, ok := vars[varName]
+	if ok {
+		return fmt.Errorf("variable %s already declared", varName)
+	}
+
+	vars[varName] = typ
 	return nil
 }
 
-func (b *builder) toType(typ *ast.Type, v *ast.Variable, isParam bool) (Type, error) {
-	if len(v.Variable.ArrayIndex) > 0 {
+func varDefName(v *ast.VariableDef) ast.IDEN {
+	switch v.Type {
+	case ast.VariableDefTypePointer:
+		p := v.Pointer.VariableDef
+		for {
+			if p.Type == ast.VariableDefTypeVariable {
+				return p.Variable.IDEN
+			}
+
+			p = p.Pointer.VariableDef
+		}
+	case ast.VariableDefTypeVariable:
+		return v.Variable.IDEN
+	default:
+		panic(fmt.Sprintf("unhandled variable type %s", v.Type))
+	}
+}
+
+func (b *builder) toType(typ *ast.Type, v *ast.VariableDef, isParam bool) (Type, error) {
+	switch v.Type {
+	case ast.VariableDefTypePointer:
+		sub, err := b.toType(typ, v.Pointer.VariableDef, false) // no need for array decay check anymore
+		if err != nil {
+			return Type{}, err
+		}
+
+		return Type{
+			Kind:    KindPointer,
+			SubType: &sub,
+		}, nil
+	case ast.VariableDefTypeVariable:
+		return b.toVarType(typ, v.Variable.ArrayIndexDef, isParam)
+	}
+
+	panic("invalid type")
+}
+
+func (b *builder) toVarType(typ *ast.Type, arrs []*ast.ArrayIndexDef, isParam bool) (Type, error) {
+	if len(arrs) > 0 {
 		if isParam {
 			// arrays decay to pointers in params
 			return Type{
@@ -194,7 +233,27 @@ func (b *builder) toType(typ *ast.Type, v *ast.Variable, isParam bool) (Type, er
 			}, nil
 		}
 
-		return b.toArrayType(typ, v)
+		var size int
+		sizeStr := arrs[0].ArrayIndex.NUM
+
+		if sizeStr != "" {
+			var err error
+			size, err = strconv.Atoi(string(sizeStr))
+			if err != nil {
+				panic("invalid size: " + sizeStr)
+			}
+		}
+
+		sub, err := b.toVarType(typ, arrs[1:], false)
+		if err != nil {
+			return Type{}, err
+		}
+
+		return Type{
+			Kind:      KindArray,
+			SubType:   &sub,
+			ArraySize: size,
+		}, nil
 	}
 
 	return Type{
@@ -213,40 +272,6 @@ func astTypeToPrim(typ *ast.Type) PrimitiveType {
 		// custom
 		panic("impl")
 	}
-}
-
-func (b *builder) toArrayType(typ *ast.Type, v *ast.Variable) (Type, error) {
-	var size int
-
-	sizeStr := v.Variable.ArrayIndex[0].ArrayIndex.NUM
-
-	if sizeStr != "" {
-		var err error
-		size, err = strconv.Atoi(string(sizeStr))
-		if err != nil {
-			panic("invalid size: " + sizeStr)
-		}
-	}
-
-	sub, err := b.subType(typ, v)
-	if err != nil {
-		return Type{}, err
-	}
-
-	return Type{
-		Kind:      KindArray,
-		SubType:   &sub,
-		ArraySize: size,
-	}, nil
-}
-
-func (b *builder) subType(typ *ast.Type, v *ast.Variable) (Type, error) {
-	copyVar := *v
-	copyVarOption := *v.Variable
-	copyVar.Variable = &copyVarOption
-	copyVar.Variable.ArrayIndex = copyVar.Variable.ArrayIndex[1:]
-
-	return b.toType(typ, &copyVar, false)
 }
 
 func (b *builder) toReturnType(i *ast.Type) (Type, error) {
@@ -274,14 +299,14 @@ func (b *builder) toReturnType(i *ast.Type) (Type, error) {
 }
 
 func (b *builder) toParamDec(p *ast.ParamDef) (*ParamDef, error) {
-	typ, err := b.toType(p.Param.Type, p.Param.Variable, true)
+	typ, err := b.toType(p.Param.Type, p.Param.VariableDef, true)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ParamDef{
 		Type: typ,
-		Name: VarName(p.Param.Variable.Variable.IDEN),
+		Name: VarName(p.Param.VariableDef.Variable.IDEN),
 	}, nil
 }
 
@@ -297,7 +322,7 @@ func (b *builder) toStatement(vars map[ast.IDEN]Type, s *ast.Statement) (*Statem
 			Assign: a,
 		}, nil
 	case ast.StatementTypeAssign:
-		a, err := b.toAssign(vars, s.Assign.Variable, s.Assign.Expr)
+		a, err := b.toAssign(vars, s.Assign.VariableAccess, s.Assign.Expr)
 		if err != nil {
 			return nil, err
 		}
@@ -332,10 +357,77 @@ func (b *builder) toStatement(vars map[ast.IDEN]Type, s *ast.Statement) (*Statem
 }
 
 func (b *builder) toDecAssign(vars map[ast.IDEN]Type, a *ast.DecAssign_StandardOption) (*Assign, error) {
-	return b.toAssign(vars, a.Variable, a.Expr)
+	varName := varDefName(a.VariableDef)
+
+	varType, ok := vars[varName]
+	if !ok {
+		varType, ok = vars[varName] // todo global
+		if !ok {
+			return nil, fmt.Errorf("variable %s not declared", varName)
+		}
+	}
+
+	expr, err := b.toExpr(a.Expr, vars)
+	if err != nil {
+		return nil, err
+	}
+
+	if !varType.Equals(expr.Type) {
+		if compatibleTypes(varType, expr.Type) {
+			expr = &Expr{
+				Cast: &Cast{
+					To:   varType,
+					Expr: expr,
+				},
+			}
+		}
+	}
+
+	return &Assign{
+		Var: VarWrite{
+			Direct: &VarWriteDirect{
+				Name: VarName(varName),
+			},
+		},
+		Expr: expr,
+	}, nil
 }
 
-func (b *builder) toAssign(vars map[ast.IDEN]Type, v *ast.Variable, e *ast.Expr) (*Assign, error) {
+func (b *builder) toVarWrite(v *ast.VariableAccess) VarWrite {
+	switch v.Type {
+	case ast.VariableAccessTypeDeref:
+		a := b.toVarWrite(v.Deref.VariableAccess)
+
+		return VarWrite{
+			Deref: &a,
+		}
+	case ast.VariableAccessTypeVariable:
+		var index []int
+		for _, ia := range v.Variable.ArrayIndexAccess {
+			i, err := strconv.Atoi(string(ia.ArrayIndex.NUM))
+			if err != nil {
+				panic(fmt.Sprintf("invalid array index %v: %v", ia.ArrayIndex.NUM, err))
+			}
+
+			index = append(index, i)
+		}
+
+		return VarWrite{
+			Direct: &VarWriteDirect{
+				Name:  VarName(v.Variable.IDEN),
+				Index: index,
+			},
+		}
+	}
+
+	panic("invalid var access: " + v.Type)
+}
+
+func (b *builder) toAssign(vars map[ast.IDEN]Type, v *ast.VariableAccess, e *ast.Expr) (*Assign, error) {
+	if v.Type == ast.VariableAccessTypeAddressOf {
+		return nil, fmt.Errorf("cannot write to &")
+	}
+
 	varType, ok := vars[v.Variable.IDEN]
 	if !ok {
 		varType, ok = vars[v.Variable.IDEN] // todo global
@@ -344,10 +436,11 @@ func (b *builder) toAssign(vars map[ast.IDEN]Type, v *ast.Variable, e *ast.Expr)
 		}
 	}
 
-	indexable := varType.Kind == KindPointer || varType.Kind == KindArray
-	if len(v.Variable.ArrayIndex) > 0 && !indexable {
-		return nil, fmt.Errorf("variable %s is not indexable", v.Variable.IDEN)
-	}
+	// TODO re-add
+	//indexable := varType.Kind == KindPointer || varType.Kind == KindArray
+	//if len(v.Variable.ArrayIndexAccess) > 0 && !indexable {
+	//	return nil, fmt.Errorf("variable %s is not indexable", v.Variable.IDEN)
+	//}
 
 	expr, err := b.toExpr(e, vars)
 	if err != nil {
@@ -366,7 +459,7 @@ func (b *builder) toAssign(vars map[ast.IDEN]Type, v *ast.Variable, e *ast.Expr)
 	}
 
 	return &Assign{
-		Name: VarName(v.Variable.IDEN),
+		Var:  b.toVarWrite(v),
 		Expr: expr,
 	}, nil
 }
@@ -472,44 +565,14 @@ func (b *builder) fromSubExpr(sub *ast.SubExpr, locals map[ast.IDEN]Type) (*Expr
 				},
 			}, nil
 		case ast.ValueTypeVariable:
-			vr := v.Value.Variable.Variable.Variable
-			name := vr.IDEN
-
-			typ, ok := locals[name]
-			if !ok {
-				return nil, fmt.Errorf("variable %s not declared", name)
-			}
-
-			if len(vr.ArrayIndex) > 0 {
-				// TODO: handle nested
-				i, err := strconv.Atoi(string(vr.ArrayIndex[0].ArrayIndex.NUM))
-				if err != nil {
-					return nil, err
-				}
-
-				return &Expr{
-					Type: *typ.SubType,
-					IndexedVar: &IndexedVar{
-						Index: i,
-						Name:  VarName(name),
-					},
-				}, nil
-			}
-
-			if typ.Kind == KindArray {
-				// decay to pointer
-				return &Expr{
-					Type: Type{
-						Kind:    KindPointer,
-						SubType: typ.SubType,
-					},
-					AddressOf: VarName(name),
-				}, nil
+			typ, vr, err := b.fromValueVar(locals, v.Value.Variable.VariableAccess)
+			if err != nil {
+				return nil, err
 			}
 
 			return &Expr{
 				Type: typ,
-				Var:  VarName(name),
+				Var:  &vr,
 			}, nil
 		case ast.ValueTypeCompLit:
 			av := v.Value.CompLit.CompositeLiteral.ArrayVal
@@ -530,6 +593,138 @@ func (b *builder) fromSubExpr(sub *ast.SubExpr, locals map[ast.IDEN]Type) (*Expr
 	}
 
 	panic("invalid sub expression: " + string(sub.Type))
+}
+
+//func (b *builder) fromValueVar(v *ast.VariableAccess, locals map[ast.IDEN]Type) (*Expr, error) {
+//	switch v.Type {
+//	case ast.VariableAccessTypeDeref, ast.VariableAccessTypeAddressOf:
+//		vr, err := b.toVarRead(locals, v)
+//		if err != nil {
+//			return nil, err
+//		}
+//
+//		typ, err := locals[vr.AddressOf.Name]
+//
+//		return &Expr{
+//			Type: Type{
+//				Kind: KindPointer,
+//				SubType: &Type{}
+//			},
+//			Var: &vr,
+//		}, nil
+//	case ast.VariableAccessTypeVariable:
+//		name := v.Variable.IDEN
+//		typ, ok := locals[name]
+//		if !ok {
+//			return nil, fmt.Errorf("variable %s not declared", name)
+//		}
+//
+//		if typ.Kind == KindArray {
+//			// decay to pointer
+//			return &Expr{
+//				Type: Type{
+//					Kind:    KindPointer,
+//					SubType: typ.SubType,
+//				},
+//				Var: &VarRead{
+//					Direct: &VarReadDirect{
+//						Name: VarName(name),
+//					},
+//				},
+//			}, nil
+//		}
+//
+//		vr, err := b.toVarRead(locals, v)
+//		if err != nil {
+//			return nil, err
+//		}
+//
+//		return &Expr{
+//			Type: typ,
+//			Var:  &vr,
+//		}, nil
+//	default:
+//		panic("invalid value type: " + string(v.Type))
+//	}
+//}
+
+func (b *builder) fromValueVar(vars map[ast.IDEN]Type, v *ast.VariableAccess) (Type, VarRead, error) {
+	switch v.Type {
+	case ast.VariableAccessTypeDeref:
+		typ, subRead, err := b.fromValueVar(vars, v.Deref.VariableAccess)
+		if err != nil {
+			return Type{}, VarRead{}, err
+		}
+
+		vr := VarRead{
+			Deref: &subRead,
+		}
+
+		return typ, vr, nil
+	case ast.VariableAccessTypeAddressOf:
+		typ, subRead, err := b.fromValueVar(vars, v.AddressOf.VariableAccess)
+		if err != nil {
+			return Type{}, VarRead{}, err
+		}
+
+		if subRead.Direct == nil {
+			return Type{}, VarRead{}, fmt.Errorf("cannot take address of address")
+		}
+
+		returnType := Type{
+			Kind:    KindPointer,
+			SubType: &typ,
+		}
+
+		vr := VarRead{
+			AddressOf: subRead.Direct,
+		}
+
+		return returnType, vr, nil
+	case ast.VariableAccessTypeVariable:
+		name := v.Variable.IDEN
+		typ, ok := vars[name]
+		if !ok {
+			return Type{}, VarRead{}, fmt.Errorf("variable %s not declared", name)
+		}
+
+		if typ.Kind == KindArray {
+			// decay to pointer
+			returnType := Type{
+				Kind:    KindPointer,
+				SubType: typ.SubType,
+			}
+
+			vr := VarRead{
+				Direct: &VarReadDirect{
+					Name: VarName(name),
+				},
+			}
+
+			return returnType, vr, nil
+		}
+
+		var index []int
+		for _, ia := range v.Variable.ArrayIndexAccess {
+			i, err := strconv.Atoi(string(ia.ArrayIndex.NUM))
+			if err != nil {
+				panic(fmt.Sprintf("invalid array index %v: %v", ia.ArrayIndex.NUM, err))
+			}
+
+			index = append(index, i)
+		}
+
+		vr := VarRead{
+			Direct: &VarReadDirect{
+				Name:  VarName(v.Variable.IDEN),
+				Index: index,
+			},
+		}
+
+		return typ, vr, nil
+	default:
+		panic("invalid value type: " + string(v.Type))
+	}
 }
 
 func (b *builder) toCompLit(av *ast.CompositeLiteral_ArrayValOption, locals map[ast.IDEN]Type) ([]*Expr, error) {
@@ -697,5 +892,15 @@ func charType() Type {
 }
 
 func compatibleTypes(t1, t2 Type) bool {
-	panic("implement me")
+	//switch t1.Kind {
+	//case KindPointer:
+	//	switch t2.Kind {
+	//	case KindPointer:
+	//		return compatibleTypes(*t1.SubType, *t2.SubType)
+	//	case
+	//	}
+	//}
+	//
+	//return false
+	panic("imlp")
 }
