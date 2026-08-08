@@ -595,59 +595,6 @@ func (b *builder) fromSubExpr(sub *ast.SubExpr, locals map[ast.IDEN]Type) (*Expr
 	panic("invalid sub expression: " + string(sub.Type))
 }
 
-//func (b *builder) fromValueVar(v *ast.VariableAccess, locals map[ast.IDEN]Type) (*Expr, error) {
-//	switch v.Type {
-//	case ast.VariableAccessTypeDeref, ast.VariableAccessTypeAddressOf:
-//		vr, err := b.toVarRead(locals, v)
-//		if err != nil {
-//			return nil, err
-//		}
-//
-//		typ, err := locals[vr.AddressOf.Name]
-//
-//		return &Expr{
-//			Type: Type{
-//				Kind: KindPointer,
-//				SubType: &Type{}
-//			},
-//			Var: &vr,
-//		}, nil
-//	case ast.VariableAccessTypeVariable:
-//		name := v.Variable.IDEN
-//		typ, ok := locals[name]
-//		if !ok {
-//			return nil, fmt.Errorf("variable %s not declared", name)
-//		}
-//
-//		if typ.Kind == KindArray {
-//			// decay to pointer
-//			return &Expr{
-//				Type: Type{
-//					Kind:    KindPointer,
-//					SubType: typ.SubType,
-//				},
-//				Var: &VarRead{
-//					Direct: &VarReadDirect{
-//						Name: VarName(name),
-//					},
-//				},
-//			}, nil
-//		}
-//
-//		vr, err := b.toVarRead(locals, v)
-//		if err != nil {
-//			return nil, err
-//		}
-//
-//		return &Expr{
-//			Type: typ,
-//			Var:  &vr,
-//		}, nil
-//	default:
-//		panic("invalid value type: " + string(v.Type))
-//	}
-//}
-
 func (b *builder) fromValueVar(vars map[ast.IDEN]Type, v *ast.VariableAccess) (Type, VarRead, error) {
 	switch v.Type {
 	case ast.VariableAccessTypeDeref:
@@ -659,6 +606,9 @@ func (b *builder) fromValueVar(vars map[ast.IDEN]Type, v *ast.VariableAccess) (T
 		vr := VarRead{
 			Deref: &subRead,
 		}
+
+		// type becomes whatever we derefed
+		typ = *typ.SubType
 
 		return typ, vr, nil
 	case ast.VariableAccessTypeAddressOf:
@@ -696,7 +646,7 @@ func (b *builder) fromValueVar(vars map[ast.IDEN]Type, v *ast.VariableAccess) (T
 			}
 
 			vr := VarRead{
-				Direct: &VarReadDirect{
+				AddressOf: &VarReadDirect{
 					Name: VarName(name),
 				},
 			}

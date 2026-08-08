@@ -41,6 +41,10 @@ func (i *Instrs) movFromReg(s semantic.Size, from Register, to Offset) {
 	i.addInstr("mov %s, %s", offsetOperand(s, to), from.Raw(s))
 }
 
+func (i *Instrs) movFromAddressToReg(from, to RawReg) {
+	i.addInstr("mov %s, [%s]", to, from)
+}
+
 func (i *Instrs) cmp(s semantic.Size, reg Register, l2 Location) {
 	i.addInstr("cmp %s, %s", reg.Raw(s), locOperand(s, l2))
 }

@@ -1,6 +1,9 @@
 package compiler
 
 import (
+	"iter"
+	"sort"
+
 	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
@@ -22,8 +25,9 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	locals := newStackVars()
 	body := &Instrs{}
 
-	for name, typ := range f.Locals {
-		locals.AddNamed(name, typ.Size())
+	for name, typ := range sortParams(f.Locals) {
+		offset := locals.AddNamed(name, typ.Size())
+		body.addComment("var %s = %d", name, offset)
 	}
 
 	c.handleParamsDef(body, f.Params, locals)
@@ -47,6 +51,25 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	funcInstrs.addInstr("ret")
 
 	return funcInstrs, nil
+}
+
+func sortParams(locals map[semantic.VarName]semantic.Type) iter.Seq2[semantic.VarName, semantic.Type] {
+	vals := make([]string, 0, len(locals))
+	for name := range locals {
+		vals = append(vals, string(name))
+	}
+	sort.Strings(vals)
+
+	return func(yield func(semantic.VarName, semantic.Type) bool) {
+		for _, val := range vals {
+			nextKey := semantic.VarName(val)
+			nextVal := locals[nextKey]
+
+			if !yield(nextKey, nextVal) {
+				return
+			}
+		}
+	}
 }
 
 func (c *Compiler) compileControl(instrs *Instrs, control *semantic.Control, locals *StackVars) error {

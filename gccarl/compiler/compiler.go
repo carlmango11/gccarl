@@ -237,39 +237,7 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 			}
 		}
 	case e.Var != nil:
-		switch {
-		case e.Var.Direct != nil:
-			addr, ok := locals.Address(e.Var.Direct.Name)
-			if !ok {
-				return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
-			}
-
-			return offsetLoc(addr.stack), nil
-
-		case e.Var.AddressOf != nil:
-			if len(e.Var.AddressOf.Index) > 0 {
-				panic("handle address of indexed array")
-			}
-
-			addr, ok := locals.Address(e.Var.AddressOf.Name)
-			if !ok {
-				return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
-			}
-
-			if addr.IsStack() {
-				instrs.addInstr("lea %s, [rbp-%d] ; addressOf", RegA.Raw(e.Type.Size()), addr.stack)
-			} else {
-				instrs.addInstr("lea %s, [rel %s] ; addressOf", RegA.Raw(e.Type.Size()), addr.label)
-			}
-
-			return Location{
-				Type:     LTRegister,
-				Register: RegA,
-			}, nil
-
-		default:
-			panic("unhandled var read case")
-		}
+		return c.compileVarExpr(instrs, e.Type, e.Var, locals)
 	case e.IndexedVar != nil:
 		offset, ok := locals.Offset(e.IndexedVar.Name)
 		if !ok {
@@ -285,6 +253,59 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 	}
 
 	panic(fmt.Sprintf("unknown expr type: %+v", e))
+}
+
+func (c *Compiler) compileVarExpr(instrs *Instrs, typ semantic.Type, v *semantic.VarRead, locals *StackVars) (Location, error) {
+	switch {
+	case v.Direct != nil:
+		addr, ok := locals.Address(v.Direct.Name)
+		if !ok {
+			return Location{}, fmt.Errorf("undefined variable: %s", v.Direct.Name)
+		}
+
+		return offsetLoc(addr.stack), nil
+
+	case v.AddressOf != nil:
+		if len(v.AddressOf.Index) > 0 {
+			panic("handle address of indexed array")
+		}
+
+		addr, ok := locals.Address(v.AddressOf.Name)
+		if !ok {
+			return Location{}, fmt.Errorf("undefined variable: %s", v.AddressOf.Name)
+		}
+
+		if addr.IsStack() {
+			instrs.addInstr("lea %s, [rbp-%d] ; addressOf", RegA.Raw(typ.Size()), addr.stack)
+		} else {
+			instrs.addInstr("lea %s, [rel %s] ; addressOf", RegA.Raw(typ.Size()), addr.label)
+		}
+
+		return Location{
+			Type:     LTRegister,
+			Register: RegA,
+		}, nil
+
+	case v.Deref != nil:
+		loc, err := c.compileVarExpr(instrs, typ, v.Deref, locals)
+		if err != nil {
+			return Location{}, err
+		}
+
+		// loc contains the address of the thing to be deref'd
+		instrs.movLocToReg(typ.Size(), loc, RegA)
+
+		// I know it's a pointer so we use full register
+		instrs.movFromAddressToReg(RawRAX, RawRAX)
+
+		return Location{
+			Type:     LTRegister,
+			Register: RegA,
+		}, nil
+
+	default:
+		panic("unhandled var read case")
+	}
 }
 
 func (c *Compiler) stringLabel(id semantic.StringID) DataLabel {
