@@ -142,9 +142,37 @@ func (c *Compiler) compileAssign(instrs *Instrs, a *semantic.Assign, locals *Sta
 	switch a.Expr.Type.Kind {
 	case semantic.KindArray:
 		return c.compileArrayAssign(instrs, a, locals)
+	case semantic.KindStruct:
+		return c.compileStructAssign(instrs, a, locals)
 	default:
 		return c.compileStandardAssign(instrs, a, locals)
 	}
+}
+
+func (c *Compiler) varOffset(vd []semantic.VarRead) (Offset, bool) {
+
+}
+
+func (c *Compiler) compileStructAssign(instrs *Instrs, a *semantic.Assign, locals *StackVars) error {
+	offset, ok := locals.Offset(a.Var.Direct.Name) // TODO pointer?
+	if !ok {
+		return fmt.Errorf("undefined variable %s", a.Var.Direct.Name)
+	}
+
+	for i, v := range a.Expr.CompLiteral {
+		reg, err := c.compileExprToReg(instrs, v, locals)
+		if err != nil {
+			return err
+		}
+
+		field := a.Expr.Type.Struct.Fields[i]
+
+		instrs.movFromReg(field.Type.Size(), reg, offset)
+
+		offset += Offset(field.Type.Size())
+	}
+
+	return nil
 }
 
 func (c *Compiler) compileArrayAssign(instrs *Instrs, a *semantic.Assign, locals *StackVars) error {

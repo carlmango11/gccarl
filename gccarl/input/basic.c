@@ -1,10 +1,16 @@
-int main() {
-    char c = 'Y';
-    char *p = &c;
-    c = *p;
+struct Person {
+    Inner i;
+}
 
-    char msg[1] = {c};
-   print(msg, 1);
+struct Inner {
+    int y;
+}
+
+int main() {
+    struct Person p = (Person){
+        .i = 4,
+        45,
+    };
 }
 
 int print(char msg[], int len) {

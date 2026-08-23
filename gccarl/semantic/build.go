@@ -8,9 +8,10 @@ import (
 )
 
 type builder struct {
-	vars  map[ast.IDEN]PrimitiveType
-	funcs map[ast.IDEN]Type
-	strs  []string
+	vars    map[ast.IDEN]PrimitiveType
+	funcs   map[ast.IDEN]Type
+	structs map[TypeName]Type // todo local structs
+	strs    []string
 }
 
 var compareOp = map[ast.OperatorType]CompareOp{
@@ -30,6 +31,7 @@ func Build(program *ast.Main) (*Program, error) {
 				Kind: KindVoid,
 			},
 		},
+		structs: make(map[TypeName]Type),
 	}
 
 	b.funcs["print"] = Type{
@@ -41,6 +43,7 @@ func Build(program *ast.Main) (*Program, error) {
 
 func (b *builder) build(p *ast.Main) (*Program, error) {
 	var funcDecs []*FuncDef
+
 	for _, dd := range p.Main.DecDef {
 		switch dd.Type {
 		case ast.DecDefTypeFuncDef:
@@ -50,6 +53,8 @@ func (b *builder) build(p *ast.Main) (*Program, error) {
 			}
 
 			funcDecs = append(funcDecs, f)
+		case ast.DecDefTypeTypeDef:
+			b.defineType(dd.TypeDef)
 		}
 	}
 
@@ -84,7 +89,7 @@ func (b *builder) toFuncDef(f *ast.DecDef_FuncDefOption) (*FuncDef, error) {
 					return nil, err
 				}
 			} else if s.VarDec != nil {
-				err := b.declareVar(locals, s.VarDec.Type, s.VarDec.VariableDef, false)
+				err := b.declareVar(locals, s.VarDec.VarDec.VarDec.Type, s.VarDec.VarDec.VarDec.VariableDef, false)
 				if err != nil {
 					return nil, err
 				}
@@ -256,6 +261,15 @@ func (b *builder) toVarType(typ *ast.Type, arrs []*ast.ArrayIndexDef, isParam bo
 		}, nil
 	}
 
+	if typ.Type == ast.TypeTypeStruct {
+		st, ok := b.structs[TypeName(typ.Struct.IDEN)]
+		if !ok {
+			panic("missing struct")
+		}
+
+		return st, nil
+	}
+
 	return Type{
 		Kind: KindPrimitive,
 		Prim: astTypeToPrim(typ),
@@ -372,6 +386,12 @@ func (b *builder) toDecAssign(vars map[ast.IDEN]Type, a *ast.DecAssign_StandardO
 		return nil, err
 	}
 
+	if varType.Kind == KindStruct {
+		// TODO this is shit
+		panic("impl")
+		//expr = b.rewriteAsStructExpr(varType, a.Type.Struct.IDEN, expr)
+	}
+
 	if !varType.Equals(expr.Type) {
 		if compatibleTypes(varType, expr.Type) {
 			expr = &Expr{
@@ -380,13 +400,15 @@ func (b *builder) toDecAssign(vars map[ast.IDEN]Type, a *ast.DecAssign_StandardO
 					Expr: expr,
 				},
 			}
+		} else {
+			panic("not compatible")
 		}
 	}
 
 	return &Assign{
 		Var: VarWrite{
-			Direct: &VarWriteDirect{
-				Name: VarName(varName),
+			Direct: []VarRead{
+				{Name: VarName(varName)},
 			},
 		},
 		Expr: expr,
@@ -402,25 +424,108 @@ func (b *builder) toVarWrite(v *ast.VariableAccess) VarWrite {
 			Deref: &a,
 		}
 	case ast.VariableAccessTypeVariable:
-		var index []int
-		for _, ia := range v.Variable.ArrayIndexAccess {
-			i, err := strconv.Atoi(string(ia.ArrayIndex.NUM))
-			if err != nil {
-				panic(fmt.Sprintf("invalid array index %v: %v", ia.ArrayIndex.NUM, err))
-			}
-
-			index = append(index, i)
-		}
-
 		return VarWrite{
-			Direct: &VarWriteDirect{
-				Name:  VarName(v.Variable.IDEN),
-				Index: index,
-			},
+			Direct: b.toVarDirects(v),
 		}
 	}
 
 	panic("invalid var access: " + v.Type)
+}
+
+func (b *builder) toVarRead(v *ast.VariableAccess_VariableOption) VarRead {
+	directs := []VarRead{b.toVarDirect(v.SubVariableAccess)}
+
+	for _, x := range v.InnerSubVariableAccess {
+		if x.Type == ast.InnerSubVariableAccessTypeArrow {
+			return VarRead{
+				Deref: VarRead{},
+			}
+		}
+	}
+}
+
+func (b *builder) toVarDirects(v *ast.VariableAccess_VariableOption) []VarRead {
+	all := []*ast.SubVariableAccess_VOption{v.SubVariableAccess.V}
+
+	for _, x := range v.InnerSubVariableAccess {
+		all = append(all, x.)
+	}
+
+	dws := []VarRead{b.toVarDirect(v.Variable.SubVariableAccess, false)}
+
+	for _, x := range v.Variable.InnerSubVariableAccess {
+		switch x.Type {
+		case ast.InnerSubVariableAccessTypeDot:
+			dws = append(dws, b.toVarDirect(x.Dot.SubVariableAccess, false))
+		case ast.InnerSubVariableAccessTypeArrow:
+			dws = append(dws, b.toVarDirect(x.Arrow.SubVariableAccess, true))
+		}
+	}
+
+	return dws
+}
+
+func (b *builder) toVarDirect(v *ast.SubVariableAccess) VarRead {
+	var index []int
+	for _, ia := range v.V.ArrayIndexAccess {
+		i, err := strconv.Atoi(string(ia.ArrayIndex.NUM))
+		if err != nil {
+			panic(fmt.Sprintf("invalid array index %v: %v", ia.ArrayIndex.NUM, err))
+		}
+
+		index = append(index, i)
+	}
+
+	return VarRead{
+		Name:    VarName(v.V.IDEN),
+		Index:   index,
+	}
+}
+
+func (b *builder) getVarType(vars map[ast.IDEN]Type, v *ast.VariableAccess_VariableOption) (Type, error) {
+	typ, ok := vars[v.SubVariableAccess.V.IDEN]
+	if !ok {
+		typ, ok = vars[v.SubVariableAccess.V.IDEN] // todo global
+		if !ok {
+			return Type{}, fmt.Errorf("variable %s not declared", v.SubVariableAccess.V.IDEN)
+		}
+	}
+
+	fieldName := v.SubVariableAccess.V.IDEN
+
+	for _, iv := range v.InnerSubVariableAccess {
+		var thisStruct StructType
+
+		switch iv.Type {
+		case ast.InnerSubVariableAccessTypeDot:
+			if typ.Kind != KindStruct {
+				return Type{}, fmt.Errorf("cannot use %v.%v for non-struct", fieldName, iv.Dot.SubVariableAccess.V.IDEN)
+			}
+
+			thisStruct = typ.Struct
+			fieldName = iv.Dot.SubVariableAccess.V.IDEN
+		case ast.InnerSubVariableAccessTypeArrow:
+			if typ.Kind != KindPointer {
+				return Type{}, fmt.Errorf("cannot use %v->%v for non-pointer", fieldName, iv.Arrow.SubVariableAccess.V.IDEN)
+			}
+
+			if typ.SubType.Kind != KindStruct {
+				return Type{}, fmt.Errorf("%v-%v is not a struct", fieldName, iv.Arrow.SubVariableAccess.V.IDEN)
+			}
+
+			thisStruct = typ.SubType.Struct
+			fieldName = iv.Arrow.SubVariableAccess.V.IDEN
+		}
+
+		for _, f := range thisStruct.Fields {
+			if f.Name == VarName(fieldName) {
+				typ = f.Type
+				break
+			}
+		}
+	}
+
+	return typ, nil
 }
 
 func (b *builder) toAssign(vars map[ast.IDEN]Type, v *ast.VariableAccess, e *ast.Expr) (*Assign, error) {
@@ -428,12 +533,9 @@ func (b *builder) toAssign(vars map[ast.IDEN]Type, v *ast.VariableAccess, e *ast
 		return nil, fmt.Errorf("cannot write to &")
 	}
 
-	varType, ok := vars[v.Variable.IDEN]
-	if !ok {
-		varType, ok = vars[v.Variable.IDEN] // todo global
-		if !ok {
-			return nil, fmt.Errorf("variable %s not declared", v.Variable.IDEN)
-		}
+	varType, err := b.getVarType(vars, v.Variable)
+	if err != nil {
+		return nil, err
 	}
 
 	// TODO re-add
@@ -455,6 +557,8 @@ func (b *builder) toAssign(vars map[ast.IDEN]Type, v *ast.VariableAccess, e *ast
 					Expr: expr,
 				},
 			}
+		} else {
+			panic("not compatible")
 		}
 	}
 
@@ -462,6 +566,23 @@ func (b *builder) toAssign(vars map[ast.IDEN]Type, v *ast.VariableAccess, e *ast
 		Var:  b.toVarWrite(v),
 		Expr: expr,
 	}, nil
+}
+
+func checkCompatibility(varType Type, expr *Expr) *Expr {
+	if !varType.Equals(expr.Type) {
+		if compatibleTypes(varType, expr.Type) {
+			expr = &Expr{
+				Cast: &Cast{
+					To:   varType,
+					Expr: expr,
+				},
+			}
+		} else {
+			panic("not compatible")
+		}
+	}
+
+	return expr
 }
 
 func (b *builder) toExpr(expr *ast.Expr, locals map[ast.IDEN]Type) (*Expr, error) {
@@ -574,10 +695,10 @@ func (b *builder) fromSubExpr(sub *ast.SubExpr, locals map[ast.IDEN]Type) (*Expr
 				Type: typ,
 				Var:  &vr,
 			}, nil
-		case ast.ValueTypeCompLit:
-			av := v.Value.CompLit.CompositeLiteral.ArrayVal
+		case ast.ValueTypeArrayLit:
+			av := v.Value.ArrayLit.ArrayEntries.Entries
 
-			exprs, err := b.toCompLit(av, locals)
+			exprs, err := b.toArrayLit(av, locals)
 			if err != nil {
 				return nil, err
 			}
@@ -587,7 +708,24 @@ func (b *builder) fromSubExpr(sub *ast.SubExpr, locals map[ast.IDEN]Type) (*Expr
 					Kind:    KindArray,
 					SubType: &exprs[0].Type,
 				},
-				CompLiteral: exprs,
+				ArrayLiteral: exprs,
+			}, nil
+		case ast.ValueTypeCompLit:
+			av := v.Value.CompLit.CompEntries
+
+			typ, err := b.toVarType(v.Value.CompLit.Type, v.Value.CompLit.ArrayIndexDef, false)
+			if err != nil {
+				return nil, err
+			}
+
+			compLit, err := b.toCompLit(av, locals)
+			if err != nil {
+				return nil, err
+			}
+
+			return &Expr{
+				Type:        typ,
+				CompLiteral: compLit,
 			}, nil
 		}
 	}
@@ -632,10 +770,9 @@ func (b *builder) fromValueVar(vars map[ast.IDEN]Type, v *ast.VariableAccess) (T
 
 		return returnType, vr, nil
 	case ast.VariableAccessTypeVariable:
-		name := v.Variable.IDEN
-		typ, ok := vars[name]
-		if !ok {
-			return Type{}, VarRead{}, fmt.Errorf("variable %s not declared", name)
+		typ, err := b.getVarType(vars, v.Variable)
+		if err != nil {
+			return Type{}, VarRead{}, err
 		}
 
 		if typ.Kind == KindArray {
@@ -646,30 +783,13 @@ func (b *builder) fromValueVar(vars map[ast.IDEN]Type, v *ast.VariableAccess) (T
 			}
 
 			vr := VarRead{
-				AddressOf: &VarReadDirect{
-					Name: VarName(name),
-				},
+				AddressOf: b.toVarDirects(v),
 			}
 
 			return returnType, vr, nil
 		}
 
-		var index []int
-		for _, ia := range v.Variable.ArrayIndexAccess {
-			i, err := strconv.Atoi(string(ia.ArrayIndex.NUM))
-			if err != nil {
-				panic(fmt.Sprintf("invalid array index %v: %v", ia.ArrayIndex.NUM, err))
-			}
-
-			index = append(index, i)
-		}
-
-		vr := VarRead{
-			Direct: &VarReadDirect{
-				Name:  VarName(v.Variable.IDEN),
-				Index: index,
-			},
-		}
+		vr := b.toVarRead(v.Variable)
 
 		return typ, vr, nil
 	default:
@@ -677,9 +797,9 @@ func (b *builder) fromValueVar(vars map[ast.IDEN]Type, v *ast.VariableAccess) (T
 	}
 }
 
-func (b *builder) toCompLit(av *ast.CompositeLiteral_ArrayValOption, locals map[ast.IDEN]Type) ([]*Expr, error) {
-	exprsNodes := []*ast.Expr{av.CompEntries.Entries.Expr}
-	for _, e := range av.CompEntries.Entries.CommaExpr {
+func (b *builder) toArrayLit(av *ast.ArrayEntries_EntriesOption, locals map[ast.IDEN]Type) ([]*Expr, error) {
+	exprsNodes := []*ast.Expr{av.Expr}
+	for _, e := range av.CommaExpr {
 		exprsNodes = append(exprsNodes, e.CommaExpr.Expr)
 	}
 
@@ -697,6 +817,44 @@ func (b *builder) toCompLit(av *ast.CompositeLiteral_ArrayValOption, locals map[
 	}
 
 	return exprs, nil
+}
+
+func (b *builder) toCompLit(e *ast.CompEntries, locals map[ast.IDEN]Type) (*CompLiteral, error) {
+	exprsNodes := []*ast.CompEntry{e.Entries.CompEntry}
+	for _, e := range e.Entries.CommaCompEntry {
+		exprsNodes = append(exprsNodes, e.E.CompEntry)
+	}
+
+	var entries []*CompLiteralEntry
+
+	for _, node := range exprsNodes {
+		var name VarName
+		var exprNode *ast.Expr
+
+		switch node.Type {
+		case ast.CompEntryTypeAnon:
+			exprNode = node.Anon.Expr
+		case ast.CompEntryTypeLabelled:
+			name = VarName(node.Labelled.IDEN)
+			exprNode = node.Labelled.Expr
+		}
+
+		expr, err := b.toExpr(exprNode, locals)
+		if err != nil {
+			return nil, err
+		}
+
+		// type check TODO
+
+		entries = append(entries, &CompLiteralEntry{
+			Name: name,
+			Expr: expr,
+		})
+	}
+
+	return &CompLiteral{
+		Entries: entries,
+	}, nil
 }
 
 func (b *builder) toFuncCall(call *ast.SubExpr_FuncCallOption, locals map[ast.IDEN]Type) (*FuncCall, error) {
@@ -829,6 +987,79 @@ func (b *builder) toLines(locals map[ast.IDEN]Type, e *ast.BlockOrLine) ([]*Line
 	panic("invalid block or lines")
 }
 
+func (b *builder) defineType(d *ast.DecDef_TypeDefOption) error {
+	switch d.TypeDef.Type {
+	case ast.TypeDefTypeStructDef:
+		return b.toStructDef(d.TypeDef.StructDef)
+	}
+
+	panic("invalid type")
+}
+
+func (b *builder) toStructDef(td *ast.TypeDef_StructDefOption) error {
+	var all []*ast.VarDecColon
+
+	if td.StructBlock.Block.VarDecColon != nil {
+		all = append(all, td.StructBlock.Block.VarDecColon)
+	}
+
+	for _, x := range td.StructBlock.Block.VarDecComma {
+		all = append(all, x.DecComma.VarDecColon)
+	}
+
+	var vars []StructField
+	structVars := map[ast.IDEN]Type{}
+
+	for _, a := range all {
+		t := a.C.VarDec.VarDec.Type
+		def := a.C.VarDec.VarDec.VariableDef
+
+		err := b.declareVar(structVars, t, def, false) // checks for dups
+		if err != nil {
+			return err
+		}
+
+		typ, err := b.toType(t, def, false)
+		if err != nil {
+			return err
+		}
+
+		vars = append(vars, StructField{
+			Name: VarName(varDefName(a.C.VarDec.VarDec.VariableDef)),
+			Type: typ,
+		})
+	}
+
+	// todo check exists
+
+	st := StructType{
+		Name:   TypeName(td.IDEN),
+		Fields: vars,
+	}
+
+	b.structs[TypeName(td.IDEN)] = Type{
+		Kind:   KindStruct,
+		Struct: st,
+	}
+
+	return nil
+}
+
+//func (b *builder) rewriteAsStructExpr(structType Type, name ast.IDEN, expr *Expr) *Expr {
+//	sd := b.structs[name]
+//
+//	newExpr := &Expr{
+//		Type: structType,
+//	}
+//
+//	for i := range expr.CompLiteral {
+//		newFieldExpr := checkCompatibility(sd.Fields[i].Type, expr.CompLiteral[i])
+//		newExpr.CompLiteral = append(newExpr.CompLiteral, newFieldExpr)
+//	}
+//
+//	return newExpr
+//}
+
 func int32Type() Type {
 	return Type{Kind: KindPrimitive, Prim: PrimInt32}
 }
@@ -842,6 +1073,10 @@ func charType() Type {
 }
 
 func compatibleTypes(t1, t2 Type) bool {
+	if t1.Kind == KindStruct {
+		return t2.Kind == KindArray
+	}
+
 	//switch t1.Kind {
 	//case KindPointer:
 	//	switch t2.Kind {

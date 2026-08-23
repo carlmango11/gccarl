@@ -38,7 +38,7 @@ type Kind int
 const (
 	KindVoid Kind = iota
 	KindPrimitive
-	KindCustom
+	KindStruct
 	KindArray
 	KindPointer
 )
@@ -51,12 +51,22 @@ const (
 	Size64 Size = 8
 )
 
+type StructType struct {
+	Name   TypeName
+	Fields []StructField
+}
+
+type StructField struct {
+	Name VarName
+	Type Type
+}
+
 type Type struct {
 	Kind      Kind
 	Prim      PrimitiveType
 	SubType   *Type
 	ArraySize int
-	Custom    TypeName
+	Struct    StructType
 }
 
 func (t Type) String() string {
@@ -71,6 +81,12 @@ func (t Type) Size() Size {
 		return Size(t.ArraySize) * (*t.SubType).Size()
 	case KindPointer:
 		return 8
+	case KindStruct:
+		var s Size
+		for _, f := range t.Struct.Fields {
+			s += f.Type.Size()
+		}
+		return s
 	}
 	panic(fmt.Sprintf("unknown type %d", t))
 }
@@ -84,9 +100,9 @@ func (t Type) Equals(t2 Type) bool {
 		return false
 	}
 
-	if t.Custom != t2.Custom {
-		return false
-	}
+	//if t.Struct != t2.Struct {
+	//	return false
+	//}
 
 	if t.SubType == nil && t2.SubType == nil {
 		return true
@@ -115,6 +131,10 @@ type FuncDef struct {
 	//TypeDefs []
 	Locals map[VarName]Type
 	Lines  []*Line
+}
+
+type StructDef struct {
+	Vars map[VarName]Type
 }
 
 type Line struct {
@@ -174,19 +194,31 @@ type NumericOpExpr struct {
 	Right *Expr
 }
 
+type CompLiteralEntry struct {
+	Name VarName
+	Expr *Expr
+}
+
+type CompLiteral struct {
+	Entries []*CompLiteralEntry
+}
+
 type Expr struct {
 	Type Type
 
-	Add         *AddExpr
-	Compare     *CompareOpExpr
-	Numeric     *NumericOpExpr
-	FuncCall    *FuncCall
-	Literal     *Literal
-	Var         *VarRead
-	IndexedVar  *IndexedVar
-	Cast        *Cast
-	CompLiteral []*Expr
-	StringID    StringID
+	Add          *AddExpr
+	Compare      *CompareOpExpr
+	Numeric      *NumericOpExpr
+	FuncCall     *FuncCall
+	Literal      *Literal
+	AddressOf    *AddressOf
+	Var          []VarRead
+	Deref        *Expr
+	IndexedVar   *IndexedVar
+	Cast         *Cast
+	CompLiteral  *CompLiteral
+	ArrayLiteral []*Expr
+	StringID     StringID
 }
 
 type IndexedVar struct {
@@ -214,23 +246,21 @@ type FuncCall struct {
 	Args []*Expr
 }
 
-type VarReadDirect struct {
-	Name  VarName
-	Index []int
+type Deref struct {
+	Var []VarRead
 }
 
-type VarRead struct {
-	Direct    *VarReadDirect
-	Deref     *VarRead
-	AddressOf *VarReadDirect
+type AddressOf struct {
+	Func FuncName
+	Var  []VarRead
 }
 
 type VarWrite struct {
-	Direct *VarWriteDirect
+	Direct []VarRead
 	Deref  *VarWrite
 }
 
-type VarWriteDirect struct {
+type VarRead struct {
 	Name  VarName
 	Index []int
 }

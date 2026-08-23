@@ -4,6 +4,19 @@ main:
 dec-def:
     func-def:type IDEN LPAREN params-def? RPAREN LBRACE line* RBRACE
     dec-assign:dec-assign
+    type-def:type-def
+
+type-def:
+    struct-def:STRUCT IDEN LBRACE struct-block RBRACE
+
+struct-block:
+    block:var-dec-colon var-dec-comma*
+
+var-dec-colon:
+    c:var-dec SEMI
+
+var-dec-comma:
+    dec-comma:COMMA var-dec-colon
 
 line:
     control:control
@@ -38,7 +51,11 @@ value:
     str:STR
     char:CHAR
     cast:LPAREN type RPAREN value
-    comp-lit:composite-literal
+    comp-lit:LPAREN type array-index-def* RPAREN LBRACE comp-entries? RBRACE
+    array-lit:LBRACE array-entries? COMMA? RBRACE
+
+array-entries:
+    entries:expr comma-expr*
 
 comma-expr:
     comma-expr:COMMA expr
@@ -46,7 +63,14 @@ comma-expr:
 variable-access:
     deref:ASTERISKS variable-access
     address-of:AMPERSAND variable-access
-    variable:IDEN array-index-access*
+    variable:sub-variable-access inner-sub-variable-access*
+
+sub-variable-access:
+    v:IDEN array-index-access*
+
+inner-sub-variable-access:
+    dot:FULL_STOP sub-variable-access
+    arrow:RIGHT_ARROW sub-variable-access
 
 variable-def:
     pointer:ASTERISKS variable-def
@@ -78,19 +102,26 @@ operator:
 
 statement:
     dec-assign:dec-assign
-    var-dec:type variable-def
+    var-dec:var-dec
     assign:variable-access EQUALS expr
     expr:expr
     return:RETURN expr
 
+var-dec:
+    var-dec:type variable-def
+
 dec-assign:
     standard:type variable-def EQUALS expr
 
-composite-literal:
-    array-val:LBRACE comp-entries? RBRACE
-
 comp-entries:
-    entries:expr comma-expr*
+    entries:comp-entry comma-comp-entry* COMMA?
+
+comma-comp-entry:
+    e:COMMA comp-entry
+
+comp-entry:
+    labelled:FULL_STOP IDEN EQUALS expr
+    anon:expr
 
 params:
     params:expr comma-expr*

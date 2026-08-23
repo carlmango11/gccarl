@@ -25,6 +25,8 @@ RSQUARE: ']'
 PLUS: '+'
 MINUS: '-'
 EEQUALS: '=='
+FULL_STOP: '.'
+RIGHT_ARROW: '->'
 
 INCLUDE: 'include'
 RETURN: 'return'
