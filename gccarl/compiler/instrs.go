@@ -57,6 +57,10 @@ func (i *Instrs) add(s semantic.Size, reg Register, l2 Location) {
 	i.addInstr("add %s, %s", reg.Raw(s), locOperand(s, l2))
 }
 
+func (i *Instrs) addN(s semantic.Size, reg Register, n int) {
+	i.addInstr("add %s, %d", reg.Raw(s), n)
+}
+
 func offsetOperand(s semantic.Size, o Offset) string {
 	return fmt.Sprintf("%s [rbp-%d]", typeInstrSize(s), o)
 }

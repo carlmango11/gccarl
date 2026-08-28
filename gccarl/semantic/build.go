@@ -489,16 +489,22 @@ func (b *builder) fromSubExpr(sub *ast.SubExpr, locals map[ast.IDEN]Type) (*Expr
 			FuncCall: fc,
 		}, nil
 	case ast.SubExprTypeAddressOf:
-		panic("impl")
-		//expr, err := b.toExpr(sub.AddressOf.Expr, locals)
-		//if err != nil {
-		//	return nil, err
-		//}
+		expr, err := b.toExpr(sub.AddressOf.Expr, locals)
+		if err != nil {
+			return nil, err
+		}
 
-		//return &Expr{
-		//	Type: expr.Type,
-		//	AddressOf: expr,
-		//}, nil
+		if !expr.Writeable() {
+			return nil, fmt.Errorf("cannot assign to expression %v", expr)
+		}
+
+		return &Expr{
+			Type: Type{
+				Kind:    KindPointer,
+				SubType: &expr.Type,
+			},
+			AddressOf: expr,
+		}, nil
 	case ast.SubExprTypeDeref:
 		expr, err := b.toExpr(sub.Deref.Expr, locals)
 		if err != nil {
@@ -610,7 +616,10 @@ func (b *builder) toVarExpr(vars map[ast.IDEN]Type, v *ast.SubExpr_VariableOptio
 			e = &Expr{
 				Type: f.Type,
 				Var: &VarExpr{
-					Expr: e,
+					Expr: &Expr{
+						Type:  *typ.SubType,
+						Deref: e,
+					},
 					Fields: []VarRead{
 						b.toVarDirect(x.Arrow.SubVariableAccess),
 					},

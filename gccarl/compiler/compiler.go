@@ -264,6 +264,8 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 	case e.Assign != nil:
 		err := c.compileAssign(instrs, e.Assign.To, e.Assign.Expr, locals)
 		return Location{}, err // TODO: return Loc
+	case e.AddressOf != nil:
+		return c.compileAddressOf(instrs, e.AddressOf, locals)
 	case e.Compare != nil:
 		return c.compileCompare(instrs, e.Compare, locals)
 	case e.Numeric != nil:
@@ -288,6 +290,8 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 				return regLocation(RegA), nil // todo return lit
 			}
 		}
+	case e.Deref != nil:
+		return c.compileDeref(instrs, e.Deref, locals)
 	case e.Var != nil:
 		return c.compileVarExpr(instrs, e.Var, locals)
 		//case e.IndexedVar != nil:
@@ -308,15 +312,14 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 }
 
 func (c *Compiler) compileVarExpr(instrs *Instrs, v *semantic.VarExpr, locals *StackVars) (Location, error) {
-	var offset Offset
+	var loc Location
 	var typ semantic.Type
 
 	fields := v.Fields
 
 	if v.Expr == nil {
 		// direct var
-		var ok bool
-		offset, ok = locals.Offset(v.Fields[0].Name) // todo global
+		offset, ok := locals.Offset(v.Fields[0].Name) // todo global
 		if !ok {
 			return Location{}, fmt.Errorf("undefined variable %s", v.Fields[0].Name)
 		}
@@ -324,23 +327,29 @@ func (c *Compiler) compileVarExpr(instrs *Instrs, v *semantic.VarExpr, locals *S
 		fields = fields[1:]
 
 		typ = v.Type
+		loc = offsetLoc(offset)
 	} else {
-		loc, err := c.compileExpr(instrs, v.Expr, locals)
+		var err error
+		loc, err = c.compileExpr(instrs, v.Expr, locals)
 		if err != nil {
 			return Location{}, err
 		}
 
-		if loc.Type != LTOffset {
-			panic("invalid location")
-		}
-
-		offset = loc.Offset
 		typ = v.Expr.Type // TODO: shit, redundant
 	}
 
-	offset += fieldOffset(typ, fields)
+	index := fieldOffset(typ, fields)
 
-	return offsetLoc(offset), nil
+	switch loc.Type {
+	case LTOffset:
+		loc.Offset += index
+	case LTRegister:
+		instrs.addN(8, loc.Register, int(index))
+	default:
+		panic("invalid location")
+	}
+
+	return loc, nil
 }
 
 func (c *Compiler) stringLabel(id semantic.StringID) DataLabel {
@@ -486,6 +495,49 @@ func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While, locals *Stack
 
 	instrs.addInstr("%v:", skip)
 	return nil
+}
+
+func (c *Compiler) compileAddressOf(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Location, error) {
+	loc, err := c.compileExpr(instrs, e, locals)
+	if err != nil {
+		return Location{}, err
+	}
+
+	if loc.Type != LTOffset {
+		return Location{}, fmt.Errorf("address of %s is not offset", loc.Type)
+	}
+
+	instrs.addInstr("lea %s, [rbp-%d] ; addressOf", RawRAX, loc.Offset)
+
+	//if addr.IsStack() {
+	//	instrs.addInstr("lea %s, [rbp-%d] ; addressOf", RegA.Raw(typ.Size()), addr.stack)
+	//} else {
+	//	panic("impl")
+	//	//instrs.addInstr("lea %s, [rel %s] ; addressOf", RegA.Raw(typ.Size()), addr.label)
+	//}
+
+	return Location{
+		Type:     LTRegister,
+		Register: RegA,
+	}, nil
+}
+
+func (c *Compiler) compileDeref(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Location, error) {
+	loc, err := c.compileExpr(instrs, e, locals)
+	if err != nil {
+		return Location{}, err
+	}
+
+	// loc contains the address of the thing to be deref'd
+	instrs.movLocToReg(e.Type.Size(), loc, RegA)
+
+	// I know it's a pointer so we use full register
+	instrs.movFromAddressToReg(RawRAX, RawRAX)
+
+	return Location{
+		Type:     LTRegister,
+		Register: RegA,
+	}, nil
 }
 
 func typeInstrSize(s semantic.Size) string {

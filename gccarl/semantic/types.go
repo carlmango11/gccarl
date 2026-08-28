@@ -225,7 +225,7 @@ type Expr struct {
 	Numeric   *NumericOpExpr
 	FuncCall  *FuncCall
 	Literal   *Literal
-	AddressOf *AddressOf
+	AddressOf *Expr
 	Var       *VarExpr
 	Deref     *Expr
 	//IndexedVar   *IndexedVar
@@ -276,10 +276,10 @@ type Deref struct {
 	Expr *Expr
 }
 
-type AddressOf struct {
-	Func FuncName
-	Var  []VarRead
-}
+//type AddressOf struct {
+//	Func FuncName
+//	Var  []VarRead
+//}
 
 type VarExpr struct {
 	Expr *Expr

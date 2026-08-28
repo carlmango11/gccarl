@@ -4,8 +4,12 @@ struct Person {
 
 int main() {
     struct Person p = {'X'};
-    p.age = 'Y';
-    char m[] = {p.age};
+
+   struct Person *y;
+
+   y = &p;
+
+    char m[] = {y->age};
 
     print(m, 1);
 }
