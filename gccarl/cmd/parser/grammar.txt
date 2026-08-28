@@ -111,7 +111,7 @@ dec-assign:
 
 initialiser:
     expr:expr
-    list:LBRACE comp-entries? COMMA? RBRACE
+    list:LBRACE comp-entries? RBRACE
 
 comp-entries:
     entries:comp-entry comma-comp-entry* COMMA?

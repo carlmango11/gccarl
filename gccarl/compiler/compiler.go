@@ -184,7 +184,16 @@ func (c *Compiler) compileStructAssign(instrs *Instrs, offset Offset, e *semanti
 			return err
 		}
 
-		field := e.Type.Struct.Fields[i]
+		var field semantic.StructField
+		if v.Name == "" {
+			field = e.Type.Struct.Fields[i]
+		} else {
+			var ok bool
+			field, ok = e.Type.Struct.Field(v.Name)
+			if !ok {
+				return fmt.Errorf("%v is not a field on %v", v.Name, e.Type.Struct.Name)
+			}
+		}
 
 		instrs.movFromReg(field.Type.Size(), reg, offset)
 

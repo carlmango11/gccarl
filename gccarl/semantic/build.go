@@ -264,7 +264,7 @@ func (b *builder) toVarType(typ *ast.Type, arrs []*ast.ArrayIndexDef, isParam bo
 	if typ.Type == ast.TypeTypeStruct {
 		st, ok := b.structs[TypeName(typ.Struct.IDEN)]
 		if !ok {
-			panic("missing struct")
+			panicf("%v is not defined", typ.Struct.IDEN)
 		}
 
 		return st, nil
@@ -274,6 +274,10 @@ func (b *builder) toVarType(typ *ast.Type, arrs []*ast.ArrayIndexDef, isParam bo
 		Kind: KindPrimitive,
 		Prim: astTypeToPrim(typ),
 	}, nil
+}
+
+func panicf(format string, args ...any) {
+	panic(fmt.Sprintf(format, args...))
 }
 
 func astTypeToPrim(typ *ast.Type) PrimitiveType {

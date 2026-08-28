@@ -1,13 +1,17 @@
-char read_char() {
-    char c[1];
-    do_syscall(0, 0, c, 1);
-
-    return c[0];
+struct Person {
+    char age;
 }
 
 int main() {
-    char msg[2] = {'Y', 'E'};
-    int n = 3 < 5;
+    struct Person p = {'X'};
+
+   struct Person *y;
+
+   y = &p;
+
+    char m[] = {y->age};
+
+    print(m, 1);
 }
 
 int print(char msg[], int len) {
