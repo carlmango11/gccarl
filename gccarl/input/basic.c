@@ -1,16 +1,13 @@
 struct Person {
-    Inner i;
-}
-
-struct Inner {
-    int y;
+    char age;
 }
 
 int main() {
-    struct Person p = (Person){
-        .i = 4,
-        45,
-    };
+    struct Person p = {'X'};
+    p.age = 'Y';
+    char m[] = {p.age};
+
+    print(m, 1);
 }
 
 int print(char msg[], int len) {

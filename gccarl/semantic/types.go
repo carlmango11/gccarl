@@ -56,6 +56,16 @@ type StructType struct {
 	Fields []StructField
 }
 
+func (s StructType) Field(name VarName) (StructField, bool) {
+	for _, f := range s.Fields {
+		if f.Name == name {
+			return f, true
+		}
+	}
+
+	return StructField{}, false
+}
+
 type StructField struct {
 	Name VarName
 	Type Type
@@ -128,9 +138,8 @@ type FuncDef struct {
 	ReturnType Type
 	Name       FuncName
 	Params     []*ParamDef
-	//TypeDefs []
-	Locals map[VarName]Type
-	Lines  []*Line
+	Locals     map[VarName]Type
+	Lines      []*Line
 }
 
 type StructDef struct {
@@ -153,9 +162,9 @@ type While struct {
 }
 
 type Statement struct {
-	Assign *Assign
-	Expr   *Expr
-	Return *Expr
+	DeclareInit *DeclareInit
+	Expr        *Expr
+	Return      *Expr
 }
 
 type If struct {
@@ -194,31 +203,48 @@ type NumericOpExpr struct {
 	Right *Expr
 }
 
-type CompLiteralEntry struct {
+type ListEntry struct {
 	Name VarName
 	Expr *Expr
 }
 
 type CompLiteral struct {
-	Entries []*CompLiteralEntry
+	Entries []*ListEntry
+}
+
+type InitList struct {
+	Entries []*ListEntry
 }
 
 type Expr struct {
 	Type Type
 
-	Add          *AddExpr
-	Compare      *CompareOpExpr
-	Numeric      *NumericOpExpr
-	FuncCall     *FuncCall
-	Literal      *Literal
-	AddressOf    *AddressOf
-	Var          []VarRead
-	Deref        *Expr
-	IndexedVar   *IndexedVar
+	Assign    *Assign
+	Add       *AddExpr
+	Compare   *CompareOpExpr
+	Numeric   *NumericOpExpr
+	FuncCall  *FuncCall
+	Literal   *Literal
+	AddressOf *AddressOf
+	Var       *VarExpr
+	Deref     *Expr
+	//IndexedVar   *IndexedVar
 	Cast         *Cast
 	CompLiteral  *CompLiteral
 	ArrayLiteral []*Expr
 	StringID     StringID
+}
+
+func (e *Expr) Writeable() bool {
+	if e.Var != nil {
+		return true
+	}
+
+	if e.Deref != nil {
+		return e.Deref.Writeable()
+	}
+
+	return false
 }
 
 type IndexedVar struct {
@@ -247,7 +273,7 @@ type FuncCall struct {
 }
 
 type Deref struct {
-	Var []VarRead
+	Expr *Expr
 }
 
 type AddressOf struct {
@@ -255,9 +281,11 @@ type AddressOf struct {
 	Var  []VarRead
 }
 
-type VarWrite struct {
-	Direct []VarRead
-	Deref  *VarWrite
+type VarExpr struct {
+	Expr *Expr
+
+	Type   Type
+	Fields []VarRead
 }
 
 type VarRead struct {
@@ -266,8 +294,19 @@ type VarRead struct {
 }
 
 type Assign struct {
-	Var  VarWrite
+	To   *Expr
 	Expr *Expr
+}
+
+type DeclareInit struct {
+	Type        Type
+	Name        VarName
+	Initialiser *Initialiser
+}
+
+type Initialiser struct {
+	Expr *Expr
+	List *InitList
 }
 
 type ParamDef struct {

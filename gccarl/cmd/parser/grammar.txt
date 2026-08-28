@@ -47,23 +47,16 @@ param-def:
 
 value:
     int:NUM
-    variable:variable-access
     str:STR
     char:CHAR
     cast:LPAREN type RPAREN value
     comp-lit:LPAREN type array-index-def* RPAREN LBRACE comp-entries? RBRACE
-    array-lit:LBRACE array-entries? COMMA? RBRACE
 
 array-entries:
     entries:expr comma-expr*
 
 comma-expr:
     comma-expr:COMMA expr
-
-variable-access:
-    deref:ASTERISKS variable-access
-    address-of:AMPERSAND variable-access
-    variable:sub-variable-access inner-sub-variable-access*
 
 sub-variable-access:
     v:IDEN array-index-access*
@@ -88,7 +81,10 @@ expr:
 
 sub-expr:
     value:value
+    variable:sub-variable-access inner-sub-variable-access*
     parens:LPAREN expr RPAREN
+    deref:ASTERISKS expr
+    address-of:AMPERSAND expr
     func-call:IDEN LPAREN params? RPAREN
 
 comp-expr:
@@ -99,11 +95,11 @@ operator:
     equal:EEQUALS
     plus:PLUS
     minus:MINUS
+    assign:EQUALS
 
 statement:
     dec-assign:dec-assign
     var-dec:var-dec
-    assign:variable-access EQUALS expr
     expr:expr
     return:RETURN expr
 
@@ -111,7 +107,11 @@ var-dec:
     var-dec:type variable-def
 
 dec-assign:
-    standard:type variable-def EQUALS expr
+    standard:type variable-def EQUALS initialiser
+
+initialiser:
+    expr:expr
+    list:LBRACE comp-entries? COMMA? RBRACE
 
 comp-entries:
     entries:comp-entry comma-comp-entry* COMMA?

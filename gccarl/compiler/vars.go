@@ -1,6 +1,8 @@
 package compiler
 
 import (
+	"fmt"
+
 	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
@@ -80,4 +82,23 @@ func (lv *StackVars) Address(id semantic.VarName) (Address, bool) {
 
 func (lv *StackVars) Size() semantic.Size {
 	return lv.size
+}
+
+func fieldOffset(t semantic.Type, fs []semantic.VarRead) Offset {
+	if len(fs) == 0 {
+		return 0
+	}
+
+	f := fs[0]
+
+	if t.Kind != semantic.KindStruct {
+		panic(fmt.Sprintf("reading %v from %v", f, t.Kind))
+	}
+
+	sf, ok := t.Struct.Field(f.Name)
+	if !ok {
+		panic(fmt.Sprintf("no %v field on %v", f.Name, t.Struct))
+	}
+
+	return fieldOffset(sf.Type, fs[1:])
 }
