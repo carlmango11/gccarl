@@ -80,34 +80,63 @@ var n15 = &VariableDef {
 	},
 }
 
-var n21 = &Value {
+var n20 = &EntryLabelField {
+	Type: EntryLabelFieldTypeC,
+	C: &EntryLabelField_COption{
+		FULL_STOP: ".",
+		IDEN: "age",
+	},
+}
+
+var n21 = &EntryLabelField {
+	Type: EntryLabelFieldTypeC,
+	C: &EntryLabelField_COption{
+		FULL_STOP: ".",
+		IDEN: "year",
+	},
+}
+
+var n19 = &EntryLabel {
+	Type: EntryLabelTypeL,
+	L: &EntryLabel_LOption{
+		EntryLabelField: n20,
+	},
+}
+
+var n25 = &Value {
 	Type: ValueTypeChar,
 	Char: &Value_CharOption{
 		CHAR: "'X'",
 	},
 }
 
-var n20 = &SubExpr {
+var n24 = &SubExpr {
 	Type: SubExprTypeValue,
 	Value: &SubExpr_ValueOption{
-		Value: n21,
+		Value: n25,
 	},
 }
 
-var n19 = &Expr {
+var n23 = &Expr {
 	Type: ExprTypeSubExpr,
 	SubExpr: &Expr_SubExprOption{
-		SubExpr: n20,
+		SubExpr: n24,
+	},
+}
+
+var n22 = &Initialiser {
+	Type: InitialiserTypeExpr,
+	Expr: &Initialiser_ExprOption{
+		Expr: n23,
 	},
 }
 
 var n18 = &CompEntry {
 	Type: CompEntryTypeLabelled,
 	Labelled: &CompEntry_LabelledOption{
-		FULL_STOP: ".",
-		IDEN: "age",
+		EntryLabel: n19,
 		EQUALS: "=",
-		Expr: n19,
+		Initialiser: n22,
 	},
 }
 

@@ -66,6 +66,16 @@ func (s StructType) Field(name VarName) (StructField, bool) {
 	return StructField{}, false
 }
 
+func (s StructType) FieldIndex(name VarName) int {
+	for i, f := range s.Fields {
+		if f.Name == name {
+			return i
+		}
+	}
+
+	panic("did not find field")
+}
+
 type StructField struct {
 	Name VarName
 	Type Type
@@ -127,6 +137,23 @@ func (t Type) Equals(t2 Type) bool {
 	}
 
 	return true
+}
+
+func (t Type) TakesInitList() bool {
+	return t.Kind == KindArray || t.Kind == KindStruct
+}
+
+func (t Type) Field(i int) (Type, error) {
+	switch t.Kind {
+	case KindArray:
+		return *t.SubType, nil
+	case KindStruct:
+		if i >= len(t.Struct.Fields) {
+			return Type{}, fmt.Errorf("index out of bounds: %d", i)
+		}
+
+		return t.Struct.Fields[i].Type, nil
+	}
 }
 
 type Program struct {
@@ -204,8 +231,8 @@ type NumericOpExpr struct {
 }
 
 type ListEntry struct {
-	Name VarName
-	Expr *Expr
+	Name []VarName
+	Init *Initialiser
 }
 
 type CompLiteral struct {

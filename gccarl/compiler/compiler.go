@@ -179,7 +179,7 @@ func (c *Compiler) compileStructAssign(instrs *Instrs, offset Offset, e *semanti
 	// TODO labelled
 
 	for i, v := range e.Initialiser.List.Entries {
-		reg, err := c.compileExprToReg(instrs, v.Expr, locals)
+		reg, err := c.compileExprToReg(instrs, v.Init, locals)
 		if err != nil {
 			return err
 		}
@@ -209,13 +209,13 @@ func (c *Compiler) compileArrayAssign(instrs *Instrs, startOffset Offset, e *sem
 			return fmt.Errorf("cannot have labelled entries in array initialiser (%v)", v.Name)
 		}
 
-		reg, err := c.compileExprToReg(instrs, v.Expr, locals)
+		reg, err := c.compileExprToReg(instrs, v.Init, locals)
 		if err != nil {
 			return err
 		}
 
-		if !v.Expr.Type.Equals(*e.Type.SubType) {
-			return fmt.Errorf("%v does not match %v", v.Expr, e.Type)
+		if !v.Init.Type.Equals(*e.Type.SubType) {
+			return fmt.Errorf("%v does not match %v", v.Init, e.Type)
 		}
 
 		o := Offset(e.Type.Size()) * Offset(i)

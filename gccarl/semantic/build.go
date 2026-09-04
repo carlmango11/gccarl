@@ -438,7 +438,7 @@ func (b *builder) toExpr(expr *ast.Expr, locals map[ast.IDEN]Type) (*Expr, error
 			}
 
 			return &Expr{
-				Type: rightExpr.Type,
+				Type: leftExpr.Type,
 				Assign: &Assign{
 					To:   leftExpr,
 					Expr: rightExpr,
@@ -674,7 +674,11 @@ func (b *builder) toArrayLit(av *ast.ArrayEntries_EntriesOption, locals map[ast.
 	return exprs, nil
 }
 
-func (b *builder) toInitList(e *ast.CompEntries, locals map[ast.IDEN]Type) (*InitList, error) {
+func (b *builder) toInitList(typ Type, e *ast.CompEntries, locals map[ast.IDEN]Type) (*InitList, error) {
+	if !typ.TakesInitList() {
+		return nil, fmt.Errorf("%v cannot take an initialiser list", typ)
+	}
+
 	exprsNodes := []*ast.CompEntry{e.Entries.CompEntry}
 	for _, e := range e.Entries.CommaCompEntry {
 		exprsNodes = append(exprsNodes, e.E.CompEntry)
@@ -682,34 +686,76 @@ func (b *builder) toInitList(e *ast.CompEntries, locals map[ast.IDEN]Type) (*Ini
 
 	var entries []*ListEntry
 
+	var i int
+
 	for _, node := range exprsNodes {
-		var name VarName
-		var exprNode *ast.Expr
+		var names []VarName
+		var subType Type
 
 		switch node.Type {
 		case ast.CompEntryTypeAnon:
-			exprNode = node.Anon.Expr
+			fieldType, err := typ.Field(i)
+			if err != nil {
+				return nil, err
+			}
+
+			subType = fieldType
 		case ast.CompEntryTypeLabelled:
-			name = VarName(node.Labelled.IDEN)
-			exprNode = node.Labelled.Expr
+			names = []VarName{
+				VarName(node.Labelled.EntryLabel.L.EntryLabelField0.C.IDEN),
+			}
+
+			for _, n := range node.Labelled.EntryLabel.L.EntryLabelField1 {
+				names = append(names, VarName(n.C.IDEN))
+			}
+
+			if typ.Kind != KindStruct {
+				return nil, fmt.Errorf("%v is not a struct so called take label %v", typ, names)
+			}
+
+			fieldType, ok := fieldType(typ, names)
+			if !ok {
+				return nil, fmt.Errorf("%v does not have field %v", typ, names)
+			}
+
+			subType = fieldType
+
+			// jump to labelled field
+			i = typ.Struct.FieldIndex(names[0])
 		}
 
-		expr, err := b.toExpr(exprNode, locals)
+		init, err := b.toInitialiser(subType, node.Anon.Initialiser, locals)
 		if err != nil {
 			return nil, err
 		}
 
+		i++
+
 		// type check TODO
 
 		entries = append(entries, &ListEntry{
-			Name: name,
-			Expr: expr,
+			Name: names,
+			Init: init,
 		})
 	}
 
 	return &InitList{
 		Entries: entries,
 	}, nil
+}
+
+func fieldType(t Type, names []VarName) (Type, bool) {
+	for _, f := range t.Struct.Fields {
+		if f.Name == names[0] {
+			if len(names) == 1 {
+				return f.Type, true
+			}
+
+			return fieldType(f.Type, names[1:])
+		}
+	}
+
+	return Type{}, false
 }
 
 func (b *builder) toFuncCall(call *ast.SubExpr_FuncCallOption, locals map[ast.IDEN]Type) (*FuncCall, error) {
@@ -918,12 +964,12 @@ func (b *builder) toInitialiser(typ Type, init *ast.Initialiser, vars map[ast.ID
 		}, nil
 
 	case ast.InitialiserTypeList:
-		cl, err := b.toInitList(init.List.CompEntries, vars)
+		cl, err := b.toInitList(typ, init.List.CompEntries, vars)
 		if err != nil {
 			return nil, err
 		}
 
-		// TODO: check compatibile
+		// TODO: check compatible
 
 		return &Initialiser{
 			List: cl,

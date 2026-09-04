@@ -207,6 +207,24 @@ func generateOptionType(rk RuleKey, parts []*grammar.Part) string {
 
 	sb.WriteString(fmt.Sprintf("type %s struct {\n", structName))
 
+	hasDup := map[string]bool{}
+
+	for _, part := range parts {
+		if part.Token == "" {
+			ruleCodeName := optionRuleFieldName(part.Rule)
+
+			_, ok := hasDup[ruleCodeName]
+			if !ok {
+				hasDup[ruleCodeName] = false
+				continue
+			}
+
+			hasDup[ruleCodeName] = true
+		}
+	}
+
+	counts := map[string]int{}
+
 	for _, part := range parts {
 		card := ""
 		if part.Cardinality == grammar.CardMultiple {
@@ -217,7 +235,15 @@ func generateOptionType(rk RuleKey, parts []*grammar.Part) string {
 			sb.WriteString(fmt.Sprintf("\t%s %s%s\n", part.Token, card, part.Token))
 		} else {
 			ruleCodeName := optionRuleFieldName(part.Rule)
-			sb.WriteString(fmt.Sprintf("\t%s %s*%s\n", ruleCodeName, card, ruleCodeName))
+
+			var cStr string
+			if hasDup[ruleCodeName] {
+				cStr = fmt.Sprintf("%d", counts[ruleCodeName])
+			}
+
+			counts[ruleCodeName]++
+
+			sb.WriteString(fmt.Sprintf("\t%s%s %s*%s\n", ruleCodeName, cStr, card, ruleCodeName))
 		}
 	}
 

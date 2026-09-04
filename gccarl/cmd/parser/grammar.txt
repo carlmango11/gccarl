@@ -120,8 +120,14 @@ comma-comp-entry:
     e:COMMA comp-entry
 
 comp-entry:
-    labelled:FULL_STOP IDEN EQUALS expr
-    anon:expr
+    labelled:entry-label EQUALS initialiser
+    anon:initialiser
+
+entry-label:
+    l:entry-label-field entry-label-field*
+
+entry-label-field:
+    c:FULL_STOP IDEN
 
 params:
     params:expr comma-expr*

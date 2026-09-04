@@ -1,10 +1,16 @@
 struct Person {
-    char age;
+    struct Address addr;
+    int age;
+}
+
+struct Address {
+    char street;
 }
 
 int main() {
     struct Person p = {
-        .age = 'X',
+        .addr.street = 'X',
+        17,
     };
 }
 
