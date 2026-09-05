@@ -19,11 +19,8 @@ const (
 	CardSingle Cardinality = iota
 	CardZeroOrOne
 	CardMultiple
+	CardOneOrMore // TODO
 )
-
-func (c Cardinality) Optional() bool {
-	return c == CardZeroOrOne || c == CardMultiple
-}
 
 func (c Cardinality) String() string {
 	switch c {
@@ -31,6 +28,8 @@ func (c Cardinality) String() string {
 		return "?"
 	case CardMultiple:
 		return "*"
+	case CardOneOrMore:
+		return "+"
 	default:
 		return ""
 	}
@@ -147,6 +146,9 @@ func parseToken(s string) *Part {
 		s = s[:len(s)-1]
 	} else if strings.HasSuffix(s, "?") {
 		card = CardZeroOrOne
+		s = s[:len(s)-1]
+	} else if strings.HasSuffix(s, "+") {
+		card = CardSingle
 		s = s[:len(s)-1]
 	}
 

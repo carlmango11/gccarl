@@ -3,40 +3,63 @@ package ast
 
 var MainNode = n0
 
-var n6 = &Type {
+var n5 = &Type {
 	Type: TypeTypeChar,
 	Char: &Type_CharOption{
 		CHAR_TYPE: "char",
 	},
 }
 
-var n7 = &VariableDef {
+var n6 = &VariableDef {
+	Type: VariableDefTypeVariable,
+	Variable: &VariableDef_VariableOption{
+		IDEN: "name",
+	},
+}
+
+var n4 = &VarDec {
+	Type: VarDecTypeVarDec,
+	VarDec: &VarDec_VarDecOption{
+		Type: n5,
+		VariableDef: n6,
+	},
+}
+
+var n3 = &VarDecColon {
+	Type: VarDecColonTypeC,
+	C: &VarDecColon_COption{
+		VarDec: n4,
+		SEMI: ";",
+	},
+}
+
+var n9 = &Type {
+	Type: TypeTypeInt,
+	Int: &Type_IntOption{
+		INT_TYPE: "int",
+	},
+}
+
+var n10 = &VariableDef {
 	Type: VariableDefTypeVariable,
 	Variable: &VariableDef_VariableOption{
 		IDEN: "age",
 	},
 }
 
-var n5 = &VarDec {
+var n8 = &VarDec {
 	Type: VarDecTypeVarDec,
 	VarDec: &VarDec_VarDecOption{
-		Type: n6,
-		VariableDef: n7,
+		Type: n9,
+		VariableDef: n10,
 	},
 }
 
-var n4 = &VarDecColon {
+var n7 = &VarDecColon {
 	Type: VarDecColonTypeC,
 	C: &VarDecColon_COption{
-		VarDec: n5,
+		VarDec: n8,
 		SEMI: ";",
-	},
-}
-
-var n3 = &StructBlock {
-	Type: StructBlockTypeBlock,
-	Block: &StructBlock_BlockOption{
-		VarDecColon: n4,
 	},
 }
 
@@ -46,7 +69,10 @@ var n2 = &TypeDef {
 		STRUCT: "struct",
 		IDEN: "Person",
 		LBRACE: "{",
-		StructBlock: n3,
+		VarDecColon: []*VarDecColon {
+			n3,
+			n7,
+		},
 		RBRACE: "}",
 	},
 }
@@ -58,14 +84,14 @@ var n1 = &DecDef {
 	},
 }
 
-var n9 = &Type {
+var n12 = &Type {
 	Type: TypeTypeInt,
 	Int: &Type_IntOption{
 		INT_TYPE: "int",
 	},
 }
 
-var n14 = &Type {
+var n17 = &Type {
 	Type: TypeTypeStruct,
 	Struct: &Type_StructOption{
 		STRUCT: "struct",
@@ -73,132 +99,302 @@ var n14 = &Type {
 	},
 }
 
-var n15 = &VariableDef {
+var n19 = &ArrayIndexDef {
+	Type: ArrayIndexDefTypeArrayIndex,
+	ArrayIndex: &ArrayIndexDef_ArrayIndexOption{
+		LSQUARE: "[",
+		RSQUARE: "]",
+	},
+}
+
+var n18 = &VariableDef {
 	Type: VariableDefTypeVariable,
 	Variable: &VariableDef_VariableOption{
 		IDEN: "p",
+		ArrayIndexDef: []*ArrayIndexDef {
+			n19,
+		},
 	},
 }
 
-var n20 = &EntryLabelField {
-	Type: EntryLabelFieldTypeC,
-	C: &EntryLabelField_COption{
-		FULL_STOP: ".",
-		IDEN: "age",
-	},
-}
-
-var n21 = &EntryLabelField {
-	Type: EntryLabelFieldTypeC,
-	C: &EntryLabelField_COption{
-		FULL_STOP: ".",
-		IDEN: "year",
-	},
-}
-
-var n19 = &EntryLabel {
-	Type: EntryLabelTypeL,
-	L: &EntryLabel_LOption{
-		EntryLabelField: n20,
-	},
-}
-
-var n25 = &Value {
+var n29 = &Value {
 	Type: ValueTypeChar,
 	Char: &Value_CharOption{
 		CHAR: "'X'",
 	},
 }
 
-var n24 = &SubExpr {
+var n28 = &SubExpr {
 	Type: SubExprTypeValue,
 	Value: &SubExpr_ValueOption{
-		Value: n25,
+		Value: n29,
 	},
 }
 
-var n23 = &Expr {
+var n27 = &Expr {
 	Type: ExprTypeSubExpr,
 	SubExpr: &Expr_SubExprOption{
-		SubExpr: n24,
+		SubExpr: n28,
 	},
 }
 
-var n22 = &Initialiser {
+var n26 = &Initialiser {
 	Type: InitialiserTypeExpr,
 	Expr: &Initialiser_ExprOption{
-		Expr: n23,
+		Expr: n27,
 	},
 }
 
-var n18 = &CompEntry {
-	Type: CompEntryTypeLabelled,
-	Labelled: &CompEntry_LabelledOption{
-		EntryLabel: n19,
-		EQUALS: "=",
-		Initialiser: n22,
+var n25 = &CompEntry {
+	Type: CompEntryTypeAnon,
+	Anon: &CompEntry_AnonOption{
+		Initialiser: n26,
 	},
 }
 
-var n17 = &CompEntries {
+var n35 = &Value {
+	Type: ValueTypeInt,
+	Int: &Value_IntOption{
+		NUM: "17",
+	},
+}
+
+var n34 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n35,
+	},
+}
+
+var n33 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n34,
+	},
+}
+
+var n32 = &Initialiser {
+	Type: InitialiserTypeExpr,
+	Expr: &Initialiser_ExprOption{
+		Expr: n33,
+	},
+}
+
+var n31 = &CompEntry {
+	Type: CompEntryTypeAnon,
+	Anon: &CompEntry_AnonOption{
+		Initialiser: n32,
+	},
+}
+
+var n30 = &CommaCompEntry {
+	Type: CommaCompEntryTypeE,
+	E: &CommaCompEntry_EOption{
+		COMMA: ",",
+		CompEntry: n31,
+	},
+}
+
+var n24 = &CompEntries {
 	Type: CompEntriesTypeEntries,
 	Entries: &CompEntries_EntriesOption{
-		CompEntry: n18,
-		COMMA: ",",
+		CompEntry: n25,
+		CommaCompEntry: []*CommaCompEntry {
+			n30,
+		},
 	},
 }
 
-var n16 = &Initialiser {
+var n23 = &Initialiser {
 	Type: InitialiserTypeList,
 	List: &Initialiser_ListOption{
 		LBRACE: "{",
-		CompEntries: n17,
+		CompEntries: n24,
 		RBRACE: "}",
 	},
 }
 
-var n13 = &DecAssign {
+var n22 = &CompEntry {
+	Type: CompEntryTypeAnon,
+	Anon: &CompEntry_AnonOption{
+		Initialiser: n23,
+	},
+}
+
+var n44 = &Value {
+	Type: ValueTypeChar,
+	Char: &Value_CharOption{
+		CHAR: "'Y'",
+	},
+}
+
+var n43 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n44,
+	},
+}
+
+var n42 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n43,
+	},
+}
+
+var n41 = &Initialiser {
+	Type: InitialiserTypeExpr,
+	Expr: &Initialiser_ExprOption{
+		Expr: n42,
+	},
+}
+
+var n40 = &CompEntry {
+	Type: CompEntryTypeAnon,
+	Anon: &CompEntry_AnonOption{
+		Initialiser: n41,
+	},
+}
+
+var n50 = &Value {
+	Type: ValueTypeInt,
+	Int: &Value_IntOption{
+		NUM: "12",
+	},
+}
+
+var n49 = &SubExpr {
+	Type: SubExprTypeValue,
+	Value: &SubExpr_ValueOption{
+		Value: n50,
+	},
+}
+
+var n48 = &Expr {
+	Type: ExprTypeSubExpr,
+	SubExpr: &Expr_SubExprOption{
+		SubExpr: n49,
+	},
+}
+
+var n47 = &Initialiser {
+	Type: InitialiserTypeExpr,
+	Expr: &Initialiser_ExprOption{
+		Expr: n48,
+	},
+}
+
+var n46 = &CompEntry {
+	Type: CompEntryTypeAnon,
+	Anon: &CompEntry_AnonOption{
+		Initialiser: n47,
+	},
+}
+
+var n45 = &CommaCompEntry {
+	Type: CommaCompEntryTypeE,
+	E: &CommaCompEntry_EOption{
+		COMMA: ",",
+		CompEntry: n46,
+	},
+}
+
+var n39 = &CompEntries {
+	Type: CompEntriesTypeEntries,
+	Entries: &CompEntries_EntriesOption{
+		CompEntry: n40,
+		CommaCompEntry: []*CommaCompEntry {
+			n45,
+		},
+	},
+}
+
+var n38 = &Initialiser {
+	Type: InitialiserTypeList,
+	List: &Initialiser_ListOption{
+		LBRACE: "{",
+		CompEntries: n39,
+		RBRACE: "}",
+	},
+}
+
+var n37 = &CompEntry {
+	Type: CompEntryTypeAnon,
+	Anon: &CompEntry_AnonOption{
+		Initialiser: n38,
+	},
+}
+
+var n36 = &CommaCompEntry {
+	Type: CommaCompEntryTypeE,
+	E: &CommaCompEntry_EOption{
+		COMMA: ",",
+		CompEntry: n37,
+	},
+}
+
+var n21 = &CompEntries {
+	Type: CompEntriesTypeEntries,
+	Entries: &CompEntries_EntriesOption{
+		CompEntry: n22,
+		CommaCompEntry: []*CommaCompEntry {
+			n36,
+		},
+		COMMA: ",",
+	},
+}
+
+var n20 = &Initialiser {
+	Type: InitialiserTypeList,
+	List: &Initialiser_ListOption{
+		LBRACE: "{",
+		CompEntries: n21,
+		RBRACE: "}",
+	},
+}
+
+var n16 = &DecAssign {
 	Type: DecAssignTypeStandard,
 	Standard: &DecAssign_StandardOption{
-		Type: n14,
-		VariableDef: n15,
+		Type: n17,
+		VariableDef: n18,
 		EQUALS: "=",
-		Initialiser: n16,
+		Initialiser: n20,
 	},
 }
 
-var n12 = &Statement {
+var n15 = &Statement {
 	Type: StatementTypeDecAssign,
 	DecAssign: &Statement_DecAssignOption{
-		DecAssign: n13,
+		DecAssign: n16,
 	},
 }
 
-var n11 = &StatementComma {
+var n14 = &StatementComma {
 	Type: StatementCommaTypeStatement,
 	Statement: &StatementComma_StatementOption{
-		Statement: n12,
+		Statement: n15,
 		SEMI: ";",
 	},
 }
 
-var n10 = &Line {
+var n13 = &Line {
 	Type: LineTypeStatement,
 	Statement: &Line_StatementOption{
-		StatementComma: n11,
+		StatementComma: n14,
 	},
 }
 
-var n8 = &DecDef {
+var n11 = &DecDef {
 	Type: DecDefTypeFuncDef,
 	FuncDef: &DecDef_FuncDefOption{
-		Type: n9,
+		Type: n12,
 		IDEN: "main",
 		LPAREN: "(",
 		RPAREN: ")",
 		LBRACE: "{",
 		Line: []*Line {
-			n10,
+			n13,
 		},
 		RBRACE: "}",
 	},
@@ -209,7 +405,7 @@ var n0 = &Main {
 	Main: &Main_MainOption{
 		DecDef: []*DecDef {
 			n1,
-			n8,
+			n11,
 		},
 	},
 }

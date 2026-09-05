@@ -84,7 +84,7 @@ func (lv *StackVars) Size() semantic.Size {
 	return lv.size
 }
 
-func fieldOffset(t semantic.Type, fs []semantic.VarRead) Offset {
+func fieldNameOffset(t semantic.Type, fs []semantic.VarRead) Offset {
 	if len(fs) == 0 {
 		return 0
 	}
@@ -100,5 +100,5 @@ func fieldOffset(t semantic.Type, fs []semantic.VarRead) Offset {
 		panic(fmt.Sprintf("no %v field on %v", f.Name, t.Struct))
 	}
 
-	return fieldOffset(sf.Type, fs[1:])
+	return fieldNameOffset(sf.Type, fs[1:])
 }

@@ -691,6 +691,7 @@ func (b *builder) toInitList(typ Type, e *ast.CompEntries, locals map[ast.IDEN]T
 	for _, node := range exprsNodes {
 		var names []VarName
 		var subType Type
+		var initNode *ast.Initialiser
 
 		switch node.Type {
 		case ast.CompEntryTypeAnon:
@@ -700,12 +701,14 @@ func (b *builder) toInitList(typ Type, e *ast.CompEntries, locals map[ast.IDEN]T
 			}
 
 			subType = fieldType
+			initNode = node.Anon.Initialiser
+
 		case ast.CompEntryTypeLabelled:
-			names = []VarName{
-				VarName(node.Labelled.EntryLabel.L.EntryLabelField0.C.IDEN),
+			if len(node.Labelled.EntryLabelField) == 0 {
+				return nil, fmt.Errorf("labelled expression cannot have no label field")
 			}
 
-			for _, n := range node.Labelled.EntryLabel.L.EntryLabelField1 {
+			for _, n := range node.Labelled.EntryLabelField {
 				names = append(names, VarName(n.C.IDEN))
 			}
 
@@ -719,12 +722,13 @@ func (b *builder) toInitList(typ Type, e *ast.CompEntries, locals map[ast.IDEN]T
 			}
 
 			subType = fieldType
+			initNode = node.Labelled.Initialiser
 
 			// jump to labelled field
 			i = typ.Struct.FieldIndex(names[0])
 		}
 
-		init, err := b.toInitialiser(subType, node.Anon.Initialiser, locals)
+		init, err := b.toInitialiser(subType, initNode, locals)
 		if err != nil {
 			return nil, err
 		}
@@ -898,20 +902,10 @@ func (b *builder) defineType(d *ast.DecDef_TypeDefOption) error {
 }
 
 func (b *builder) toStructDef(td *ast.TypeDef_StructDefOption) error {
-	var all []*ast.VarDecColon
-
-	if td.StructBlock.Block.VarDecColon != nil {
-		all = append(all, td.StructBlock.Block.VarDecColon)
-	}
-
-	for _, x := range td.StructBlock.Block.VarDecComma {
-		all = append(all, x.DecComma.VarDecColon)
-	}
-
 	var vars []StructField
 	structVars := map[ast.IDEN]Type{}
 
-	for _, a := range all {
+	for _, a := range td.VarDecColon {
 		t := a.C.VarDec.VarDec.Type
 		def := a.C.VarDec.VarDec.VariableDef
 

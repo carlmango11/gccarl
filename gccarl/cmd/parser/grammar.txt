@@ -7,10 +7,7 @@ dec-def:
     type-def:type-def
 
 type-def:
-    struct-def:STRUCT IDEN LBRACE struct-block RBRACE
-
-struct-block:
-    block:var-dec-colon var-dec-comma*
+    struct-def:STRUCT IDEN LBRACE var-dec-colon* RBRACE
 
 var-dec-colon:
     c:var-dec SEMI
@@ -120,11 +117,8 @@ comma-comp-entry:
     e:COMMA comp-entry
 
 comp-entry:
-    labelled:entry-label EQUALS initialiser
+    labelled:entry-label-field* EQUALS initialiser
     anon:initialiser
-
-entry-label:
-    l:entry-label-field entry-label-field*
 
 entry-label-field:
     c:FULL_STOP IDEN

@@ -151,7 +151,7 @@ func (c *Compiler) compileDecInit(instrs *Instrs, a *semantic.DeclareInit, local
 
 	switch {
 	case a.Initialiser.List != nil:
-		return c.compileInitialiser(instrs, offset, a, locals)
+		return c.compileInitialiser(instrs, a.Type, offset, a.Initialiser, locals)
 	default:
 		reg, err := c.compileExprToReg(instrs, a.Initialiser.Expr, locals)
 		if err != nil {
@@ -164,68 +164,130 @@ func (c *Compiler) compileDecInit(instrs *Instrs, a *semantic.DeclareInit, local
 	}
 }
 
-func (c *Compiler) compileInitialiser(instrs *Instrs, offset Offset, e *semantic.DeclareInit, locals *StackVars) error {
-	switch e.Type.Kind {
-	case semantic.KindArray:
-		return c.compileArrayAssign(instrs, offset, e, locals)
-	case semantic.KindStruct:
-		return c.compileStructAssign(instrs, offset, e, locals)
+func (c *Compiler) compileInitialiser(instrs *Instrs, typ semantic.Type, to Offset, init *semantic.Initialiser, locals *StackVars) error {
+	switch {
+	case init.Expr != nil:
+		loc, err := c.compileExpr(instrs, init.Expr, locals)
+		if err != nil {
+			return err
+		}
+
+		return c.movExprToOffset(instrs, typ, loc, to)
+
+	case init.List != nil:
+		var i int
+
+		for _, entry := range init.List.Entries {
+			if len(entry.Name) > 0 {
+				// jump to this
+				i = fieldNameIndex(typ, entry.Name)
+			}
+
+			// get offset of i
+			fieldOffset, fieldType := fieldByIndex(typ, i)
+			i++
+
+			err := c.compileInitialiser(instrs, fieldType, fieldOffset+to, entry.Init, locals)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
 	default:
 		panic("invalid initialiser type")
 	}
 }
 
-func (c *Compiler) compileStructAssign(instrs *Instrs, offset Offset, e *semantic.DeclareInit, locals *StackVars) error {
-	// TODO labelled
+func fieldByIndex(typ semantic.Type, i int) (Offset, semantic.Type) {
+	switch typ.Kind {
+	case semantic.KindArray:
+		return Offset(typ.SubType.Size()) * Offset(i), *typ.SubType
+	case semantic.KindStruct:
+		var offset Offset
 
-	for i, v := range e.Initialiser.List.Entries {
-		reg, err := c.compileExprToReg(instrs, v.Init, locals)
-		if err != nil {
-			return err
-		}
-
-		var field semantic.StructField
-		if v.Name == "" {
-			field = e.Type.Struct.Fields[i]
-		} else {
-			var ok bool
-			field, ok = e.Type.Struct.Field(v.Name)
-			if !ok {
-				return fmt.Errorf("%v is not a field on %v", v.Name, e.Type.Struct.Name)
+		for j, f := range typ.Struct.Fields {
+			if j == i {
+				return offset, f.Type
 			}
+
+			offset += Offset(f.Type.Size())
 		}
 
-		instrs.movFromReg(field.Type.Size(), reg, offset)
-
-		offset += Offset(field.Type.Size())
+		panic("never reached i")
 	}
 
-	return nil
+	panic("invalid kind")
 }
 
-func (c *Compiler) compileArrayAssign(instrs *Instrs, startOffset Offset, e *semantic.DeclareInit, locals *StackVars) error {
-	for i, v := range e.Initialiser.List.Entries {
-		if v.Name != "" {
-			return fmt.Errorf("cannot have labelled entries in array initialiser (%v)", v.Name)
-		}
-
-		reg, err := c.compileExprToReg(instrs, v.Init, locals)
-		if err != nil {
-			return err
-		}
-
-		if !v.Init.Type.Equals(*e.Type.SubType) {
-			return fmt.Errorf("%v does not match %v", v.Init, e.Type)
-		}
-
-		o := Offset(e.Type.Size()) * Offset(i)
-		offset := startOffset - o
-
-		instrs.movFromReg(e.Type.SubType.Size(), reg, offset)
+func fieldNameIndex(typ semantic.Type, names []semantic.VarName) int {
+	if len(names) > 1 {
+		panic("impl")
 	}
 
-	return nil
+	for i, f := range typ.Struct.Fields {
+		if f.Name == names[0] {
+			return i
+		}
+	}
+
+	panicf("field %s not found", names[0])
+	return 0
 }
+
+//func (c *Compiler) compileStructAssign(instrs *Instrs, offset Offset, e *semantic.DeclareInit, locals *StackVars) error {
+//	// TODO labelled
+//
+//	for i, v := range e.Initialiser.List.Entries {
+//		c.writeInitialiser(instrs, e.Type, offset, e.Initialiser, locals)
+//
+//		reg, err := c.compileExprToReg(instrs, v.Init, locals)
+//		if err != nil {
+//			return err
+//		}
+//
+//		var field semantic.StructField
+//		if v.Name == "" {
+//			field = e.Type.Struct.Fields[i]
+//		} else {
+//			var ok bool
+//			field, ok = e.Type.Struct.Field(v.Name)
+//			if !ok {
+//				return fmt.Errorf("%v is not a field on %v", v.Name, e.Type.Struct.Name)
+//			}
+//		}
+//
+//		instrs.movFromReg(field.Type.Size(), reg, offset)
+//
+//		offset += Offset(field.Type.Size())
+//	}
+//
+//	return nil
+//}
+//
+//func (c *Compiler) compileArrayAssign(instrs *Instrs, startOffset Offset, e *semantic.DeclareInit, locals *StackVars) error {
+//	for i, v := range e.Initialiser.List.Entries {
+//		if v.Name != "" {
+//			return fmt.Errorf("cannot have labelled entries in array initialiser (%v)", v.Name)
+//		}
+//
+//		reg, err := c.compileExprToReg(instrs, v.Init, locals)
+//		if err != nil {
+//			return err
+//		}
+//
+//		if !v.Init.Type.Equals(*e.Type.SubType) {
+//			return fmt.Errorf("%v does not match %v", v.Init, e.Type)
+//		}
+//
+//		o := Offset(e.Type.Size()) * Offset(i)
+//		offset := startOffset - o
+//
+//		instrs.movFromReg(e.Type.SubType.Size(), reg, offset)
+//	}
+//
+//	return nil
+//}
 
 func (c *Compiler) compileAssign(instrs *Instrs, to, e *semantic.Expr, locals *StackVars) error {
 	if to.Deref != nil {
@@ -347,7 +409,7 @@ func (c *Compiler) compileVarExpr(instrs *Instrs, v *semantic.VarExpr, locals *S
 		typ = v.Expr.Type // TODO: shit, redundant
 	}
 
-	index := fieldOffset(typ, fields)
+	index := fieldNameOffset(typ, fields)
 
 	switch loc.Type {
 	case LTOffset:
@@ -547,6 +609,32 @@ func (c *Compiler) compileDeref(instrs *Instrs, e *semantic.Expr, locals *StackV
 		Type:     LTRegister,
 		Register: RegA,
 	}, nil
+}
+
+func (c *Compiler) movExprToOffset(instrs *Instrs, typ semantic.Type, loc Location, to Offset) error {
+	switch loc.Type {
+	case LTRegister:
+		instrs.movFromReg(typ.Size(), loc.Register, to)
+		return nil
+	case LTOffset:
+		left := typ.Size()
+		from := loc.Offset
+
+		for left > 0 {
+			thisMove := min(8, left)
+
+			instrs.movOffsetToReg(thisMove, from, RegA)
+			instrs.movFromReg(thisMove, RegA, to)
+
+			from += Offset(thisMove)
+			to += Offset(thisMove)
+			left -= thisMove
+		}
+
+		return nil
+	default:
+		panic("invalid loc type")
+	}
 }
 
 func typeInstrSize(s semantic.Size) string {

@@ -154,6 +154,8 @@ func (t Type) Field(i int) (Type, error) {
 
 		return t.Struct.Fields[i].Type, nil
 	}
+
+	panic(fmt.Sprintf("%v does not have %v", t, i))
 }
 
 type Program struct {
@@ -256,10 +258,9 @@ type Expr struct {
 	Var       *VarExpr
 	Deref     *Expr
 	//IndexedVar   *IndexedVar
-	Cast         *Cast
-	CompLiteral  *CompLiteral
-	ArrayLiteral []*Expr
-	StringID     StringID
+	Cast        *Cast
+	CompLiteral *CompLiteral
+	StringID    StringID
 }
 
 func (e *Expr) Writeable() bool {
