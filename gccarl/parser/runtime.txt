@@ -1,0 +1,76 @@
+// Parse constructs a fresh typed AST for text. The entire input must match main.
+func Parse(text string) (*Main, error) {
+ reader := tokens.NewReader(tokenDefinitions, text)
+ p := &parseState{}
+ for {
+  token, err := reader.Next()
+  if err == io.EOF { break }
+  if err != nil { return nil, err }
+  p.tokens = append(p.tokens, token)
+ }
+ var tree *Main
+ for _, match := range p.parseMain(0) {
+  if match.end != len(p.tokens) { p.expect(match.end, "end of input"); continue }
+  if tree != nil { return nil, fmt.Errorf("ambiguous input: multiple complete parses") }
+  tree = match.value
+ }
+ if tree != nil { return tree, nil }
+ expected := make([]string, 0, len(p.expected))
+ for name := range p.expected { expected = append(expected, name) }
+ sort.Strings(expected)
+ if p.farthest == len(p.tokens) {
+  return nil, fmt.Errorf("unexpected end of input at token %d; expected %s", p.farthest+1, strings.Join(expected, ", "))
+ }
+ return nil, fmt.Errorf("unexpected token %d (%q); expected %s", p.farthest+1, p.tokens[p.farthest].Val, strings.Join(expected, ", "))
+}
+
+type parseMatch[T any] struct { value T; end int }
+
+func (p *parseState) expect(pos int, name string) {
+ if pos < p.farthest { return }
+ if pos > p.farthest || p.expected == nil { p.farthest = pos; p.expected = map[string]bool{} }
+ p.expected[name] = true
+}
+
+func matchToken[T ~string](p *parseState, pos int, name tokens.Name) []parseMatch[T] {
+ if pos == len(p.tokens) || p.tokens[pos].Name != name { p.expect(pos, string(name)); return nil }
+ return []parseMatch[T]{{value:T(p.tokens[pos].Val), end:pos+1}}
+}
+
+func extendMatches[S, T any](states []parseMatch[S], parse func(int) []parseMatch[T], assign func(*S, T)) []parseMatch[S] {
+ var next []parseMatch[S]
+ for _, state := range states {
+  for _, child := range parse(state.end) {
+   value := state.value
+   assign(&value, child.value)
+   next = append(next, parseMatch[S]{value:value, end:child.end})
+  }
+ }
+ return next
+}
+
+func optionalMatch[T any](parse func(int) []parseMatch[T]) func(int) []parseMatch[T] {
+ return func(pos int) []parseMatch[T] {
+  var zero T
+  return append(parse(pos), parseMatch[T]{value:zero, end:pos})
+ }
+}
+
+func repeatedMatches[T any](parse func(int) []parseMatch[T], minimum int) func(int) []parseMatch[[]T] {
+ return func(pos int) []parseMatch[[]T] {
+  states := []parseMatch[[]T]{{end:pos}}
+  var matches []parseMatch[[]T]
+  for count:=0; len(states)>0; count++ {
+   if count >= minimum { matches = append(matches, states...) }
+   var next []parseMatch[[]T]
+   for _, state := range states {
+    for _, child := range parse(state.end) {
+     values := append(append([]T(nil), state.value...), child.value)
+     next = append(next, parseMatch[[]T]{value:values, end:child.end})
+    }
+   }
+   states = next
+  }
+  return matches
+ }
+}

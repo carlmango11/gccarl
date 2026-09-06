@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/carlmango11/gccarl/gccarl/compiler"
-	"github.com/carlmango11/gccarl/gccarl/generated/ast"
+	"github.com/carlmango11/gccarl/gccarl/generated/cparser"
 	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
@@ -22,15 +22,24 @@ func main() {
 	flag.BoolVar(&debug, "d", false, "enable debug logging")
 	flag.Parse()
 
-	textF, err := os.Open(flag.Args()[0])
+	if flag.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "usage: gccarl -o output.asm program.c")
+		os.Exit(1)
+	}
+
+	text, err := os.ReadFile(flag.Arg(0))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
-	defer textF.Close()
+	tree, err := cparser.Parse(string(text))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 
-	program, err := semantic.Build(ast.MainNode)
+	program, err := semantic.Build(tree)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

@@ -72,6 +72,9 @@ func Parse(input io.Reader) (map[RuleName]*Rule, error) {
 		}
 
 		if tabChars[line[0:1]] {
+			if rules[ruleName] == nil {
+				return nil, fmt.Errorf("option before rule: %s", line)
+			}
 			line = strings.TrimSpace(line)
 			bits := strings.Split(line, ":")
 
@@ -79,8 +82,11 @@ func Parse(input io.Reader) (map[RuleName]*Rule, error) {
 				return nil, fmt.Errorf("invalid syntax: %s", line)
 			}
 
-			label := bits[0]
-			tokenStrs := strings.Split(bits[1], " ")
+			label := strings.TrimSpace(bits[0])
+			if label == "" {
+				return nil, fmt.Errorf("empty option name in rule %q", ruleName)
+			}
+			tokenStrs := strings.Fields(bits[1])
 
 			if len(tokenStrs) == 1 && tokenStrs[0] == "" {
 				tokenStrs = nil
@@ -98,11 +104,18 @@ func Parse(input io.Reader) (map[RuleName]*Rule, error) {
 
 			rules[ruleName].Options = append(rules[ruleName].Options, option)
 		} else {
+			line = strings.TrimSpace(line)
+			if !strings.HasSuffix(line, ":") || len(line) == 1 {
+				return nil, fmt.Errorf("invalid rule: %s", line)
+			}
 			ruleName = RuleName(line[:len(line)-1])
 			rules[ruleName] = &Rule{}
 		}
 	}
 
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
 	err := validate(rules)
 	if err != nil {
 		return nil, err
@@ -112,6 +125,9 @@ func Parse(input io.Reader) (map[RuleName]*Rule, error) {
 }
 
 func validate(rules map[RuleName]*Rule) error {
+	if len(rules) == 0 {
+		return fmt.Errorf("empty grammar")
+	}
 	for ruleName, rule := range rules {
 		if len(rule.Options) == 0 {
 			return fmt.Errorf("no options for rule %q", ruleName)
@@ -148,7 +164,7 @@ func parseToken(s string) *Part {
 		card = CardZeroOrOne
 		s = s[:len(s)-1]
 	} else if strings.HasSuffix(s, "+") {
-		card = CardSingle
+		card = CardOneOrMore
 		s = s[:len(s)-1]
 	}
 

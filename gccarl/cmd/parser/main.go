@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/carlmango11/gccarl/gccarl/parser"
-	"github.com/carlmango11/gccarl/gccarl/tokens"
 )
 
 //go:embed grammar.txt
@@ -18,34 +17,43 @@ var grammar string
 var tokenDef string
 
 func main() {
+	var grammarFile, tokensFile, outDir, packageName string
 	var debug bool
-
+	flag.StringVar(&grammarFile, "grammar", "", "grammar file (defaults to bundled grammar)")
+	flag.StringVar(&tokensFile, "tokens", "", "token definitions (defaults to bundled definitions)")
+	flag.StringVar(&outDir, "out", "generated", "output parent directory")
+	flag.StringVar(&packageName, "package", "ast", "generated package name")
 	flag.BoolVar(&debug, "d", false, "enable debug logging")
 	flag.Parse()
-
-	textF, err := os.Open(flag.Args()[0])
-	if err != nil {
+	if err := generate(grammarFile, tokensFile, outDir, packageName, debug); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		return
+		os.Exit(1)
 	}
+}
 
-	defer textF.Close()
-
-	tk, err := tokens.New(strings.NewReader(tokenDef), textF)
+func generate(grammarFile, tokensFile, outDir, packageName string, debug bool) error {
+	if flag.NArg() != 0 {
+		return fmt.Errorf("generation takes no program argument; use -grammar and -tokens")
+	}
+	grammarText, err := readDefinition(grammarFile, grammar)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
+		return err
 	}
-
-	parser, err := parser.New(strings.NewReader(grammar), true)
+	tokenText, err := readDefinition(tokensFile, tokenDef)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
+		return err
 	}
-
-	err = parser.Parse(tk, "generated", "ast")
+	p, err := parser.New(strings.NewReader(grammarText), debug)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
+		return err
 	}
+	return p.Generate(strings.NewReader(tokenText), outDir, packageName)
+}
+
+func readDefinition(path, fallback string) (string, error) {
+	if path == "" {
+		return fallback, nil
+	}
+	data, err := os.ReadFile(path)
+	return string(data), err
 }

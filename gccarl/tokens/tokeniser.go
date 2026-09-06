@@ -32,7 +32,7 @@ type Reader struct {
 }
 
 func New(tokenDef, textR io.Reader) (*Reader, error) {
-	tokenDefs, err := parseTokenDefs(tokenDef)
+	tokenDefs, err := ParseDefinitions(tokenDef)
 	if err != nil {
 		return nil, err
 	}
@@ -42,10 +42,11 @@ func New(tokenDef, textR io.Reader) (*Reader, error) {
 		return nil, err
 	}
 
-	return &Reader{tokens: tokenDefs, text: string(text)}, nil
+	return NewReader(tokenDefs, string(text)), nil
 }
 
-func parseTokenDefs(r io.Reader) ([]*TokenDef, error) {
+// ParseDefinitions compiles the token definitions for reuse across inputs.
+func ParseDefinitions(r io.Reader) ([]*TokenDef, error) {
 	sc := bufio.NewScanner(r)
 
 	var defs []*TokenDef
@@ -56,7 +57,7 @@ func parseTokenDefs(r io.Reader) ([]*TokenDef, error) {
 			continue
 		}
 
-		bits := strings.Split(line, ":")
+		bits := strings.SplitN(line, ":", 2)
 		if len(bits) != 2 {
 			return nil, fmt.Errorf("tokeniser: invalid token definition: %s", line)
 		}
@@ -64,20 +65,35 @@ func parseTokenDefs(r io.Reader) ([]*TokenDef, error) {
 		name := strings.TrimSpace(bits[0])
 		def := strings.TrimSpace(bits[1])
 
+		if def == "" {
+			return nil, fmt.Errorf("tokeniser: empty definition for %s", name)
+		}
+
+		if def == "'" || def == "''" {
+			return nil, fmt.Errorf("tokeniser: empty literal for %s", name)
+		}
+
 		if def[0] == '\'' && def[len(def)-1] == '\'' {
 			defs = append(defs, &TokenDef{Name: name, Literal: def[1 : len(def)-1]})
 		} else {
 			def = strings.ReplaceAll(def, `\'`, `'`)
 
-			reg, err := regexp.Compile("^" + def)
+			reg, err := regexp.Compile("^(?:" + def + ")")
 			if err != nil {
 				return nil, fmt.Errorf("tokeniser: invalid token definition: %s", def)
+			}
+
+			if reg.MatchString("") {
+				return nil, fmt.Errorf("tokeniser: token %s matches empty input", name)
 			}
 
 			defs = append(defs, &TokenDef{Name: name, Regex: reg})
 		}
 	}
 
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
 	return defs, nil
 }
 
@@ -156,4 +172,9 @@ func (tk *Reader) skipWhitespace() {
 
 func (tk *Reader) Reset() {
 	tk.i = 0
+}
+
+// NewReader tokenizes text using immutable, compiled token definitions.
+func NewReader(definitions []*TokenDef, text string) *Reader {
+	return &Reader{tokens: definitions, text: text}
 }

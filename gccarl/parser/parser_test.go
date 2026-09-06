@@ -73,11 +73,22 @@ type:
 			p, err := New(strings.NewReader(tc.grammar), true)
 			require.NoError(t, err)
 
-			tks, err := tokens.New(tokenDef, tc.text)
+			tks, err := tokens.New(strings.NewReader(tokenDef), strings.NewReader(tc.text))
 			require.NoError(t, err)
 
-			path, err := p.Parse(tks)
+			err = p.Parse(tks, t.TempDir(), "ast")
 			require.NoError(t, err)
+			var path []RuleKey
+			var visit func(*Node)
+			visit = func(n *Node) {
+				path = append(path, n.Key)
+				for _, v := range n.Values {
+					if v.Node != nil {
+						visit(v.Node)
+					}
+				}
+			}
+			visit(p.cursors[0].Top)
 			assert.Equal(t, tc.expected, path)
 		})
 	}

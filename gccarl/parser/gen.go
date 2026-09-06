@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -155,30 +156,21 @@ func (g *Generator) writeValue(val *Value) {
 }
 
 func (g *Generator) generateTypes() {
-	g.types.WriteString("package " + g.packageName)
-
+	g.types.WriteString("package " + g.packageName + "\n")
 	tks := map[tokens.Name]bool{}
-	optionTypes := map[RuleKey][]*grammar.Part{}
-
-	for ruleName, rule := range g.grammar {
-		for _, o := range rule.Options {
-			optionTypes[RuleKey{ruleName, o.Name}] = o.Parts
-
-			for _, p := range o.Parts {
-				if p.Token != "" {
-					tks[p.Token] = true
+	for _, name := range sortedRules(g.grammar) {
+		rule := g.grammar[name]
+		g.types.WriteString(g.generateRuleType(name, rule.Options))
+		for _, option := range rule.Options {
+			g.types.WriteString(generateOptionType(RuleKey{name, option.Name}, option.Parts))
+			for _, part := range option.Parts {
+				if part.Token != "" {
+					tks[part.Token] = true
 				}
 			}
 		}
 	}
-
-	for name, rule := range g.grammar {
-		s := g.generateRuleType(name, rule.Options)
-		g.types.WriteString("\n" + s)
-	}
-
-	g.types.WriteString("\n" + generateTokens(tks))
-	g.types.WriteString("\n" + generateOptionTypes(optionTypes))
+	g.types.WriteString(generateTokens(tks))
 }
 
 func generateOptionTypes(types map[RuleKey][]*grammar.Part) string {
@@ -207,44 +199,9 @@ func generateOptionType(rk RuleKey, parts []*grammar.Part) string {
 
 	sb.WriteString(fmt.Sprintf("type %s struct {\n", structName))
 
-	hasDup := map[string]bool{}
-
-	for _, part := range parts {
-		if part.Token == "" {
-			ruleCodeName := optionRuleFieldName(part.Rule)
-
-			_, ok := hasDup[ruleCodeName]
-			if !ok {
-				hasDup[ruleCodeName] = false
-				continue
-			}
-
-			hasDup[ruleCodeName] = true
-		}
-	}
-
-	counts := map[string]int{}
-
-	for _, part := range parts {
-		card := ""
-		if part.Cardinality == grammar.CardMultiple {
-			card = "[]"
-		}
-
-		if part.Token != "" {
-			sb.WriteString(fmt.Sprintf("\t%s %s%s\n", part.Token, card, part.Token))
-		} else {
-			ruleCodeName := optionRuleFieldName(part.Rule)
-
-			var cStr string
-			if hasDup[ruleCodeName] {
-				cStr = fmt.Sprintf("%d", counts[ruleCodeName])
-			}
-
-			counts[ruleCodeName]++
-
-			sb.WriteString(fmt.Sprintf("\t%s%s %s*%s\n", ruleCodeName, cStr, card, ruleCodeName))
-		}
+	fields := partFields(parts)
+	for i, part := range parts {
+		fmt.Fprintf(&sb, "\t%s %s\n", fields[i], partType(part))
 	}
 
 	sb.WriteString("}\n\n")
@@ -262,7 +219,12 @@ func optionRuleFieldName(r grammar.RuleName) string {
 func generateTokens(tks map[tokens.Name]bool) string {
 	var sb strings.Builder
 
+	names := make([]string, 0, len(tks))
 	for tk := range tks {
+		names = append(names, string(tk))
+	}
+	sort.Strings(names)
+	for _, tk := range names {
 		sb.WriteString(fmt.Sprintf("\ntype %v string", tk))
 	}
 

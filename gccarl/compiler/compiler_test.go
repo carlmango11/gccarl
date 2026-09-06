@@ -1,14 +1,9 @@
 package compiler
 
 import (
-	"bytes"
-	"os"
 	"testing"
 
-	"github.com/carlmango11/gccarl/gccarl/ast"
-	"github.com/carlmango11/gccarl/gccarl/parser"
 	"github.com/carlmango11/gccarl/gccarl/semantic"
-	"github.com/carlmango11/gccarl/gccarl/tokens"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,33 +15,8 @@ func TestGenerator(t *testing.T) {
 }`,
 	}
 
-	tokenDef, err := os.ReadFile("../cmd/gccarl/tokens.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	grammar, err := os.ReadFile("../cmd/gccarl/grammar.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	for _, text := range texts {
-		tk, err := tokens.New(string(tokenDef), text)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		p, err := parser.New(bytes.NewReader(grammar), false)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		parsed, err := p.Parse(tk)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		astProg, err := ast.Build(parsed)
+		astProg, err := cparser.Parse(text)
 		require.NoError(t, err)
 
 		prog, err := semantic.Build(astProg)
@@ -55,5 +25,17 @@ func TestGenerator(t *testing.T) {
 		c := New()
 		_, err = c.Compile(prog)
 		require.NoError(t, err)
+	}
+}
+
+func TestRuntimePrograms(t *testing.T) {
+	for _, text := range []string{"int main() { return 7; }", "int main() { return 42; }"} {
+		tree, err := cparser.Parse(text)
+		require.NoError(t, err)
+		program, err := semantic.Build(tree)
+		require.NoError(t, err)
+		output, err := New().Compile(program)
+		require.NoError(t, err)
+		require.NotEmpty(t, output)
 	}
 }
