@@ -11,3 +11,16 @@ do_syscall:
 	mov rsp, rbp
 	pop rbp
     ret
+
+assert:
+	push rbp
+	mov rbp, rsp
+
+    mov rax, 9
+    mov rdi, rdi
+    mov rsi, rsi
+    syscall
+
+	mov rsp, rbp
+	pop rbp
+    ret

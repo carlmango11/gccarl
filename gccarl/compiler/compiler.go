@@ -38,6 +38,12 @@ type Compiler struct {
 func New() *Compiler {
 	return &Compiler{
 		funcs: map[semantic.FuncName]*FuncDef{
+			"assert": {
+				ReturnType: semantic.Type{
+					Kind: semantic.KindPrimitive,
+					Prim: semantic.PrimInt64,
+				},
+			},
 			"do_syscall": {
 				ReturnType: semantic.Type{
 					Kind: semantic.KindPrimitive,
@@ -74,9 +80,9 @@ func (c *Compiler) compile(prog *semantic.Program) (*Instrs, error) {
 	full.addInstr("_start:")
 
 	full.addInstr("\tcall main")
-	full.addInstr("\tcall exit")
+	full.addInstr("\thlt")
 
-	full.instrs = append(full.instrs, exitRoutine...)
+	full.instrs = append(full.instrs, assertRoutine...)
 
 	for _, fd := range prog.FuncDefs {
 		c.funcs[fd.Name] = &FuncDef{
@@ -144,6 +150,9 @@ func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, local
 }
 
 func (c *Compiler) compileDecInit(instrs *Instrs, a *semantic.DeclareInit, locals *StackVars) error {
+	instrs.addComment("START declare and assign %v", a.Name)
+	defer instrs.addComment("END declare and assign %v", a.Name)
+
 	offset, ok := locals.Offset(a.Name)
 	if !ok {
 		return fmt.Errorf("unknown var %v", a.Name)
@@ -187,7 +196,7 @@ func (c *Compiler) compileInitialiser(instrs *Instrs, typ semantic.Type, to Offs
 			fieldOffset, fieldType := fieldByIndex(typ, i)
 			i++
 
-			err := c.compileInitialiser(instrs, fieldType, fieldOffset+to, entry.Init, locals)
+			err := c.compileInitialiser(instrs, fieldType, to-fieldOffset, entry.Init, locals)
 			if err != nil {
 				return err
 			}
@@ -413,7 +422,7 @@ func (c *Compiler) compileVarExpr(instrs *Instrs, v *semantic.VarExpr, locals *S
 
 	switch loc.Type {
 	case LTOffset:
-		loc.Offset += index
+		loc.Offset -= index
 	case LTRegister:
 		instrs.addN(8, loc.Register, int(index))
 	default:

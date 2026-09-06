@@ -7,11 +7,11 @@ import (
 	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
-var exitRoutine = []Instr{
-	"exit:",
+var assertRoutine = []Instr{
+	"assert:",
 	"\tpush rbp",
 	"\tmov rbp, rsp",
-	"\tmov rax, 60",
+	"\tmov rax, 9",
 	"\tsyscall",
 	"\tpop rbp",
 	"\tret",

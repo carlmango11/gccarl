@@ -30,6 +30,9 @@ func Build(program *cparser.Main) (*Program, error) {
 			"do_syscall": {
 				Kind: KindVoid,
 			},
+			"assert": {
+				Kind: KindVoid,
+			},
 		},
 		structs: make(map[TypeName]Type),
 	}
@@ -54,7 +57,10 @@ func (b *builder) build(p *cparser.Main) (*Program, error) {
 
 			funcDecs = append(funcDecs, f)
 		case cparser.DecDefTypeTypeDef:
-			b.defineType(dd.TypeDef)
+			err := b.defineType(dd.TypeDef)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -433,7 +439,7 @@ func (b *builder) toExpr(expr *cparser.Expr, locals map[cparser.IDEN]Type) (*Exp
 		}
 
 		if compExpr.Operator.Type == cparser.OperatorTypeAssign {
-			if rightExpr.Writeable() {
+			if !leftExpr.Writeable() {
 				return nil, fmt.Errorf("cannot assign to expression %v", rightExpr)
 			}
 
@@ -803,9 +809,13 @@ func (b *builder) toIf(locals map[cparser.IDEN]Type, i *cparser.Control_IfOption
 		return nil, err
 	}
 
-	elseLines, err := b.toLines(locals, i.Else.Else.BlockOrLine)
-	if err != nil {
-		return nil, err
+	var elseLines []*Line
+
+	if i.Else != nil {
+		elseLines, err = b.toLines(locals, i.Else.Else.BlockOrLine)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &If{

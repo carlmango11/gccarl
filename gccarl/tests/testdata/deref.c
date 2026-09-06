@@ -3,5 +3,5 @@ int main() {
     char *p = &c;
     c = *p;
 
-    test_set(1, c);
+    assert('Y', c);
 }

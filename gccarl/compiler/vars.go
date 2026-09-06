@@ -95,10 +95,23 @@ func fieldNameOffset(t semantic.Type, fs []semantic.VarRead) Offset {
 		panic(fmt.Sprintf("reading %v from %v", f, t.Kind))
 	}
 
-	sf, ok := t.Struct.Field(f.Name)
-	if !ok {
-		panic(fmt.Sprintf("no %v field on %v", f.Name, t.Struct))
+	var fieldType semantic.Type
+
+	var offset Offset
+	for _, field := range t.Struct.Fields {
+		if field.Name == f.Name {
+			fieldType = field.Type
+			break
+		}
+
+		offset += Offset(field.Type.Size())
 	}
 
-	return fieldNameOffset(sf.Type, fs[1:])
+	sub := fieldType
+	for _, i := range f.Index {
+		sub = *sub.SubType
+		offset += Offset(i) * Offset(sub.Size())
+	}
+
+	return offset + fieldNameOffset(fieldType, fs[1:])
 }
