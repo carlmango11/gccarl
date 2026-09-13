@@ -107,11 +107,18 @@ func fieldNameOffset(t semantic.Type, fs []semantic.VarRead) Offset {
 		offset += Offset(field.Type.Size())
 	}
 
-	sub := fieldType
-	for _, i := range f.Index {
-		sub = *sub.SubType
-		offset += Offset(i) * Offset(sub.Size())
-	}
+	offset += indexOffset(fieldType, f)
 
 	return offset + fieldNameOffset(fieldType, fs[1:])
+}
+
+func indexOffset(t semantic.Type, f semantic.VarRead) Offset {
+	var offset Offset
+
+	for _, i := range f.Index {
+		t = *t.SubType
+		offset += Offset(i) * Offset(t.Size())
+	}
+
+	return offset
 }

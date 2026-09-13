@@ -404,6 +404,8 @@ func (c *Compiler) compileVarExpr(instrs *Instrs, v *semantic.VarExpr, locals *S
 			return Location{}, fmt.Errorf("undefined variable %s", v.Fields[0].Name)
 		}
 
+		offset -= indexOffset(v.Type, fields[0])
+
 		fields = fields[1:]
 
 		typ = v.Type
