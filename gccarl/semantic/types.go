@@ -16,6 +16,7 @@ const (
 	PrimInt32
 	PrimInt64
 	PrimChar
+	PrimUChar
 	PrimBool
 	PrimFloat32
 )
@@ -183,10 +184,18 @@ type Line struct {
 type Control struct {
 	If    *If
 	While *While
+	For   *For
 }
 
 type While struct {
 	Condition *Expr
+	Lines     []*Line
+}
+
+type For struct {
+	Init      *Statement
+	Condition *Statement
+	Action    *Statement
 	Lines     []*Line
 }
 

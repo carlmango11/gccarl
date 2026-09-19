@@ -22,6 +22,7 @@ line:
 control:
     if:IF LPAREN expr RPAREN block-or-line else?
     while:WHILE LPAREN expr RPAREN LBRACE line* RBRACE
+    for:FOR LPAREN statement? SEMI statement? SEMI statement? RPAREN LBRACE block-or-line RBRACE
 
 block-or-line:
     block:LBRACE line* RBRACE
@@ -131,6 +132,7 @@ comma-expr:
 
 type:
     int:INT_TYPE
+    unsigned-int:UNSIGNED INT_TYPE
     char:CHAR_TYPE
     void:VOID
     custom:IDEN

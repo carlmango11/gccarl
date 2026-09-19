@@ -579,6 +579,39 @@ func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While, locals *Stack
 	return nil
 }
 
+func (c *Compiler) compileFor(instrs *Instrs, f *semantic.For, locals *StackVars) error {
+	c.compileStatement(instrs, f.Init, locals)
+
+	repeat := c.newLabel("repeat")
+	instrs.addInstr("%v:", repeat)
+
+	//loc, err := c.compileExpr(instrs, w.Condition, locals)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//instrs.movLocToReg(w.Condition.Type.Size(), loc, RegA)
+	//instrs.addInstr("mov %s, 1", RawRBX)
+	//
+	//instrs.addInstr("cmp %s, %s", RawRAX, RawRBX)
+	//
+	//skip := c.newLabel("skip")
+	//instrs.addInstr("jne %s", skip)
+	//
+	//for _, l := range w.Lines {
+	//	err := c.compileLine(instrs, l, locals)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
+	//
+	//instrs.addComment("start again")
+	//instrs.addInstr("jmp %s", repeat)
+	//
+	//instrs.addInstr("%v:", skip)
+	return nil
+}
+
 func (c *Compiler) compileAddressOf(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Location, error) {
 	loc, err := c.compileExpr(instrs, e, locals)
 	if err != nil {

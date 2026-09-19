@@ -174,12 +174,14 @@ type ControlType string
 const (
 	ControlTypeIf    ControlType = "if"
 	ControlTypeWhile ControlType = "while"
+	ControlTypeFor   ControlType = "for"
 )
 
 type Control struct {
 	Type  ControlType
 	If    *Control_IfOption
 	While *Control_WhileOption
+	For   *Control_ForOption
 }
 type Control_IfOption struct {
 	IF          IF
@@ -198,6 +200,20 @@ type Control_WhileOption struct {
 	LBRACE LBRACE
 	Line   []*Line
 	RBRACE RBRACE
+}
+
+type Control_ForOption struct {
+	FOR         FOR
+	LPAREN      LPAREN
+	Statement0  *Statement
+	SEMI0       SEMI
+	Statement1  *Statement
+	SEMI1       SEMI
+	Statement2  *Statement
+	RPAREN      RPAREN
+	LBRACE      LBRACE
+	BlockOrLine *BlockOrLine
+	RBRACE      RBRACE
 }
 
 type DecAssignType string
@@ -579,22 +595,29 @@ type SubVariableAccess_VOption struct {
 type TypeType string
 
 const (
-	TypeTypeInt    TypeType = "int"
-	TypeTypeChar   TypeType = "char"
-	TypeTypeVoid   TypeType = "void"
-	TypeTypeCustom TypeType = "custom"
-	TypeTypeStruct TypeType = "struct"
+	TypeTypeInt         TypeType = "int"
+	TypeTypeUnsignedInt TypeType = "unsigned-int"
+	TypeTypeChar        TypeType = "char"
+	TypeTypeVoid        TypeType = "void"
+	TypeTypeCustom      TypeType = "custom"
+	TypeTypeStruct      TypeType = "struct"
 )
 
 type Type struct {
-	Type   TypeType
-	Int    *Type_IntOption
-	Char   *Type_CharOption
-	Void   *Type_VoidOption
-	Custom *Type_CustomOption
-	Struct *Type_StructOption
+	Type        TypeType
+	Int         *Type_IntOption
+	UnsignedInt *Type_UnsignedIntOption
+	Char        *Type_CharOption
+	Void        *Type_VoidOption
+	Custom      *Type_CustomOption
+	Struct      *Type_StructOption
 }
 type Type_IntOption struct {
+	INT_TYPE INT_TYPE
+}
+
+type Type_UnsignedIntOption struct {
+	UNSIGNED UNSIGNED
 	INT_TYPE INT_TYPE
 }
 
@@ -755,6 +778,7 @@ type COMMA string
 type EEQUALS string
 type ELSE string
 type EQUALS string
+type FOR string
 type FULL_STOP string
 type IDEN string
 type IF string
@@ -774,5 +798,6 @@ type RSQUARE string
 type SEMI string
 type STR string
 type STRUCT string
+type UNSIGNED string
 type VOID string
 type WHILE string

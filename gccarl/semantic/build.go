@@ -292,6 +292,8 @@ func astTypeToPrim(typ *cparser.Type) PrimitiveType {
 		return PrimInt32
 	case cparser.TypeTypeChar:
 		return PrimChar
+	case cparser.TypeTypeUnsignedInt:
+		return PrimUChar
 	default:
 		// custom
 		panic("impl")
@@ -851,6 +853,35 @@ func (b *builder) toWhile(locals map[cparser.IDEN]Type, w *cparser.Control_While
 	}, nil
 }
 
+func (b *builder) toFor(locals map[cparser.IDEN]Type, f *cparser.Control_ForOption) (*For, error) {
+	init, err := b.toStatement(locals, f.Statement0)
+	if err != nil {
+		return nil, err
+	}
+
+	cond, err := b.toStatement(locals, f.Statement1)
+	if err != nil {
+		return nil, err
+	}
+
+	action, err := b.toStatement(locals, f.Statement2)
+	if err != nil {
+		return nil, err
+	}
+
+	lines, err := b.toLines(locals, f.BlockOrLine)
+	if err != nil {
+		return nil, err
+	}
+
+	return &For{
+		Init:      init,
+		Condition: cond,
+		Action:    action,
+		Lines:     lines,
+	}, nil
+}
+
 func (b *builder) toControl(locals map[cparser.IDEN]Type, c *cparser.Control) (*Control, error) {
 	switch c.Type {
 	case cparser.ControlTypeIf:
@@ -870,6 +901,15 @@ func (b *builder) toControl(locals map[cparser.IDEN]Type, c *cparser.Control) (*
 
 		return &Control{
 			While: w,
+		}, nil
+	case cparser.ControlTypeFor:
+		f, err := b.toFor(locals, c.For)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Control{
+			For: f,
 		}, nil
 	}
 

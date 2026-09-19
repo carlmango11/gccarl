@@ -78,6 +78,8 @@ func (c *Compiler) compileControl(instrs *Instrs, control *semantic.Control, loc
 		return c.compileIf(instrs, control.If, locals)
 	case control.While != nil:
 		return c.compileWhile(instrs, control.While, locals)
+	case control.For != nil:
+		return c.compileFor(instrs, control.For, locals)
 	}
 
 	panic("invalid control")
