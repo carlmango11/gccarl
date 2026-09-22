@@ -22,13 +22,13 @@ func (a Address) IsStack() bool {
 }
 
 type StackVars struct {
-	vars map[semantic.VarName]*Var
+	vars map[semantic.VarID]*Var
 	size semantic.Size
 }
 
 func newStackVars() *StackVars {
 	return &StackVars{
-		vars: make(map[semantic.VarName]*Var),
+		vars: make(map[semantic.VarID]*Var),
 	}
 }
 
@@ -40,7 +40,7 @@ func (lv *StackVars) Add(size semantic.Size) Offset {
 	return offset
 }
 
-func (lv *StackVars) AddNamed(name semantic.VarName, size semantic.Size) Offset {
+func (lv *StackVars) AddNamed(name semantic.VarID, size semantic.Size) Offset {
 	offset := Offset(lv.size + size)
 
 	lv.vars[name] = &Var{
@@ -54,7 +54,7 @@ func (lv *StackVars) AddNamed(name semantic.VarName, size semantic.Size) Offset 
 	return offset
 }
 
-func (lv *StackVars) AddLabelled(name semantic.VarName, label DataLabel) {
+func (lv *StackVars) AddLabelled(name semantic.VarID, label DataLabel) {
 	lv.vars[name] = &Var{
 		address: Address{
 			label: label,
@@ -62,7 +62,7 @@ func (lv *StackVars) AddLabelled(name semantic.VarName, label DataLabel) {
 	}
 }
 
-func (lv *StackVars) Offset(id semantic.VarName) (Offset, bool) {
+func (lv *StackVars) Offset(id semantic.VarID) (Offset, bool) {
 	v, ok := lv.vars[id]
 	if !ok {
 		return 0, false
@@ -71,7 +71,7 @@ func (lv *StackVars) Offset(id semantic.VarName) (Offset, bool) {
 	return v.address.stack, true
 }
 
-func (lv *StackVars) Address(id semantic.VarName) (Address, bool) {
+func (lv *StackVars) Address(id semantic.VarID) (Address, bool) {
 	v, ok := lv.vars[id]
 	if !ok {
 		return Address{}, false
@@ -84,40 +84,18 @@ func (lv *StackVars) Size() semantic.Size {
 	return lv.size
 }
 
-func fieldNameOffset(t semantic.Type, fs []semantic.VarRead) Offset {
-	if len(fs) == 0 {
-		return 0
-	}
-
-	f := fs[0]
-
+func fieldNameOffset(t semantic.Type, f semantic.FieldName) Offset {
 	if t.Kind != semantic.KindStruct {
 		panic(fmt.Sprintf("reading %v from %v", f, t.Kind))
 	}
 
-	var fieldType semantic.Type
-
 	var offset Offset
 	for _, field := range t.Struct.Fields {
-		if field.Name == f.Name {
-			fieldType = field.Type
+		if field.Name == f {
 			break
 		}
 
 		offset += Offset(field.Type.Size())
-	}
-
-	offset += indexOffset(fieldType, f)
-
-	return offset + fieldNameOffset(fieldType, fs[1:])
-}
-
-func indexOffset(t semantic.Type, f semantic.VarRead) Offset {
-	var offset Offset
-
-	for _, i := range f.Index {
-		t = *t.SubType
-		offset += Offset(i) * Offset(t.Size())
 	}
 
 	return offset

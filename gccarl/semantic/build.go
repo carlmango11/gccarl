@@ -8,10 +8,20 @@ import (
 )
 
 type builder struct {
-	vars    map[cparser.IDEN]Type
-	funcs   map[cparser.IDEN]Type
-	structs map[TypeName]Type // todo local structs
-	strs    []string
+	funcs     map[cparser.IDEN]Type
+	strs      []string
+	scopes    []*Scope
+	nextVarID int
+}
+
+type Var struct {
+	ID   VarID
+	Type Type
+}
+
+type Scope struct {
+	vars    map[cparser.IDEN]Var
+	structs map[cparser.IDEN]Type
 }
 
 var compareOp = map[cparser.OperatorType]CompareOp{
@@ -25,7 +35,6 @@ var numericalOps = map[cparser.OperatorType]NumericOp{
 
 func Build(program *cparser.Main) (*Program, error) {
 	b := &builder{
-		vars: make(map[cparser.IDEN]Type),
 		funcs: map[cparser.IDEN]Type{
 			"do_syscall": {
 				Kind: KindVoid,
@@ -34,7 +43,7 @@ func Build(program *cparser.Main) (*Program, error) {
 				Kind: KindVoid,
 			},
 		},
-		structs: make(map[TypeName]Type),
+		scopes: []*Scope{newScope()},
 	}
 
 	b.funcs["print"] = Type{
@@ -70,8 +79,17 @@ func (b *builder) build(p *cparser.Main) (*Program, error) {
 	}, nil
 }
 
+func (b *builder) newScope() {
+	b.scopes = append(b.scopes, newScope())
+}
+
+func (b *builder) dropScope() {
+	b.scopes = b.scopes[:len(b.scopes)-1]
+}
+
 func (b *builder) toFuncDef(f *cparser.DecDef_FuncDefOption) (*FuncDef, error) {
-	// TODO func scoped types
+	b.newScope()
+	defer b.dropScope()
 
 	returnType, err := b.toReturnType(f.Type)
 	if err != nil {
@@ -80,27 +98,14 @@ func (b *builder) toFuncDef(f *cparser.DecDef_FuncDefOption) (*FuncDef, error) {
 
 	b.funcs[f.IDEN] = returnType
 
-	locals := map[cparser.IDEN]Type{}
-
-	for _, l := range f.Line {
-		switch l.Type {
-		case cparser.LineTypeControl: // TODO
-		case cparser.LineTypeStatement:
-			s := l.Statement.StatementComma.Statement.Statement
-
-			if s.DecAssign != nil {
-				decAssign := s.DecAssign.DecAssign.Standard
-				err := b.declareVar(locals, decAssign.Type, decAssign.VariableDef, false)
-				if err != nil {
-					return nil, err
-				}
-			} else if s.VarDec != nil {
-				err := b.declareVar(locals, s.VarDec.VarDec.VarDec.Type, s.VarDec.VarDec.VarDec.VariableDef, false)
-				if err != nil {
-					return nil, err
-				}
-			}
+	var statements []*Statement
+	for _, s := range f.Block.Block.Statement {
+		statement, err := b.toStatement(s)
+		if err != nil {
+			return nil, err
 		}
+
+		statements = append(statements, statement)
 	}
 
 	var paramDefs []*ParamDef
@@ -116,7 +121,7 @@ func (b *builder) toFuncDef(f *cparser.DecDef_FuncDefOption) (*FuncDef, error) {
 				return nil, err
 			}
 
-			err = b.declareVar(locals, astParam.Param.Type, astParam.Param.VariableDef, true)
+			_, err = b.declareVar(astParam.Param.Type, astParam.Param.VariableDef, true)
 			if err != nil {
 				return nil, err
 			}
@@ -125,76 +130,35 @@ func (b *builder) toFuncDef(f *cparser.DecDef_FuncDefOption) (*FuncDef, error) {
 		}
 	}
 
-	var lines []*Line
-	for _, l := range f.Line {
-		line, err := b.toLine(locals, l)
-		if err != nil {
-			return nil, err
-		}
-
-		if line != nil {
-			lines = append(lines, line)
-		}
-	}
-
-	localsCast := map[VarName]Type{}
-	for k, v := range locals {
-		localsCast[VarName(k)] = v
-	}
-
 	return &FuncDef{
 		ReturnType: returnType,
 		Name:       FuncName(f.IDEN),
-		Locals:     localsCast,
 		Params:     paramDefs,
-		Lines:      lines,
+		Statements: statements,
 	}, nil
 }
 
-func (b *builder) toLine(locals map[cparser.IDEN]Type, l *cparser.Line) (*Line, error) {
-	switch l.Type {
-	case cparser.LineTypeControl:
-		c, err := b.toControl(locals, l.Control.Control)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Line{
-			Control: c,
-		}, nil
-	case cparser.LineTypeStatement:
-		s, err := b.toStatement(locals, l.Statement.StatementComma.Statement.Statement)
-		if err != nil {
-			return nil, err
-		}
-
-		if s == nil {
-			return nil, nil
-		}
-
-		return &Line{
-			Statement: s,
-		}, nil
-	}
-
-	panic("unreachable")
-}
-
-func (b *builder) declareVar(vars map[cparser.IDEN]Type, astType *cparser.Type, v *cparser.VariableDef, isParam bool) error {
+func (b *builder) declareVar(astType *cparser.Type, v *cparser.VariableDef, isParam bool) (Var, error) {
 	typ, err := b.toType(astType, v, isParam)
 	if err != nil {
-		return err
+		return Var{}, err
 	}
 
 	varName := varDefName(v)
 
-	_, ok := vars[varName]
+	_, ok := b.scope().vars[varName]
 	if ok {
-		return fmt.Errorf("variable %s already declared", varName)
+		return Var{}, fmt.Errorf("variable %s already declared", varName)
 	}
 
-	vars[varName] = typ
-	return nil
+	newVar := Var{
+		ID:   b.newVarID(varName),
+		Type: typ,
+	}
+
+	b.scope().vars[varName] = newVar
+
+	return newVar, nil
 }
 
 func varDefName(v *cparser.VariableDef) cparser.IDEN {
@@ -268,7 +232,7 @@ func (b *builder) toVarType(typ *cparser.Type, arrs []*cparser.ArrayIndexDef, is
 	}
 
 	if typ.Type == cparser.TypeTypeStruct {
-		st, ok := b.structs[TypeName(typ.Struct.IDEN)]
+		st, ok := b.structType(typ.Struct.IDEN)
 		if !ok {
 			panicf("%v is not defined", typ.Struct.IDEN)
 		}
@@ -280,6 +244,32 @@ func (b *builder) toVarType(typ *cparser.Type, arrs []*cparser.ArrayIndexDef, is
 		Kind: KindPrimitive,
 		Prim: astTypeToPrim(typ),
 	}, nil
+}
+
+func (b *builder) structType(n cparser.IDEN) (Type, bool) {
+	for i := len(b.scopes) - 1; i >= 0; i-- {
+		s, ok := b.scopes[i].structs[n]
+		if ok {
+			return s, true
+		}
+	}
+
+	return Type{}, false
+}
+
+func (b *builder) getVar(n cparser.IDEN) (Var, error) {
+	for i := len(b.scopes) - 1; i >= 0; i-- {
+		s, ok := b.scopes[i].vars[n]
+		if ok {
+			return s, nil
+		}
+	}
+
+	return Var{}, fmt.Errorf("variable %s not declared", n)
+}
+
+func (b *builder) scope() *Scope {
+	return b.scopes[len(b.scopes)-1]
 }
 
 func panicf(format string, args ...any) {
@@ -332,14 +322,41 @@ func (b *builder) toParamDec(p *cparser.ParamDef) (*ParamDef, error) {
 
 	return &ParamDef{
 		Type: typ,
-		Name: VarName(p.Param.VariableDef.Variable.IDEN),
+		Name: b.newVarID(p.Param.VariableDef.Variable.IDEN),
 	}, nil
 }
 
-func (b *builder) toStatement(vars map[cparser.IDEN]Type, s *cparser.Statement) (*Statement, error) {
+func (b *builder) toStatement(s *cparser.Statement) (*Statement, error) {
 	switch s.Type {
+	case cparser.StatementTypeIf:
+		ifC, err := b.toIf(s.If)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Statement{
+			If: ifC,
+		}, nil
+	case cparser.StatementTypeWhile:
+		w, err := b.toWhile(s.While)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Statement{
+			While: w,
+		}, nil
+	case cparser.StatementTypeFor:
+		f, err := b.toFor(s.For)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Statement{
+			For: f,
+		}, nil
 	case cparser.StatementTypeDecAssign:
-		a, err := b.toDecAssign(vars, s.DecAssign.DecAssign.Standard)
+		a, err := b.toDecAssign(s.DecAssign.DecAssign.Standard)
 		if err != nil {
 			return nil, err
 		}
@@ -348,10 +365,12 @@ func (b *builder) toStatement(vars map[cparser.IDEN]Type, s *cparser.Statement) 
 			DeclareInit: a,
 		}, nil
 	case cparser.StatementTypeVarDec:
-		// handled in the normal local func vars
-		return nil, nil
+		_, err := b.declareVar(s.VarDec.VarDec.VarDec.Type, s.VarDec.VarDec.VarDec.VariableDef, false)
+		if err != nil {
+			return nil, err
+		}
 	case cparser.StatementTypeReturn:
-		expr, err := b.toExpr(s.Return.Expr, vars)
+		expr, err := b.toExpr(s.Return.Expr)
 		if err != nil {
 			return nil, err
 		}
@@ -360,7 +379,7 @@ func (b *builder) toStatement(vars map[cparser.IDEN]Type, s *cparser.Statement) 
 			Return: expr,
 		}, nil
 	case cparser.StatementTypeExpr:
-		expr, err := b.toExpr(s.Expr.Expr, vars)
+		expr, err := b.toExpr(s.Expr.Expr)
 		if err != nil {
 			return nil, err
 		}
@@ -373,69 +392,35 @@ func (b *builder) toStatement(vars map[cparser.IDEN]Type, s *cparser.Statement) 
 	panic("invalid statement: " + s.Type)
 }
 
-func (b *builder) toDecAssign(vars map[cparser.IDEN]Type, a *cparser.DecAssign_StandardOption) (*DeclareInit, error) {
-	varName := varDefName(a.VariableDef)
-
-	varType, ok := vars[varName]
-	if !ok {
-		varType, ok = vars[varName] // todo global
-		if !ok {
-			return nil, fmt.Errorf("variable %s not declared", varName)
-		}
+func (b *builder) toDecAssign(a *cparser.DecAssign_StandardOption) (*DeclareInit, error) {
+	v, err := b.declareVar(a.Type, a.VariableDef, false)
+	if err != nil {
+		return nil, err
 	}
 
-	init, err := b.toInitialiser(varType, a.Initialiser, vars)
+	init, err := b.toInitialiser(v.Type, a.Initialiser)
 	if err != nil {
 		return nil, err
 	}
 
 	return &DeclareInit{
-		Type:        varType,
-		Name:        VarName(varName),
+		Type:        v.Type,
+		Var:         v.ID,
 		Initialiser: init,
 	}, nil
 }
 
-func (b *builder) toVarDirect(v *cparser.SubVariableAccess) VarRead {
-	var index []int
-	for _, ia := range v.V.ArrayIndexAccess {
-		i, err := strconv.Atoi(string(ia.ArrayIndex.NUM))
-		if err != nil {
-			panic(fmt.Sprintf("invalid array index %v: %v", ia.ArrayIndex.NUM, err))
-		}
-
-		index = append(index, i)
-	}
-
-	return VarRead{
-		Name:  VarName(v.V.IDEN),
-		Index: index,
-	}
-}
-
-func (b *builder) getVarType(vars map[cparser.IDEN]Type, name cparser.IDEN) (Type, error) {
-	typ, ok := vars[name]
-	if !ok {
-		typ, ok = b.vars[name]
-		if !ok {
-			return Type{}, fmt.Errorf("variable %s not declared", name)
-		}
-	}
-
-	return typ, nil
-}
-
-func (b *builder) toExpr(expr *cparser.Expr, locals map[cparser.IDEN]Type) (*Expr, error) {
+func (b *builder) toExpr(expr *cparser.Expr) (*Expr, error) {
 	switch expr.Type {
 	case cparser.ExprTypeComp:
 		compExpr := expr.Comp.CompExpr.CompExpr
 
-		rightExpr, err := b.toExpr(compExpr.Expr, locals)
+		rightExpr, err := b.toExpr(compExpr.Expr)
 		if err != nil {
 			return nil, err
 		}
 
-		leftExpr, err := b.fromSubExpr(compExpr.SubExpr, locals)
+		leftExpr, err := b.fromSubExpr(compExpr.SubExpr)
 		if err != nil {
 			return nil, err
 		}
@@ -477,16 +462,16 @@ func (b *builder) toExpr(expr *cparser.Expr, locals map[cparser.IDEN]Type) (*Exp
 			},
 		}, nil
 	case cparser.ExprTypeSubExpr:
-		return b.fromSubExpr(expr.SubExpr.SubExpr, locals)
+		return b.fromSubExpr(expr.SubExpr.SubExpr)
 	}
 
 	panic("invalid expression: " + string(expr.Type))
 }
 
-func (b *builder) fromSubExpr(sub *cparser.SubExpr, locals map[cparser.IDEN]Type) (*Expr, error) {
+func (b *builder) fromSubExpr(sub *cparser.SubExpr) (*Expr, error) {
 	switch sub.Type {
 	case cparser.SubExprTypeFuncCall:
-		fc, err := b.toFuncCall(sub.FuncCall, locals)
+		fc, err := b.toFuncCall(sub.FuncCall)
 		if err != nil {
 			return nil, err
 		}
@@ -501,7 +486,7 @@ func (b *builder) fromSubExpr(sub *cparser.SubExpr, locals map[cparser.IDEN]Type
 			FuncCall: fc,
 		}, nil
 	case cparser.SubExprTypeAddressOf:
-		expr, err := b.toExpr(sub.AddressOf.Expr, locals)
+		expr, err := b.toExpr(sub.AddressOf.Expr)
 		if err != nil {
 			return nil, err
 		}
@@ -518,7 +503,7 @@ func (b *builder) fromSubExpr(sub *cparser.SubExpr, locals map[cparser.IDEN]Type
 			AddressOf: expr,
 		}, nil
 	case cparser.SubExprTypeDeref:
-		expr, err := b.toExpr(sub.Deref.Expr, locals)
+		expr, err := b.toExpr(sub.Deref.Expr)
 		if err != nil {
 			return nil, err
 		}
@@ -528,7 +513,7 @@ func (b *builder) fromSubExpr(sub *cparser.SubExpr, locals map[cparser.IDEN]Type
 			Deref: expr,
 		}, nil
 	case cparser.SubExprTypeVariable:
-		return b.toVarExpr(locals, sub.Variable)
+		return b.fromVarOption(sub.Variable)
 	case cparser.SubExprTypeValue:
 		v := sub.Value
 
@@ -568,99 +553,119 @@ func (b *builder) fromSubExpr(sub *cparser.SubExpr, locals map[cparser.IDEN]Type
 					Char: v.Value.Char.CHAR[1],
 				},
 			}, nil
-			//case ast.ValueTypeCompLit:
-			//	av := v.Value.CompLit.CompEntries
-			//
-			//	typ, err := b.toVarType(v.Value.CompLit.Type, v.Value.CompLit.ArrayIndexDef, false)
-			//	if err != nil {
-			//		return nil, err
-			//	}
-			//
-			//	compLit, err := b.toInitList(av, locals)
-			//	if err != nil {
-			//		return nil, err
-			//	}
-			//
-			//	return &Expr{
-			//		Type:        typ,
-			//		CompLiteral: compLit,
-			//	}, nil
 		}
 	}
 
 	panic("invalid sub expression: " + string(sub.Type))
 }
 
-func (b *builder) toVarExpr(vars map[cparser.IDEN]Type, v *cparser.SubExpr_VariableOption) (*Expr, error) {
-	e := &Expr{}
-
-	typ, err := b.getVarType(vars, v.SubVariableAccess.V.IDEN)
+func (b *builder) fromVarOption(vo *cparser.SubExpr_VariableOption) (*Expr, error) {
+	v, err := b.getVar(vo.SubVariableAccess.V.IDEN)
 	if err != nil {
 		return nil, err
 	}
 
-	e.Type = typ
-	e.Var = &VarExpr{
-		Type:   typ,
-		Fields: []VarRead{b.toVarDirect(v.SubVariableAccess)},
+	e := &Expr{
+		Type: v.Type,
+		Var:  &v.ID,
 	}
 
-	name := v.SubVariableAccess.V.IDEN
-
-	for _, x := range v.InnerSubVariableAccess {
-		switch x.Type {
-		case cparser.InnerSubVariableAccessTypeArrow:
-			if typ.Kind != KindPointer {
-				return nil, fmt.Errorf("cannot use %v->%v for non-pointer", name, x.Arrow.SubVariableAccess.V.IDEN)
-			}
-
-			if typ.SubType.Kind != KindStruct {
-				return nil, fmt.Errorf("%v is not a struct", name)
-			}
-
-			f, ok := typ.SubType.Struct.Field(VarName(x.Arrow.SubVariableAccess.V.IDEN))
-			if !ok {
-				return nil, fmt.Errorf("%v does not have field %v", name, x.Arrow.SubVariableAccess.V.IDEN)
-			}
-
-			name = x.Arrow.SubVariableAccess.V.IDEN
-
-			e = &Expr{
-				Type: f.Type,
-				Var: &VarExpr{
-					Expr: &Expr{
-						Type:  *typ.SubType,
-						Deref: e,
-					},
-					Fields: []VarRead{
-						b.toVarDirect(x.Arrow.SubVariableAccess),
-					},
-					Type: f.Type,
-				},
-			}
-
-		case cparser.InnerSubVariableAccessTypeDot:
-			if typ.Kind != KindStruct {
-				return nil, fmt.Errorf("%v is not a struct", name)
-			}
-
-			f, ok := typ.Struct.Field(VarName(x.Dot.SubVariableAccess.V.IDEN))
-			if !ok {
-				return nil, fmt.Errorf("%v does not have field %v", name, x.Dot.SubVariableAccess.V.IDEN)
-			}
-
-			typ = f.Type
-			name = x.Dot.SubVariableAccess.V.IDEN
-
-			e.Type = f.Type
-			e.Var.Fields = append(e.Var.Fields, b.toVarDirect(x.Dot.SubVariableAccess))
-		}
-	}
-
-	return e, nil
+	return b.fromVarOptionRecursive(e, string(vo.SubVariableAccess.V.IDEN), vo.InnerSubVariableAccess)
 }
 
-func (b *builder) toArrayLit(av *cparser.ArrayEntries_EntriesOption, locals map[cparser.IDEN]Type) ([]*Expr, error) {
+func (b *builder) fromVarOptionRecursive(inner *Expr, parentName string, sub []*cparser.InnerSubVariableAccess) (*Expr, error) {
+	if len(sub) == 0 {
+		return inner, nil
+	}
+
+	x := sub[0]
+	rest := sub[1:]
+
+	var structType Type
+	var subVar *cparser.SubVariableAccess
+
+	switch x.Type {
+	case cparser.InnerSubVariableAccessTypeDot:
+		if inner.Type.Kind != KindStruct {
+			return nil, fmt.Errorf("%v is not a struct", parentName)
+		}
+
+		structType = inner.Type
+		subVar = x.Dot.SubVariableAccess
+
+	case cparser.InnerSubVariableAccessTypeArrow:
+		if inner.Type.Kind != KindPointer {
+			return nil, fmt.Errorf("cannot use %v->%v for non-pointer", parentName, x.Arrow.SubVariableAccess.V.IDEN)
+		}
+
+		structType = *inner.Type.SubType
+		subVar = x.Arrow.SubVariableAccess
+
+		inner = &Expr{
+			Type:  *inner.Type.SubType,
+			Deref: inner,
+		}
+
+	default:
+		panic("invalid sub expression: " + string(x.Type))
+	}
+
+	if structType.Kind != KindStruct {
+		return nil, fmt.Errorf("%v is not a struct", parentName)
+	}
+
+	f, ok := structType.Struct.Field(FieldName(subVar.V.IDEN))
+	if !ok {
+		return nil, fmt.Errorf("%v does not have field %v", parentName, subVar.V.IDEN)
+	}
+
+	inner = &Expr{
+		Type: f.Type,
+		Field: &FieldExpr{
+			Expr:  inner,
+			Field: f.Name,
+		},
+	}
+
+	// array indexing
+	var err error
+	inner, err = wrapArrayIndexing(inner, string(f.Name), subVar.V.ArrayIndexAccess)
+	if err != nil {
+		return nil, err
+	}
+
+	return b.fromVarOptionRecursive(inner, string(f.Name), rest)
+}
+
+func wrapArrayIndexing(inner *Expr, parentName string, arr []*cparser.ArrayIndexAccess) (*Expr, error) {
+	if len(arr) == 0 {
+		return inner, nil
+	}
+
+	x := arr[0]
+	rest := arr[1:]
+
+	if !inner.Type.Indexable() {
+		return nil, fmt.Errorf("%v is not indexable", parentName)
+	}
+
+	idx, err := strconv.Atoi(string(x.ArrayIndex.NUM))
+	if err != nil {
+		return nil, fmt.Errorf("invalid array index %v: %v", x.ArrayIndex.NUM, err)
+	}
+
+	inner = &Expr{
+		Type: *inner.Type.SubType,
+		Index: &IndexExpr{
+			Expr:  inner,
+			Index: idx,
+		},
+	}
+
+	return wrapArrayIndexing(inner, "fix me", rest) // todo fix parent
+}
+
+func (b *builder) toArrayLit(av *cparser.ArrayEntries_EntriesOption) ([]*Expr, error) {
 	exprsNodes := []*cparser.Expr{av.Expr}
 	for _, e := range av.CommaExpr {
 		exprsNodes = append(exprsNodes, e.CommaExpr.Expr)
@@ -669,7 +674,7 @@ func (b *builder) toArrayLit(av *cparser.ArrayEntries_EntriesOption, locals map[
 	var exprs []*Expr
 
 	for _, astExpr := range exprsNodes {
-		expr, err := b.toExpr(astExpr, locals)
+		expr, err := b.toExpr(astExpr)
 		if err != nil {
 			return nil, err
 		}
@@ -682,7 +687,7 @@ func (b *builder) toArrayLit(av *cparser.ArrayEntries_EntriesOption, locals map[
 	return exprs, nil
 }
 
-func (b *builder) toInitList(typ Type, e *cparser.CompEntries, locals map[cparser.IDEN]Type) (*InitList, error) {
+func (b *builder) toInitList(typ Type, e *cparser.CompEntries) (*InitList, error) {
 	if !typ.TakesInitList() {
 		return nil, fmt.Errorf("%v cannot take an initialiser list", typ)
 	}
@@ -697,7 +702,7 @@ func (b *builder) toInitList(typ Type, e *cparser.CompEntries, locals map[cparse
 	var i int
 
 	for _, node := range exprsNodes {
-		var names []VarName
+		var names []FieldName
 		var subType Type
 		var initNode *cparser.Initialiser
 
@@ -717,7 +722,7 @@ func (b *builder) toInitList(typ Type, e *cparser.CompEntries, locals map[cparse
 			}
 
 			for _, n := range node.Labelled.EntryLabelField {
-				names = append(names, VarName(n.C.IDEN))
+				names = append(names, FieldName(n.C.IDEN))
 			}
 
 			if typ.Kind != KindStruct {
@@ -736,7 +741,7 @@ func (b *builder) toInitList(typ Type, e *cparser.CompEntries, locals map[cparse
 			i = typ.Struct.FieldIndex(names[0])
 		}
 
-		init, err := b.toInitialiser(subType, initNode, locals)
+		init, err := b.toInitialiser(subType, initNode)
 		if err != nil {
 			return nil, err
 		}
@@ -756,7 +761,7 @@ func (b *builder) toInitList(typ Type, e *cparser.CompEntries, locals map[cparse
 	}, nil
 }
 
-func fieldType(t Type, names []VarName) (Type, bool) {
+func fieldType(t Type, names []FieldName) (Type, bool) {
 	for _, f := range t.Struct.Fields {
 		if f.Name == names[0] {
 			if len(names) == 1 {
@@ -770,7 +775,7 @@ func fieldType(t Type, names []VarName) (Type, bool) {
 	return Type{}, false
 }
 
-func (b *builder) toFuncCall(call *cparser.SubExpr_FuncCallOption, locals map[cparser.IDEN]Type) (*FuncCall, error) {
+func (b *builder) toFuncCall(call *cparser.SubExpr_FuncCallOption) (*FuncCall, error) {
 	var params []*cparser.Expr
 	if call.Params != nil {
 		params = append(params, call.Params.Params.Expr)
@@ -782,7 +787,7 @@ func (b *builder) toFuncCall(call *cparser.SubExpr_FuncCallOption, locals map[cp
 
 	var args []*Expr
 	for _, e := range params {
-		arg, err := b.toExpr(e, locals)
+		arg, err := b.toExpr(e)
 		if err != nil {
 			return nil, err
 		}
@@ -796,8 +801,8 @@ func (b *builder) toFuncCall(call *cparser.SubExpr_FuncCallOption, locals map[cp
 	}, nil
 }
 
-func (b *builder) toIf(locals map[cparser.IDEN]Type, i *cparser.Control_IfOption) (*If, error) {
-	expr, err := b.toExpr(i.Expr, locals)
+func (b *builder) toIf(i *cparser.Statement_IfOption) (*If, error) {
+	expr, err := b.toExpr(i.Expr)
 	if err != nil {
 		return nil, err
 	}
@@ -806,29 +811,29 @@ func (b *builder) toIf(locals map[cparser.IDEN]Type, i *cparser.Control_IfOption
 		return nil, fmt.Errorf("if condition must be a boolean")
 	}
 
-	ifLines, err := b.toLines(locals, i.BlockOrLine)
+	ifLines, err := b.bosToStatements(i.BlockOrStatement)
 	if err != nil {
 		return nil, err
 	}
 
-	var elseLines []*Line
+	var elseStatements []*Statement
 
 	if i.Else != nil {
-		elseLines, err = b.toLines(locals, i.Else.Else.BlockOrLine)
+		elseStatements, err = b.bosToStatements(i.Else.Else.BlockOrStatement)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &If{
-		Condition: expr,
-		Lines:     ifLines,
-		ElseLines: elseLines,
+		Condition:      expr,
+		Statements:     ifLines,
+		ElseStatements: elseStatements,
 	}, nil
 }
 
-func (b *builder) toWhile(locals map[cparser.IDEN]Type, w *cparser.Control_WhileOption) (*While, error) {
-	expr, err := b.toExpr(w.Expr, locals)
+func (b *builder) toWhile(w *cparser.Statement_WhileOption) (*While, error) {
+	expr, err := b.toExpr(w.Expr)
 	if err != nil {
 		return nil, err
 	}
@@ -837,98 +842,62 @@ func (b *builder) toWhile(locals map[cparser.IDEN]Type, w *cparser.Control_While
 		return nil, fmt.Errorf("if condition must be a boolean")
 	}
 
-	var lines []*Line
-	for _, n := range w.Line {
-		l, err := b.toLine(locals, n)
-		if err != nil {
-			return nil, err
-		}
-
-		lines = append(lines, l)
+	statements, err := b.bosToStatements(w.BlockOrStatement)
+	if err != nil {
+		return nil, err
 	}
 
 	return &While{
-		Condition: expr,
-		Lines:     lines,
+		Condition:  expr,
+		Statements: statements,
 	}, nil
 }
 
-func (b *builder) toFor(locals map[cparser.IDEN]Type, f *cparser.Control_ForOption) (*For, error) {
-	init, err := b.toStatement(locals, f.Statement0)
+func (b *builder) toFor(f *cparser.Statement_ForOption) (*For, error) {
+	init, err := b.toStatement(f.Statement0)
 	if err != nil {
 		return nil, err
 	}
 
-	cond, err := b.toStatement(locals, f.Statement1)
+	cond, err := b.toStatement(f.Statement1)
 	if err != nil {
 		return nil, err
 	}
 
-	action, err := b.toStatement(locals, f.Statement2)
+	action, err := b.toStatement(f.Statement2)
 	if err != nil {
 		return nil, err
 	}
 
-	lines, err := b.toLines(locals, f.BlockOrLine)
+	lines, err := b.bosToStatements(f.BlockOrStatement)
 	if err != nil {
 		return nil, err
 	}
 
 	return &For{
-		Init:      init,
-		Condition: cond,
-		Action:    action,
-		Lines:     lines,
+		Init:       init,
+		Condition:  cond,
+		Action:     action,
+		Statements: lines,
 	}, nil
 }
 
-func (b *builder) toControl(locals map[cparser.IDEN]Type, c *cparser.Control) (*Control, error) {
-	switch c.Type {
-	case cparser.ControlTypeIf:
-		ifC, err := b.toIf(locals, c.If)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Control{
-			If: ifC,
-		}, nil
-	case cparser.ControlTypeWhile:
-		w, err := b.toWhile(locals, c.While)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Control{
-			While: w,
-		}, nil
-	case cparser.ControlTypeFor:
-		f, err := b.toFor(locals, c.For)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Control{
-			For: f,
-		}, nil
-	}
-
-	panic("invalid control")
-}
-
-func (b *builder) toLines(locals map[cparser.IDEN]Type, e *cparser.BlockOrLine) ([]*Line, error) {
+func (b *builder) bosToStatements(e *cparser.BlockOrStatement) ([]*Statement, error) {
 	switch e.Type {
-	case cparser.BlockOrLineTypeLine:
-		l, err := b.toLine(locals, e.Line.Line)
+	case cparser.BlockOrStatementTypeStatement:
+		l, err := b.toStatement(e.Statement.Statement)
 		if err != nil {
 			return nil, err
 		}
 
-		return []*Line{l}, nil
-	case cparser.BlockOrLineTypeBlock:
-		var all []*Line
-		for _, n := range e.Block.Line {
-			l, err := b.toLine(locals, n)
+		return []*Statement{l}, nil
+	case cparser.BlockOrStatementTypeBlock:
+		b.newScope()
+		defer b.dropScope()
+
+		var all []*Statement
+		for _, n := range e.Block.Block.Block.Statement {
+			l, err := b.toStatement(n)
 			if err != nil {
 				return nil, err
 			}
@@ -939,7 +908,7 @@ func (b *builder) toLines(locals map[cparser.IDEN]Type, e *cparser.BlockOrLine) 
 		return all, nil
 	}
 
-	panic("invalid block or lines")
+	panic("invalid block or statement")
 }
 
 func (b *builder) defineType(d *cparser.DecDef_TypeDefOption) error {
@@ -953,16 +922,20 @@ func (b *builder) defineType(d *cparser.DecDef_TypeDefOption) error {
 
 func (b *builder) toStructDef(td *cparser.TypeDef_StructDefOption) error {
 	var vars []StructField
-	structVars := map[cparser.IDEN]Type{}
+	structVars := map[cparser.IDEN]bool{}
 
 	for _, a := range td.VarDecColon {
 		t := a.C.VarDec.VarDec.Type
 		def := a.C.VarDec.VarDec.VariableDef
 
-		err := b.declareVar(structVars, t, def, false) // checks for dups
-		if err != nil {
-			return err
+		fieldName := varDefName(def)
+
+		_, ok := structVars[fieldName]
+		if ok {
+			return fmt.Errorf("duplicate field name %s on %s", fieldName, td.IDEN)
 		}
+
+		structVars[fieldName] = true
 
 		typ, err := b.toType(t, def, false)
 		if err != nil {
@@ -970,7 +943,7 @@ func (b *builder) toStructDef(td *cparser.TypeDef_StructDefOption) error {
 		}
 
 		vars = append(vars, StructField{
-			Name: VarName(varDefName(a.C.VarDec.VarDec.VariableDef)),
+			Name: FieldName(fieldName),
 			Type: typ,
 		})
 	}
@@ -982,7 +955,7 @@ func (b *builder) toStructDef(td *cparser.TypeDef_StructDefOption) error {
 		Fields: vars,
 	}
 
-	b.structs[TypeName(td.IDEN)] = Type{
+	b.scope().structs[td.IDEN] = Type{
 		Kind:   KindStruct,
 		Struct: st,
 	}
@@ -990,10 +963,10 @@ func (b *builder) toStructDef(td *cparser.TypeDef_StructDefOption) error {
 	return nil
 }
 
-func (b *builder) toInitialiser(typ Type, init *cparser.Initialiser, vars map[cparser.IDEN]Type) (*Initialiser, error) {
+func (b *builder) toInitialiser(typ Type, init *cparser.Initialiser) (*Initialiser, error) {
 	switch init.Type {
 	case cparser.InitialiserTypeExpr:
-		expr, err := b.toExpr(init.Expr.Expr, vars)
+		expr, err := b.toExpr(init.Expr.Expr)
 		if err != nil {
 			return nil, err
 		}
@@ -1008,7 +981,7 @@ func (b *builder) toInitialiser(typ Type, init *cparser.Initialiser, vars map[cp
 		}, nil
 
 	case cparser.InitialiserTypeList:
-		cl, err := b.toInitList(typ, init.List.CompEntries, vars)
+		cl, err := b.toInitList(typ, init.List.CompEntries)
 		if err != nil {
 			return nil, err
 		}
@@ -1041,20 +1014,14 @@ func (b *builder) handleExprType(varType Type, expr *Expr) (*Expr, error) {
 	return expr, nil
 }
 
-//func (b *builder) rewriteAsStructExpr(structType Type, name ast.IDEN, expr *Expr) *Expr {
-//	sd := b.structs[name]
-//
-//	newExpr := &Expr{
-//		Type: structType,
-//	}
-//
-//	for i := range expr.CompLiteral {
-//		newFieldExpr := checkCompatibility(sd.Fields[i].Type, expr.CompLiteral[i])
-//		newExpr.CompLiteral = append(newExpr.CompLiteral, newFieldExpr)
-//	}
-//
-//	return newExpr
-//}
+func (b *builder) newVarID(iden cparser.IDEN) VarID {
+	b.nextVarID++
+
+	return VarID{
+		ID:   b.nextVarID,
+		Name: VarName(iden),
+	}
+}
 
 func int32Type() Type {
 	return Type{Kind: KindPrimitive, Prim: PrimInt32}
@@ -1084,4 +1051,11 @@ func compatibleTypes(t1, t2 Type) bool {
 	//
 	//return false
 	panic("imlp")
+}
+
+func newScope() *Scope {
+	return &Scope{
+		vars:    make(map[cparser.IDEN]Var),
+		structs: make(map[cparser.IDEN]Type),
+	}
 }

@@ -1,9 +1,6 @@
 package compiler
 
 import (
-	"iter"
-	"sort"
-
 	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
@@ -18,28 +15,24 @@ var assertRoutine = []Instr{
 }
 
 func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
+	c.locals = newStackVars()
+
 	funcInstrs := &Instrs{}
 	funcInstrs.addInstr("push rbp")
 	funcInstrs.addInstr("mov rbp, rsp")
 
-	locals := newStackVars()
 	body := &Instrs{}
 
-	for name, typ := range sortParams(f.Locals) {
-		offset := locals.AddNamed(name, typ.Size())
-		body.addComment("var %s = %d", name, offset)
-	}
+	c.handleParamsDef(body, f.Params)
 
-	c.handleParamsDef(body, f.Params, locals)
-
-	for _, l := range f.Lines {
-		err := c.compileLine(body, l, locals)
+	for _, l := range f.Statements {
+		err := c.compileStatement(body, l)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	stackSize := locals.Size()
+	stackSize := c.locals.Size()
 	if stackSize > 0 {
 		funcInstrs.addInstr("sub rsp, %d", stackSize)
 	}
@@ -53,66 +46,34 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	return funcInstrs, nil
 }
 
-func sortParams(locals map[semantic.VarName]semantic.Type) iter.Seq2[semantic.VarName, semantic.Type] {
-	vals := make([]string, 0, len(locals))
-	for name := range locals {
-		vals = append(vals, string(name))
-	}
-	sort.Strings(vals)
-
-	return func(yield func(semantic.VarName, semantic.Type) bool) {
-		for _, val := range vals {
-			nextKey := semantic.VarName(val)
-			nextVal := locals[nextKey]
-
-			if !yield(nextKey, nextVal) {
-				return
-			}
-		}
-	}
-}
-
-func (c *Compiler) compileControl(instrs *Instrs, control *semantic.Control, locals *StackVars) error {
-	switch {
-	case control.If != nil:
-		return c.compileIf(instrs, control.If, locals)
-	case control.While != nil:
-		return c.compileWhile(instrs, control.While, locals)
-	case control.For != nil:
-		return c.compileFor(instrs, control.For, locals)
-	}
-
-	panic("invalid control")
-}
-
-func (c *Compiler) handleParamsDef(instrs *Instrs, ps []*semantic.ParamDef, locals *StackVars) {
+func (c *Compiler) handleParamsDef(instrs *Instrs, ps []*semantic.ParamDef) {
 	for i, p := range ps {
 		instrs.addComment("receive %s", p.Name)
 
-		offset := locals.AddNamed(p.Name, p.Type.Size())
+		offset := c.locals.AddNamed(p.Name, p.Type.Size())
 		instrs.movFromReg(p.Type.Size(), paramReg[i], offset)
 	}
 }
 
-func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall, locals *StackVars) (Location, error) {
+func (c *Compiler) functionCall(instrs *Instrs, fc *semantic.FuncCall) (Location, error) {
 	paramOffsets := make([]Offset, len(fc.Args))
 
 	for i, expr := range fc.Args {
-		loc, err := c.compileExpr(instrs, expr, locals)
+		loc, err := c.compileExpr(instrs, expr)
 		if err != nil {
 			return Location{}, err
 		}
 
 		switch loc.Type {
 		case LTRegister:
-			offset := locals.Add(expr.Type.Size())
+			offset := c.locals.Add(expr.Type.Size())
 			instrs.movFromReg(expr.Type.Size(), loc.Register, offset)
 
 			paramOffsets[i] = offset
 		case LTOffset:
 			paramOffsets[i] = loc.Offset
 		case LTLabel:
-			offset := locals.Add(8) // pointer
+			offset := c.locals.Add(8) // pointer
 			instrs.movLocToReg(8, loc, RegA)
 			instrs.movFromReg(8, RegA, offset)
 

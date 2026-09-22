@@ -33,10 +33,15 @@ type FuncDef struct {
 type Compiler struct {
 	funcs  map[semantic.FuncName]*FuncDef
 	labelC int
+
+	globals map[semantic.VarID]Offset // TODO relative offset?
+	locals  *StackVars
+	reg     map[Register]bool
 }
 
 func New() *Compiler {
 	return &Compiler{
+		reg: make(map[Register]bool),
 		funcs: map[semantic.FuncName]*FuncDef{
 			"assert": {
 				ReturnType: semantic.Type{
@@ -113,23 +118,13 @@ func (c *Compiler) addDataSection(prog *semantic.Program, full *Instrs) {
 	}
 }
 
-func (c *Compiler) compileLine(instrs *Instrs, l *semantic.Line, locals *StackVars) error {
-	switch {
-	case l.Control != nil:
-		return c.compileControl(instrs, l.Control, locals)
-	case l.Statement != nil:
-		return c.compileStatement(instrs, l.Statement, locals)
-	}
-	panic("invalid")
-}
-
-func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, locals *StackVars) error {
+func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement) error {
 	switch {
 	case s.Expr != nil:
-		_, err := c.compileExpr(instrs, s.Expr, locals)
+		_, err := c.compileExpr(instrs, s.Expr)
 		return err
 	case s.Return != nil:
-		loc, err := c.compileExpr(instrs, s.Return, locals)
+		loc, err := c.compileExpr(instrs, s.Return)
 		if err != nil {
 			return err
 		}
@@ -138,31 +133,34 @@ func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement, local
 
 		return nil
 	case s.DeclareInit != nil:
-		err := c.compileDecInit(instrs, s.DeclareInit, locals)
+		err := c.compileDecInit(instrs, s.DeclareInit)
 		if err != nil {
 			return err
 		}
 
 		return nil
+	case s.If != nil:
+		return c.compileIf(instrs, s.If)
+	case s.While != nil:
+		return c.compileWhile(instrs, s.While)
+	case s.For != nil:
+		return c.compileFor(instrs, s.For)
 	}
 
 	panic("missing statement type")
 }
 
-func (c *Compiler) compileDecInit(instrs *Instrs, a *semantic.DeclareInit, locals *StackVars) error {
-	instrs.addComment("START declare and assign %v", a.Name)
-	defer instrs.addComment("END declare and assign %v", a.Name)
+func (c *Compiler) compileDecInit(instrs *Instrs, a *semantic.DeclareInit) error {
+	instrs.addComment("START declare and assign %v", a.Var)
+	defer instrs.addComment("END declare and assign %v", a.Var)
 
-	offset, ok := locals.Offset(a.Name)
-	if !ok {
-		return fmt.Errorf("unknown var %v", a.Name)
-	}
+	offset := c.locals.AddNamed(a.Var, a.Type.Size())
 
 	switch {
 	case a.Initialiser.List != nil:
-		return c.compileInitialiser(instrs, a.Type, offset, a.Initialiser, locals)
+		return c.compileInitialiser(instrs, a.Type, offset, a.Initialiser)
 	default:
-		reg, err := c.compileExprToReg(instrs, a.Initialiser.Expr, locals)
+		reg, err := c.compileExprToReg(instrs, a.Initialiser.Expr)
 		if err != nil {
 			return err
 		}
@@ -173,10 +171,10 @@ func (c *Compiler) compileDecInit(instrs *Instrs, a *semantic.DeclareInit, local
 	}
 }
 
-func (c *Compiler) compileInitialiser(instrs *Instrs, typ semantic.Type, to Offset, init *semantic.Initialiser, locals *StackVars) error {
+func (c *Compiler) compileInitialiser(instrs *Instrs, typ semantic.Type, to Offset, init *semantic.Initialiser) error {
 	switch {
 	case init.Expr != nil:
-		loc, err := c.compileExpr(instrs, init.Expr, locals)
+		loc, err := c.compileExpr(instrs, init.Expr)
 		if err != nil {
 			return err
 		}
@@ -196,7 +194,7 @@ func (c *Compiler) compileInitialiser(instrs *Instrs, typ semantic.Type, to Offs
 			fieldOffset, fieldType := fieldByIndex(typ, i)
 			i++
 
-			err := c.compileInitialiser(instrs, fieldType, to-fieldOffset, entry.Init, locals)
+			err := c.compileInitialiser(instrs, fieldType, to-fieldOffset, entry.Init)
 			if err != nil {
 				return err
 			}
@@ -229,7 +227,7 @@ func fieldByIndex(typ semantic.Type, i int) (Offset, semantic.Type) {
 	panic("invalid kind")
 }
 
-func fieldNameIndex(typ semantic.Type, names []semantic.VarName) int {
+func fieldNameIndex(typ semantic.Type, names []semantic.FieldName) int {
 	if len(names) > 1 {
 		panic("impl")
 	}
@@ -244,13 +242,13 @@ func fieldNameIndex(typ semantic.Type, names []semantic.VarName) int {
 	return 0
 }
 
-//func (c *Compiler) compileStructAssign(instrs *Instrs, offset Offset, e *semantic.DeclareInit, locals *StackVars) error {
+//func (c *Compiler) compileStructAssign(instrs *Instrs, offset Offset, e *semantic.DeclareInit) error {
 //	// TODO labelled
 //
 //	for i, v := range e.Initialiser.List.Entries {
-//		c.writeInitialiser(instrs, e.Type, offset, e.Initialiser, locals)
+//		c.writeInitialiser(instrs, e.Type, offset, e.Initialiser)
 //
-//		reg, err := c.compileExprToReg(instrs, v.Init, locals)
+//		reg, err := c.compileExprToReg(instrs, v.Init)
 //		if err != nil {
 //			return err
 //		}
@@ -274,13 +272,13 @@ func fieldNameIndex(typ semantic.Type, names []semantic.VarName) int {
 //	return nil
 //}
 //
-//func (c *Compiler) compileArrayAssign(instrs *Instrs, startOffset Offset, e *semantic.DeclareInit, locals *StackVars) error {
+//func (c *Compiler) compileArrayAssign(instrs *Instrs, startOffset Offset, e *semantic.DeclareInit) error {
 //	for i, v := range e.Initialiser.List.Entries {
 //		if v.Name != "" {
 //			return fmt.Errorf("cannot have labelled entries in array initialiser (%v)", v.Name)
 //		}
 //
-//		reg, err := c.compileExprToReg(instrs, v.Init, locals)
+//		reg, err := c.compileExprToReg(instrs, v.Init)
 //		if err != nil {
 //			return err
 //		}
@@ -298,12 +296,12 @@ func fieldNameIndex(typ semantic.Type, names []semantic.VarName) int {
 //	return nil
 //}
 
-func (c *Compiler) compileAssign(instrs *Instrs, to, e *semantic.Expr, locals *StackVars) error {
+func (c *Compiler) compileAssign(instrs *Instrs, to, e *semantic.Expr) error {
 	if to.Deref != nil {
 		panic("handle deref")
 	}
 
-	toLoc, err := c.compileExpr(instrs, to, locals)
+	toLoc, err := c.compileExpr(instrs, to)
 	if err != nil {
 		return err
 	}
@@ -312,7 +310,7 @@ func (c *Compiler) compileAssign(instrs *Instrs, to, e *semantic.Expr, locals *S
 		panicf("cannot write to %v", toLoc.Type)
 	}
 
-	reg, err := c.compileExprToReg(instrs, e, locals)
+	reg, err := c.compileExprToReg(instrs, e)
 	if err != nil {
 		return err
 	}
@@ -322,8 +320,8 @@ func (c *Compiler) compileAssign(instrs *Instrs, to, e *semantic.Expr, locals *S
 	return nil
 }
 
-func (c *Compiler) compileExprToReg(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Register, error) {
-	loc, err := c.compileExpr(instrs, e, locals)
+func (c *Compiler) compileExprToReg(instrs *Instrs, e *semantic.Expr) (Register, error) {
+	loc, err := c.compileExpr(instrs, e)
 	if err != nil {
 		return RegUnset, err
 	}
@@ -339,19 +337,19 @@ func (c *Compiler) compileExprToReg(instrs *Instrs, e *semantic.Expr, locals *St
 	}
 }
 
-func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Location, error) {
+func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr) (Location, error) {
 	switch {
 	case e.Assign != nil:
-		err := c.compileAssign(instrs, e.Assign.To, e.Assign.Expr, locals)
+		err := c.compileAssign(instrs, e.Assign.To, e.Assign.Expr)
 		return Location{}, err // TODO: return Loc
 	case e.AddressOf != nil:
-		return c.compileAddressOf(instrs, e.AddressOf, locals)
+		return c.compileAddressOf(instrs, e.AddressOf)
 	case e.Compare != nil:
-		return c.compileCompare(instrs, e.Compare, locals)
+		return c.compileCompare(instrs, e.Compare)
 	case e.Numeric != nil:
-		return c.compileNumeric(instrs, e.Numeric, locals)
+		return c.compileNumeric(instrs, e.Numeric)
 	case e.FuncCall != nil:
-		return c.functionCall(instrs, e.FuncCall, locals)
+		return c.functionCall(instrs, e.FuncCall)
 	case e.StringID != 0:
 		return Location{
 			Type:  LTLabel,
@@ -371,62 +369,31 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr, locals *StackVa
 			}
 		}
 	case e.Deref != nil:
-		return c.compileDeref(instrs, e.Deref, locals)
+		return c.compileDeref(instrs, e.Deref)
 	case e.Var != nil:
-		return c.compileVarExpr(instrs, e.Var, locals)
-		//case e.IndexedVar != nil:
-		//	offset, ok := locals.Offset(e.IndexedVar.Name)
-		//	if !ok {
-		//		return Location{}, fmt.Errorf("undefined variable: %s", e.Var)
-		//	}
-		//
-		//	offset += Offset(e.IndexedVar.Index) * Offset(e.Type.Size())
-		//
-		//	return Location{
-		//		Type:   LTOffset,
-		//		Offset: offset,
-		//	}, nil
+		return c.varExprLoc(*e.Var)
+	case e.Field != nil:
+		return c.compileFieldExpr(instrs, e.Field)
+	case e.Index != nil:
+		return c.compileIndexExpr(instrs, e.Index)
 	}
 
 	panic(fmt.Sprintf("unknown expr type: %+v", e))
 }
 
-func (c *Compiler) compileVarExpr(instrs *Instrs, v *semantic.VarExpr, locals *StackVars) (Location, error) {
-	var loc Location
-	var typ semantic.Type
-
-	fields := v.Fields
-
-	if v.Expr == nil {
-		// direct var
-		offset, ok := locals.Offset(v.Fields[0].Name) // todo global
-		if !ok {
-			return Location{}, fmt.Errorf("undefined variable %s", v.Fields[0].Name)
-		}
-
-		offset -= indexOffset(v.Type, fields[0])
-
-		fields = fields[1:]
-
-		typ = v.Type
-		loc = offsetLoc(offset)
-	} else {
-		var err error
-		loc, err = c.compileExpr(instrs, v.Expr, locals)
-		if err != nil {
-			return Location{}, err
-		}
-
-		typ = v.Expr.Type // TODO: shit, redundant
+func (c *Compiler) compileIndexExpr(instrs *Instrs, f *semantic.IndexExpr) (Location, error) {
+	loc, err := c.compileExpr(instrs, f.Expr)
+	if err != nil {
+		return Location{}, err
 	}
 
-	index := fieldNameOffset(typ, fields)
+	offset := Offset(f.Expr.Type.Size()) * Offset(f.Index)
 
 	switch loc.Type {
 	case LTOffset:
-		loc.Offset -= index
+		loc.Offset -= offset
 	case LTRegister:
-		instrs.addN(8, loc.Register, int(index))
+		instrs.addN(8, loc.Register, int(offset))
 	default:
 		panic("invalid location")
 	}
@@ -434,12 +401,41 @@ func (c *Compiler) compileVarExpr(instrs *Instrs, v *semantic.VarExpr, locals *S
 	return loc, nil
 }
 
+func (c *Compiler) compileFieldExpr(instrs *Instrs, f *semantic.FieldExpr) (Location, error) {
+	loc, err := c.compileExpr(instrs, f.Expr)
+	if err != nil {
+		return Location{}, err
+	}
+
+	offset := fieldNameOffset(f.Expr.Type, f.Field)
+
+	switch loc.Type {
+	case LTOffset:
+		loc.Offset -= offset
+	case LTRegister:
+		instrs.addN(8, loc.Register, int(offset))
+	default:
+		panic("invalid location")
+	}
+
+	return loc, nil
+}
+
+func (c *Compiler) varExprLoc(v semantic.VarID) (Location, error) {
+	offset, ok := c.locals.Offset(v) // TODO; global
+	if !ok {
+		return Location{}, fmt.Errorf("undefined variable %s", v.Name)
+	}
+
+	return offsetLoc(offset), nil
+}
+
 func (c *Compiler) stringLabel(id semantic.StringID) DataLabel {
 	return DataLabel(fmt.Sprintf("str_%d", id))
 }
 
-func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If, locals *StackVars) error {
-	loc, err := c.compileExpr(instrs, ifs.Condition, locals)
+func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If) error {
+	loc, err := c.compileExpr(instrs, ifs.Condition)
 	if err != nil {
 		return err
 	}
@@ -454,8 +450,8 @@ func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If, locals *StackVars
 
 	instrs.addInstr("jne %s", elseLabel)
 
-	for _, l := range ifs.Lines {
-		err := c.compileLine(instrs, l, locals)
+	for _, s := range ifs.Statements {
+		err := c.compileStatement(instrs, s)
 		if err != nil {
 			return err
 		}
@@ -467,8 +463,8 @@ func (c *Compiler) compileIf(instrs *Instrs, ifs *semantic.If, locals *StackVars
 	// else
 	instrs.addInstr("%s:", elseLabel)
 
-	for _, l := range ifs.ElseLines {
-		err := c.compileLine(instrs, l, locals)
+	for _, s := range ifs.ElseStatements {
+		err := c.compileStatement(instrs, s)
 		if err != nil {
 			return err
 		}
@@ -484,15 +480,15 @@ func (c *Compiler) newLabel(prefix string) string {
 	return fmt.Sprintf("%v_%d", prefix, c.labelC)
 }
 
-func (c *Compiler) compileCompare(instrs *Instrs, e *semantic.CompareOpExpr, locals *StackVars) (Location, error) {
-	rightLoc, err := c.compileExpr(instrs, e.Right, locals)
+func (c *Compiler) compileCompare(instrs *Instrs, e *semantic.CompareOpExpr) (Location, error) {
+	rightLoc, err := c.compileExpr(instrs, e.Right)
 	if err != nil {
 		return Location{}, err
 	}
 
 	instrs.movLocToReg(e.Left.Type.Size(), rightLoc, RegD)
 
-	leftLoc, err := c.compileExpr(instrs, e.Left, locals)
+	leftLoc, err := c.compileExpr(instrs, e.Left)
 	if err != nil {
 		return Location{}, err
 	}
@@ -522,15 +518,15 @@ func (c *Compiler) compileCompare(instrs *Instrs, e *semantic.CompareOpExpr, loc
 	}, nil
 }
 
-func (c *Compiler) compileNumeric(instrs *Instrs, n *semantic.NumericOpExpr, locals *StackVars) (Location, error) {
-	rightLoc, err := c.compileExpr(instrs, n.Right, locals)
+func (c *Compiler) compileNumeric(instrs *Instrs, n *semantic.NumericOpExpr) (Location, error) {
+	rightLoc, err := c.compileExpr(instrs, n.Right)
 	if err != nil {
 		return Location{}, err
 	}
 
 	instrs.movLocToReg(n.Left.Type.Size(), rightLoc, RegD)
 
-	leftLoc, err := c.compileExpr(instrs, n.Left, locals)
+	leftLoc, err := c.compileExpr(instrs, n.Left)
 	if err != nil {
 		return Location{}, err
 	}
@@ -548,11 +544,11 @@ func (c *Compiler) compileNumeric(instrs *Instrs, n *semantic.NumericOpExpr, loc
 	}, nil
 }
 
-func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While, locals *StackVars) error {
+func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While) error {
 	repeat := c.newLabel("repeat")
 	instrs.addInstr("%v:", repeat)
 
-	loc, err := c.compileExpr(instrs, w.Condition, locals)
+	loc, err := c.compileExpr(instrs, w.Condition)
 	if err != nil {
 		return err
 	}
@@ -565,8 +561,8 @@ func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While, locals *Stack
 	skip := c.newLabel("skip")
 	instrs.addInstr("jne %s", skip)
 
-	for _, l := range w.Lines {
-		err := c.compileLine(instrs, l, locals)
+	for _, s := range w.Statements {
+		err := c.compileStatement(instrs, s)
 		if err != nil {
 			return err
 		}
@@ -579,13 +575,13 @@ func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While, locals *Stack
 	return nil
 }
 
-func (c *Compiler) compileFor(instrs *Instrs, f *semantic.For, locals *StackVars) error {
-	c.compileStatement(instrs, f.Init, locals)
+func (c *Compiler) compileFor(instrs *Instrs, f *semantic.For) error {
+	c.compileStatement(instrs, f.Init)
 
 	repeat := c.newLabel("repeat")
 	instrs.addInstr("%v:", repeat)
 
-	//loc, err := c.compileExpr(instrs, w.Condition, locals)
+	//loc, err := c.compileExpr(instrs, w.Condition)
 	//if err != nil {
 	//	return err
 	//}
@@ -599,7 +595,7 @@ func (c *Compiler) compileFor(instrs *Instrs, f *semantic.For, locals *StackVars
 	//instrs.addInstr("jne %s", skip)
 	//
 	//for _, l := range w.Lines {
-	//	err := c.compileLine(instrs, l, locals)
+	//	err := c.compileLine(instrs, l)
 	//	if err != nil {
 	//		return err
 	//	}
@@ -612,8 +608,8 @@ func (c *Compiler) compileFor(instrs *Instrs, f *semantic.For, locals *StackVars
 	return nil
 }
 
-func (c *Compiler) compileAddressOf(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Location, error) {
-	loc, err := c.compileExpr(instrs, e, locals)
+func (c *Compiler) compileAddressOf(instrs *Instrs, e *semantic.Expr) (Location, error) {
+	loc, err := c.compileExpr(instrs, e)
 	if err != nil {
 		return Location{}, err
 	}
@@ -637,8 +633,8 @@ func (c *Compiler) compileAddressOf(instrs *Instrs, e *semantic.Expr, locals *St
 	}, nil
 }
 
-func (c *Compiler) compileDeref(instrs *Instrs, e *semantic.Expr, locals *StackVars) (Location, error) {
-	loc, err := c.compileExpr(instrs, e, locals)
+func (c *Compiler) compileDeref(instrs *Instrs, e *semantic.Expr) (Location, error) {
+	loc, err := c.compileExpr(instrs, e)
 	if err != nil {
 		return Location{}, err
 	}

@@ -2,7 +2,7 @@ main:
   main:dec-def*
 
 dec-def:
-    func-def:type IDEN LPAREN params-def? RPAREN LBRACE line* RBRACE
+    func-def:type IDEN LPAREN params-def? RPAREN block
     dec-assign:dec-assign
     type-def:type-def
 
@@ -15,21 +15,15 @@ var-dec-colon:
 var-dec-comma:
     dec-comma:COMMA var-dec-colon
 
-line:
-    control:control
-    statement:statement-comma
+block:
+    block:LBRACE statement* RBRACE
 
-control:
-    if:IF LPAREN expr RPAREN block-or-line else?
-    while:WHILE LPAREN expr RPAREN LBRACE line* RBRACE
-    for:FOR LPAREN statement? SEMI statement? SEMI statement? RPAREN LBRACE block-or-line RBRACE
-
-block-or-line:
-    block:LBRACE line* RBRACE
-    line:line
+block-or-statement:
+    block:block
+    statement:statement
 
 else:
-    else:ELSE block-or-line
+    else:ELSE block-or-statement
 
 statement-comma:
     statement:statement SEMI
@@ -100,6 +94,10 @@ statement:
     var-dec:var-dec
     expr:expr
     return:RETURN expr
+    if:IF LPAREN expr RPAREN block-or-statement else?
+    while:WHILE LPAREN expr RPAREN block-or-statement
+    for:FOR LPAREN statement? SEMI statement? SEMI statement? RPAREN block-or-statement
+    compound:block
 
 var-dec:
     var-dec:type variable-def

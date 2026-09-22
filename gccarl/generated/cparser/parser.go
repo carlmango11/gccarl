@@ -157,14 +157,14 @@ type parseState struct {
 	cacheArrayEntries           map[int][]parseMatch[*ArrayEntries]
 	cacheArrayIndexAccess       map[int][]parseMatch[*ArrayIndexAccess]
 	cacheArrayIndexDef          map[int][]parseMatch[*ArrayIndexDef]
-	cacheBlockOrLine            map[int][]parseMatch[*BlockOrLine]
+	cacheBlock                  map[int][]parseMatch[*Block]
+	cacheBlockOrStatement       map[int][]parseMatch[*BlockOrStatement]
 	cacheCommaCompEntry         map[int][]parseMatch[*CommaCompEntry]
 	cacheCommaExpr              map[int][]parseMatch[*CommaExpr]
 	cacheCommaParamDef          map[int][]parseMatch[*CommaParamDef]
 	cacheCompEntries            map[int][]parseMatch[*CompEntries]
 	cacheCompEntry              map[int][]parseMatch[*CompEntry]
 	cacheCompExpr               map[int][]parseMatch[*CompExpr]
-	cacheControl                map[int][]parseMatch[*Control]
 	cacheDecAssign              map[int][]parseMatch[*DecAssign]
 	cacheDecDef                 map[int][]parseMatch[*DecDef]
 	cacheElse                   map[int][]parseMatch[*Else]
@@ -172,7 +172,6 @@ type parseState struct {
 	cacheExpr                   map[int][]parseMatch[*Expr]
 	cacheInitialiser            map[int][]parseMatch[*Initialiser]
 	cacheInnerSubVariableAccess map[int][]parseMatch[*InnerSubVariableAccess]
-	cacheLine                   map[int][]parseMatch[*Line]
 	cacheMain                   map[int][]parseMatch[*Main]
 	cacheOperator               map[int][]parseMatch[*Operator]
 	cacheParamDef               map[int][]parseMatch[*ParamDef]
@@ -253,33 +252,52 @@ func (p *parseState) parseArrayIndexDef(pos int) []parseMatch[*ArrayIndexDef] {
 	p.cacheArrayIndexDef[pos] = matches
 	return matches
 }
-func (p *parseState) parseBlockOrLine(pos int) []parseMatch[*BlockOrLine] {
-	if matches, ok := p.cacheBlockOrLine[pos]; ok {
+func (p *parseState) parseBlock(pos int) []parseMatch[*Block] {
+	if matches, ok := p.cacheBlock[pos]; ok {
 		return matches
 	}
-	var matches []parseMatch[*BlockOrLine]
+	var matches []parseMatch[*Block]
 	{
-		states := []parseMatch[BlockOrLine_BlockOption]{{end: pos}}
-		states = extendMatches(states, func(pos int) []parseMatch[LBRACE] { return matchToken[LBRACE](p, pos, "LBRACE") }, func(value *BlockOrLine_BlockOption, child LBRACE) { value.LBRACE = child })
-		states = extendMatches(states, repeatedMatches(p.parseLine, 0), func(value *BlockOrLine_BlockOption, child []*Line) { value.Line = child })
-		states = extendMatches(states, func(pos int) []parseMatch[RBRACE] { return matchToken[RBRACE](p, pos, "RBRACE") }, func(value *BlockOrLine_BlockOption, child RBRACE) { value.RBRACE = child })
+		states := []parseMatch[Block_BlockOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[LBRACE] { return matchToken[LBRACE](p, pos, "LBRACE") }, func(value *Block_BlockOption, child LBRACE) { value.LBRACE = child })
+		states = extendMatches(states, repeatedMatches(p.parseStatement, 0), func(value *Block_BlockOption, child []*Statement) { value.Statement = child })
+		states = extendMatches(states, func(pos int) []parseMatch[RBRACE] { return matchToken[RBRACE](p, pos, "RBRACE") }, func(value *Block_BlockOption, child RBRACE) { value.RBRACE = child })
 		for _, state := range states {
 			value := state.value
-			matches = append(matches, parseMatch[*BlockOrLine]{value: &BlockOrLine{Type: BlockOrLineTypeBlock, Block: &value}, end: state.end})
+			matches = append(matches, parseMatch[*Block]{value: &Block{Type: BlockTypeBlock, Block: &value}, end: state.end})
+		}
+	}
+	if p.cacheBlock == nil {
+		p.cacheBlock = map[int][]parseMatch[*Block]{}
+	}
+	p.cacheBlock[pos] = matches
+	return matches
+}
+func (p *parseState) parseBlockOrStatement(pos int) []parseMatch[*BlockOrStatement] {
+	if matches, ok := p.cacheBlockOrStatement[pos]; ok {
+		return matches
+	}
+	var matches []parseMatch[*BlockOrStatement]
+	{
+		states := []parseMatch[BlockOrStatement_BlockOption]{{end: pos}}
+		states = extendMatches(states, p.parseBlock, func(value *BlockOrStatement_BlockOption, child *Block) { value.Block = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*BlockOrStatement]{value: &BlockOrStatement{Type: BlockOrStatementTypeBlock, Block: &value}, end: state.end})
 		}
 	}
 	{
-		states := []parseMatch[BlockOrLine_LineOption]{{end: pos}}
-		states = extendMatches(states, p.parseLine, func(value *BlockOrLine_LineOption, child *Line) { value.Line = child })
+		states := []parseMatch[BlockOrStatement_StatementOption]{{end: pos}}
+		states = extendMatches(states, p.parseStatement, func(value *BlockOrStatement_StatementOption, child *Statement) { value.Statement = child })
 		for _, state := range states {
 			value := state.value
-			matches = append(matches, parseMatch[*BlockOrLine]{value: &BlockOrLine{Type: BlockOrLineTypeLine, Line: &value}, end: state.end})
+			matches = append(matches, parseMatch[*BlockOrStatement]{value: &BlockOrStatement{Type: BlockOrStatementTypeStatement, Statement: &value}, end: state.end})
 		}
 	}
-	if p.cacheBlockOrLine == nil {
-		p.cacheBlockOrLine = map[int][]parseMatch[*BlockOrLine]{}
+	if p.cacheBlockOrStatement == nil {
+		p.cacheBlockOrStatement = map[int][]parseMatch[*BlockOrStatement]{}
 	}
-	p.cacheBlockOrLine[pos] = matches
+	p.cacheBlockOrStatement[pos] = matches
 	return matches
 }
 func (p *parseState) parseCommaCompEntry(pos int) []parseMatch[*CommaCompEntry] {
@@ -413,62 +431,6 @@ func (p *parseState) parseCompExpr(pos int) []parseMatch[*CompExpr] {
 	p.cacheCompExpr[pos] = matches
 	return matches
 }
-func (p *parseState) parseControl(pos int) []parseMatch[*Control] {
-	if matches, ok := p.cacheControl[pos]; ok {
-		return matches
-	}
-	var matches []parseMatch[*Control]
-	{
-		states := []parseMatch[Control_IfOption]{{end: pos}}
-		states = extendMatches(states, func(pos int) []parseMatch[IF] { return matchToken[IF](p, pos, "IF") }, func(value *Control_IfOption, child IF) { value.IF = child })
-		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Control_IfOption, child LPAREN) { value.LPAREN = child })
-		states = extendMatches(states, p.parseExpr, func(value *Control_IfOption, child *Expr) { value.Expr = child })
-		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Control_IfOption, child RPAREN) { value.RPAREN = child })
-		states = extendMatches(states, p.parseBlockOrLine, func(value *Control_IfOption, child *BlockOrLine) { value.BlockOrLine = child })
-		states = extendMatches(states, optionalMatch(p.parseElse), func(value *Control_IfOption, child *Else) { value.Else = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*Control]{value: &Control{Type: ControlTypeIf, If: &value}, end: state.end})
-		}
-	}
-	{
-		states := []parseMatch[Control_WhileOption]{{end: pos}}
-		states = extendMatches(states, func(pos int) []parseMatch[WHILE] { return matchToken[WHILE](p, pos, "WHILE") }, func(value *Control_WhileOption, child WHILE) { value.WHILE = child })
-		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Control_WhileOption, child LPAREN) { value.LPAREN = child })
-		states = extendMatches(states, p.parseExpr, func(value *Control_WhileOption, child *Expr) { value.Expr = child })
-		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Control_WhileOption, child RPAREN) { value.RPAREN = child })
-		states = extendMatches(states, func(pos int) []parseMatch[LBRACE] { return matchToken[LBRACE](p, pos, "LBRACE") }, func(value *Control_WhileOption, child LBRACE) { value.LBRACE = child })
-		states = extendMatches(states, repeatedMatches(p.parseLine, 0), func(value *Control_WhileOption, child []*Line) { value.Line = child })
-		states = extendMatches(states, func(pos int) []parseMatch[RBRACE] { return matchToken[RBRACE](p, pos, "RBRACE") }, func(value *Control_WhileOption, child RBRACE) { value.RBRACE = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*Control]{value: &Control{Type: ControlTypeWhile, While: &value}, end: state.end})
-		}
-	}
-	{
-		states := []parseMatch[Control_ForOption]{{end: pos}}
-		states = extendMatches(states, func(pos int) []parseMatch[FOR] { return matchToken[FOR](p, pos, "FOR") }, func(value *Control_ForOption, child FOR) { value.FOR = child })
-		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Control_ForOption, child LPAREN) { value.LPAREN = child })
-		states = extendMatches(states, optionalMatch(p.parseStatement), func(value *Control_ForOption, child *Statement) { value.Statement0 = child })
-		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Control_ForOption, child SEMI) { value.SEMI0 = child })
-		states = extendMatches(states, optionalMatch(p.parseStatement), func(value *Control_ForOption, child *Statement) { value.Statement1 = child })
-		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Control_ForOption, child SEMI) { value.SEMI1 = child })
-		states = extendMatches(states, optionalMatch(p.parseStatement), func(value *Control_ForOption, child *Statement) { value.Statement2 = child })
-		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Control_ForOption, child RPAREN) { value.RPAREN = child })
-		states = extendMatches(states, func(pos int) []parseMatch[LBRACE] { return matchToken[LBRACE](p, pos, "LBRACE") }, func(value *Control_ForOption, child LBRACE) { value.LBRACE = child })
-		states = extendMatches(states, p.parseBlockOrLine, func(value *Control_ForOption, child *BlockOrLine) { value.BlockOrLine = child })
-		states = extendMatches(states, func(pos int) []parseMatch[RBRACE] { return matchToken[RBRACE](p, pos, "RBRACE") }, func(value *Control_ForOption, child RBRACE) { value.RBRACE = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*Control]{value: &Control{Type: ControlTypeFor, For: &value}, end: state.end})
-		}
-	}
-	if p.cacheControl == nil {
-		p.cacheControl = map[int][]parseMatch[*Control]{}
-	}
-	p.cacheControl[pos] = matches
-	return matches
-}
 func (p *parseState) parseDecAssign(pos int) []parseMatch[*DecAssign] {
 	if matches, ok := p.cacheDecAssign[pos]; ok {
 		return matches
@@ -503,9 +465,7 @@ func (p *parseState) parseDecDef(pos int) []parseMatch[*DecDef] {
 		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *DecDef_FuncDefOption, child LPAREN) { value.LPAREN = child })
 		states = extendMatches(states, optionalMatch(p.parseParamsDef), func(value *DecDef_FuncDefOption, child *ParamsDef) { value.ParamsDef = child })
 		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *DecDef_FuncDefOption, child RPAREN) { value.RPAREN = child })
-		states = extendMatches(states, func(pos int) []parseMatch[LBRACE] { return matchToken[LBRACE](p, pos, "LBRACE") }, func(value *DecDef_FuncDefOption, child LBRACE) { value.LBRACE = child })
-		states = extendMatches(states, repeatedMatches(p.parseLine, 0), func(value *DecDef_FuncDefOption, child []*Line) { value.Line = child })
-		states = extendMatches(states, func(pos int) []parseMatch[RBRACE] { return matchToken[RBRACE](p, pos, "RBRACE") }, func(value *DecDef_FuncDefOption, child RBRACE) { value.RBRACE = child })
+		states = extendMatches(states, p.parseBlock, func(value *DecDef_FuncDefOption, child *Block) { value.Block = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*DecDef]{value: &DecDef{Type: DecDefTypeFuncDef, FuncDef: &value}, end: state.end})
@@ -541,7 +501,7 @@ func (p *parseState) parseElse(pos int) []parseMatch[*Else] {
 	{
 		states := []parseMatch[Else_ElseOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[ELSE] { return matchToken[ELSE](p, pos, "ELSE") }, func(value *Else_ElseOption, child ELSE) { value.ELSE = child })
-		states = extendMatches(states, p.parseBlockOrLine, func(value *Else_ElseOption, child *BlockOrLine) { value.BlockOrLine = child })
+		states = extendMatches(states, p.parseBlockOrStatement, func(value *Else_ElseOption, child *BlockOrStatement) { value.BlockOrStatement = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Else]{value: &Else{Type: ElseTypeElse, Else: &value}, end: state.end})
@@ -660,33 +620,6 @@ func (p *parseState) parseInnerSubVariableAccess(pos int) []parseMatch[*InnerSub
 		p.cacheInnerSubVariableAccess = map[int][]parseMatch[*InnerSubVariableAccess]{}
 	}
 	p.cacheInnerSubVariableAccess[pos] = matches
-	return matches
-}
-func (p *parseState) parseLine(pos int) []parseMatch[*Line] {
-	if matches, ok := p.cacheLine[pos]; ok {
-		return matches
-	}
-	var matches []parseMatch[*Line]
-	{
-		states := []parseMatch[Line_ControlOption]{{end: pos}}
-		states = extendMatches(states, p.parseControl, func(value *Line_ControlOption, child *Control) { value.Control = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*Line]{value: &Line{Type: LineTypeControl, Control: &value}, end: state.end})
-		}
-	}
-	{
-		states := []parseMatch[Line_StatementOption]{{end: pos}}
-		states = extendMatches(states, p.parseStatementComma, func(value *Line_StatementOption, child *StatementComma) { value.StatementComma = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*Line]{value: &Line{Type: LineTypeStatement, Statement: &value}, end: state.end})
-		}
-	}
-	if p.cacheLine == nil {
-		p.cacheLine = map[int][]parseMatch[*Line]{}
-	}
-	p.cacheLine[pos] = matches
 	return matches
 }
 func (p *parseState) parseMain(pos int) []parseMatch[*Main] {
@@ -855,6 +788,55 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeReturn, Return: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Statement_IfOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[IF] { return matchToken[IF](p, pos, "IF") }, func(value *Statement_IfOption, child IF) { value.IF = child })
+		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Statement_IfOption, child LPAREN) { value.LPAREN = child })
+		states = extendMatches(states, p.parseExpr, func(value *Statement_IfOption, child *Expr) { value.Expr = child })
+		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Statement_IfOption, child RPAREN) { value.RPAREN = child })
+		states = extendMatches(states, p.parseBlockOrStatement, func(value *Statement_IfOption, child *BlockOrStatement) { value.BlockOrStatement = child })
+		states = extendMatches(states, optionalMatch(p.parseElse), func(value *Statement_IfOption, child *Else) { value.Else = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeIf, If: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Statement_WhileOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[WHILE] { return matchToken[WHILE](p, pos, "WHILE") }, func(value *Statement_WhileOption, child WHILE) { value.WHILE = child })
+		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Statement_WhileOption, child LPAREN) { value.LPAREN = child })
+		states = extendMatches(states, p.parseExpr, func(value *Statement_WhileOption, child *Expr) { value.Expr = child })
+		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Statement_WhileOption, child RPAREN) { value.RPAREN = child })
+		states = extendMatches(states, p.parseBlockOrStatement, func(value *Statement_WhileOption, child *BlockOrStatement) { value.BlockOrStatement = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeWhile, While: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Statement_ForOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[FOR] { return matchToken[FOR](p, pos, "FOR") }, func(value *Statement_ForOption, child FOR) { value.FOR = child })
+		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Statement_ForOption, child LPAREN) { value.LPAREN = child })
+		states = extendMatches(states, optionalMatch(p.parseStatement), func(value *Statement_ForOption, child *Statement) { value.Statement0 = child })
+		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_ForOption, child SEMI) { value.SEMI0 = child })
+		states = extendMatches(states, optionalMatch(p.parseStatement), func(value *Statement_ForOption, child *Statement) { value.Statement1 = child })
+		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_ForOption, child SEMI) { value.SEMI1 = child })
+		states = extendMatches(states, optionalMatch(p.parseStatement), func(value *Statement_ForOption, child *Statement) { value.Statement2 = child })
+		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Statement_ForOption, child RPAREN) { value.RPAREN = child })
+		states = extendMatches(states, p.parseBlockOrStatement, func(value *Statement_ForOption, child *BlockOrStatement) { value.BlockOrStatement = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeFor, For: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Statement_CompoundOption]{{end: pos}}
+		states = extendMatches(states, p.parseBlock, func(value *Statement_CompoundOption, child *Block) { value.Block = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeCompound, Compound: &value}, end: state.end})
 		}
 	}
 	if p.cacheStatement == nil {

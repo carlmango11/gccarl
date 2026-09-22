@@ -48,26 +48,40 @@ type ArrayIndexDef_ArrayIndexOption struct {
 	RSQUARE RSQUARE
 }
 
-type BlockOrLineType string
+type BlockType string
 
 const (
-	BlockOrLineTypeBlock BlockOrLineType = "block"
-	BlockOrLineTypeLine  BlockOrLineType = "line"
+	BlockTypeBlock BlockType = "block"
 )
 
-type BlockOrLine struct {
-	Type  BlockOrLineType
-	Block *BlockOrLine_BlockOption
-	Line  *BlockOrLine_LineOption
+type Block struct {
+	Type  BlockType
+	Block *Block_BlockOption
 }
-type BlockOrLine_BlockOption struct {
-	LBRACE LBRACE
-	Line   []*Line
-	RBRACE RBRACE
+type Block_BlockOption struct {
+	LBRACE    LBRACE
+	Statement []*Statement
+	RBRACE    RBRACE
 }
 
-type BlockOrLine_LineOption struct {
-	Line *Line
+type BlockOrStatementType string
+
+const (
+	BlockOrStatementTypeBlock     BlockOrStatementType = "block"
+	BlockOrStatementTypeStatement BlockOrStatementType = "statement"
+)
+
+type BlockOrStatement struct {
+	Type      BlockOrStatementType
+	Block     *BlockOrStatement_BlockOption
+	Statement *BlockOrStatement_StatementOption
+}
+type BlockOrStatement_BlockOption struct {
+	Block *Block
+}
+
+type BlockOrStatement_StatementOption struct {
+	Statement *Statement
 }
 
 type CommaCompEntryType string
@@ -169,53 +183,6 @@ type CompExpr_CompExprOption struct {
 	Expr     *Expr
 }
 
-type ControlType string
-
-const (
-	ControlTypeIf    ControlType = "if"
-	ControlTypeWhile ControlType = "while"
-	ControlTypeFor   ControlType = "for"
-)
-
-type Control struct {
-	Type  ControlType
-	If    *Control_IfOption
-	While *Control_WhileOption
-	For   *Control_ForOption
-}
-type Control_IfOption struct {
-	IF          IF
-	LPAREN      LPAREN
-	Expr        *Expr
-	RPAREN      RPAREN
-	BlockOrLine *BlockOrLine
-	Else        *Else
-}
-
-type Control_WhileOption struct {
-	WHILE  WHILE
-	LPAREN LPAREN
-	Expr   *Expr
-	RPAREN RPAREN
-	LBRACE LBRACE
-	Line   []*Line
-	RBRACE RBRACE
-}
-
-type Control_ForOption struct {
-	FOR         FOR
-	LPAREN      LPAREN
-	Statement0  *Statement
-	SEMI0       SEMI
-	Statement1  *Statement
-	SEMI1       SEMI
-	Statement2  *Statement
-	RPAREN      RPAREN
-	LBRACE      LBRACE
-	BlockOrLine *BlockOrLine
-	RBRACE      RBRACE
-}
-
 type DecAssignType string
 
 const (
@@ -253,9 +220,7 @@ type DecDef_FuncDefOption struct {
 	LPAREN    LPAREN
 	ParamsDef *ParamsDef
 	RPAREN    RPAREN
-	LBRACE    LBRACE
-	Line      []*Line
-	RBRACE    RBRACE
+	Block     *Block
 }
 
 type DecDef_DecAssignOption struct {
@@ -277,8 +242,8 @@ type Else struct {
 	Else *Else_ElseOption
 }
 type Else_ElseOption struct {
-	ELSE        ELSE
-	BlockOrLine *BlockOrLine
+	ELSE             ELSE
+	BlockOrStatement *BlockOrStatement
 }
 
 type EntryLabelFieldType string
@@ -358,26 +323,6 @@ type InnerSubVariableAccess_DotOption struct {
 type InnerSubVariableAccess_ArrowOption struct {
 	RIGHT_ARROW       RIGHT_ARROW
 	SubVariableAccess *SubVariableAccess
-}
-
-type LineType string
-
-const (
-	LineTypeControl   LineType = "control"
-	LineTypeStatement LineType = "statement"
-)
-
-type Line struct {
-	Type      LineType
-	Control   *Line_ControlOption
-	Statement *Line_StatementOption
-}
-type Line_ControlOption struct {
-	Control *Control
-}
-
-type Line_StatementOption struct {
-	StatementComma *StatementComma
 }
 
 type MainType string
@@ -484,6 +429,10 @@ const (
 	StatementTypeVarDec    StatementType = "var-dec"
 	StatementTypeExpr      StatementType = "expr"
 	StatementTypeReturn    StatementType = "return"
+	StatementTypeIf        StatementType = "if"
+	StatementTypeWhile     StatementType = "while"
+	StatementTypeFor       StatementType = "for"
+	StatementTypeCompound  StatementType = "compound"
 )
 
 type Statement struct {
@@ -492,6 +441,10 @@ type Statement struct {
 	VarDec    *Statement_VarDecOption
 	Expr      *Statement_ExprOption
 	Return    *Statement_ReturnOption
+	If        *Statement_IfOption
+	While     *Statement_WhileOption
+	For       *Statement_ForOption
+	Compound  *Statement_CompoundOption
 }
 type Statement_DecAssignOption struct {
 	DecAssign *DecAssign
@@ -508,6 +461,39 @@ type Statement_ExprOption struct {
 type Statement_ReturnOption struct {
 	RETURN RETURN
 	Expr   *Expr
+}
+
+type Statement_IfOption struct {
+	IF               IF
+	LPAREN           LPAREN
+	Expr             *Expr
+	RPAREN           RPAREN
+	BlockOrStatement *BlockOrStatement
+	Else             *Else
+}
+
+type Statement_WhileOption struct {
+	WHILE            WHILE
+	LPAREN           LPAREN
+	Expr             *Expr
+	RPAREN           RPAREN
+	BlockOrStatement *BlockOrStatement
+}
+
+type Statement_ForOption struct {
+	FOR              FOR
+	LPAREN           LPAREN
+	Statement0       *Statement
+	SEMI0            SEMI
+	Statement1       *Statement
+	SEMI1            SEMI
+	Statement2       *Statement
+	RPAREN           RPAREN
+	BlockOrStatement *BlockOrStatement
+}
+
+type Statement_CompoundOption struct {
+	Block *Block
 }
 
 type StatementCommaType string

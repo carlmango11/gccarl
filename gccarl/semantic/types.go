@@ -6,6 +6,12 @@ import (
 
 type VarName string
 
+// todo: this shold be just Var and contain Type too
+type VarID struct {
+	ID   int
+	Name VarName
+}
+
 type TypeName string
 type FuncName string
 
@@ -57,7 +63,7 @@ type StructType struct {
 	Fields []StructField
 }
 
-func (s StructType) Field(name VarName) (StructField, bool) {
+func (s StructType) Field(name FieldName) (StructField, bool) {
 	for _, f := range s.Fields {
 		if f.Name == name {
 			return f, true
@@ -67,7 +73,7 @@ func (s StructType) Field(name VarName) (StructField, bool) {
 	return StructField{}, false
 }
 
-func (s StructType) FieldIndex(name VarName) int {
+func (s StructType) FieldIndex(name FieldName) int {
 	for i, f := range s.Fields {
 		if f.Name == name {
 			return i
@@ -78,7 +84,7 @@ func (s StructType) FieldIndex(name VarName) int {
 }
 
 type StructField struct {
-	Name VarName
+	Name FieldName
 	Type Type
 }
 
@@ -109,7 +115,7 @@ func (t Type) Size() Size {
 		}
 		return s
 	}
-	panic(fmt.Sprintf("unknown type %d", t))
+	panic(fmt.Sprintf("unknown type %v", t))
 }
 
 func (t Type) Equals(t2 Type) bool {
@@ -144,6 +150,10 @@ func (t Type) TakesInitList() bool {
 	return t.Kind == KindArray || t.Kind == KindStruct
 }
 
+func (t Type) Indexable() bool {
+	return t.Kind == KindArray || t.Kind == KindPointer
+}
+
 func (t Type) Field(i int) (Type, error) {
 	switch t.Kind {
 	case KindArray:
@@ -168,47 +178,38 @@ type FuncDef struct {
 	ReturnType Type
 	Name       FuncName
 	Params     []*ParamDef
-	Locals     map[VarName]Type
-	Lines      []*Line
+	Statements []*Statement
 }
 
 type StructDef struct {
-	Vars map[VarName]Type
-}
-
-type Line struct {
-	Statement *Statement
-	Control   *Control
-}
-
-type Control struct {
-	If    *If
-	While *While
-	For   *For
+	Vars map[VarID]Type
 }
 
 type While struct {
-	Condition *Expr
-	Lines     []*Line
+	Condition  *Expr
+	Statements []*Statement
 }
 
 type For struct {
-	Init      *Statement
-	Condition *Statement
-	Action    *Statement
-	Lines     []*Line
+	Init       *Statement
+	Condition  *Statement
+	Action     *Statement
+	Statements []*Statement
 }
 
 type Statement struct {
 	DeclareInit *DeclareInit
 	Expr        *Expr
 	Return      *Expr
+	If          *If
+	While       *While
+	For         *For
 }
 
 type If struct {
-	Condition *Expr
-	Lines     []*Line
-	ElseLines []*Line
+	Condition      *Expr
+	Statements     []*Statement
+	ElseStatements []*Statement
 }
 
 type StringID int
@@ -242,7 +243,7 @@ type NumericOpExpr struct {
 }
 
 type ListEntry struct {
-	Name []VarName
+	Name []FieldName
 	Init *Initialiser
 }
 
@@ -254,19 +255,32 @@ type InitList struct {
 	Entries []*ListEntry
 }
 
+type FieldName string
+
+type FieldExpr struct {
+	Expr  *Expr
+	Field FieldName
+}
+
+type IndexExpr struct {
+	Expr  *Expr
+	Index int
+}
+
 type Expr struct {
 	Type Type
 
-	Assign    *Assign
-	Add       *AddExpr
-	Compare   *CompareOpExpr
-	Numeric   *NumericOpExpr
-	FuncCall  *FuncCall
-	Literal   *Literal
-	AddressOf *Expr
-	Var       *VarExpr
-	Deref     *Expr
-	//IndexedVar   *IndexedVar
+	Assign      *Assign
+	Add         *AddExpr
+	Compare     *CompareOpExpr
+	Numeric     *NumericOpExpr
+	FuncCall    *FuncCall
+	Field       *FieldExpr
+	Index       *IndexExpr
+	Literal     *Literal
+	AddressOf   *Expr
+	Var         *VarID
+	Deref       *Expr
 	Cast        *Cast
 	CompLiteral *CompLiteral
 	StringID    StringID
@@ -285,7 +299,7 @@ func (e *Expr) Writeable() bool {
 }
 
 type IndexedVar struct {
-	Name  VarName
+	Name  VarID
 	Index int
 }
 
@@ -313,18 +327,6 @@ type Deref struct {
 	Expr *Expr
 }
 
-//type AddressOf struct {
-//	Func FuncName
-//	Var  []VarRead
-//}
-
-type VarExpr struct {
-	Expr *Expr
-
-	Type   Type
-	Fields []VarRead
-}
-
 type VarRead struct {
 	Name  VarName
 	Index []int
@@ -335,9 +337,10 @@ type Assign struct {
 	Expr *Expr
 }
 
+// todo: rename to Initialise or something
 type DeclareInit struct {
-	Type        Type
-	Name        VarName
+	Type        Type // todo: move into VarID and rename to Var
+	Var         VarID
 	Initialiser *Initialiser
 }
 
@@ -348,5 +351,5 @@ type Initialiser struct {
 
 type ParamDef struct {
 	Type Type
-	Name VarName
+	Name VarID
 }
