@@ -18,15 +18,8 @@ var-dec-comma:
 block:
     block:LBRACE statement* RBRACE
 
-block-or-statement:
-    block:block
-    statement:statement
-
 else:
-    else:ELSE block-or-statement
-
-statement-comma:
-    statement:statement SEMI
+    else:ELSE statement
 
 params-def:
     params:param-def comma-param-def*
@@ -90,13 +83,13 @@ operator:
     assign:EQUALS
 
 statement:
-    dec-assign:dec-assign
-    var-dec:var-dec
-    expr:expr
-    return:RETURN expr
-    if:IF LPAREN expr RPAREN block-or-statement else?
-    while:WHILE LPAREN expr RPAREN block-or-statement
-    for:FOR LPAREN statement? SEMI statement? SEMI statement? RPAREN block-or-statement
+    dec-assign:dec-assign SEMI
+    var-dec:var-dec SEMI
+    expr:expr SEMI
+    return:RETURN expr SEMI
+    if:IF LPAREN expr RPAREN statement else?
+    while:WHILE LPAREN expr RPAREN statement
+    for:FOR LPAREN statement? SEMI statement? SEMI statement? RPAREN statement
     compound:block
 
 var-dec:

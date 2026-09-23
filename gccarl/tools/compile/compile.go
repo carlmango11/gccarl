@@ -15,7 +15,7 @@ func main() {
 					Kind: semantic.KindArray,
 				},
 				Name: "main",
-				Locals: map[semantic.VarID]semantic.Type{
+				Locals: map[semantic.Var]semantic.Type{
 					"x": {
 						Kind: semantic.KindArray,
 						SubType: &semantic.Type{

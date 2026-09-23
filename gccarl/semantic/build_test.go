@@ -45,9 +45,12 @@ func TestToVarOption(t *testing.T) {
 		},
 	}
 
-	xID := VarID{
-		ID:   123,
+	xID := VarID(123)
+
+	xVar := Var{
+		ID:   xID,
 		Name: "x",
+		Type: xType,
 	}
 
 	b := &builder{
@@ -57,6 +60,7 @@ func TestToVarOption(t *testing.T) {
 					"x": {
 						Type: xType,
 						ID:   xID,
+						Name: "x",
 					},
 				},
 			},
@@ -113,7 +117,7 @@ func TestToVarOption(t *testing.T) {
 								Type: *xType.SubType,
 								Deref: &Expr{
 									Type: xType,
-									Var:  &xID,
+									Var:  &xVar,
 								},
 							},
 							Field: "y",

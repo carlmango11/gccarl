@@ -64,26 +64,6 @@ type Block_BlockOption struct {
 	RBRACE    RBRACE
 }
 
-type BlockOrStatementType string
-
-const (
-	BlockOrStatementTypeBlock     BlockOrStatementType = "block"
-	BlockOrStatementTypeStatement BlockOrStatementType = "statement"
-)
-
-type BlockOrStatement struct {
-	Type      BlockOrStatementType
-	Block     *BlockOrStatement_BlockOption
-	Statement *BlockOrStatement_StatementOption
-}
-type BlockOrStatement_BlockOption struct {
-	Block *Block
-}
-
-type BlockOrStatement_StatementOption struct {
-	Statement *Statement
-}
-
 type CommaCompEntryType string
 
 const (
@@ -242,8 +222,8 @@ type Else struct {
 	Else *Else_ElseOption
 }
 type Else_ElseOption struct {
-	ELSE             ELSE
-	BlockOrStatement *BlockOrStatement
+	ELSE      ELSE
+	Statement *Statement
 }
 
 type EntryLabelFieldType string
@@ -448,67 +428,56 @@ type Statement struct {
 }
 type Statement_DecAssignOption struct {
 	DecAssign *DecAssign
+	SEMI      SEMI
 }
 
 type Statement_VarDecOption struct {
 	VarDec *VarDec
+	SEMI   SEMI
 }
 
 type Statement_ExprOption struct {
 	Expr *Expr
+	SEMI SEMI
 }
 
 type Statement_ReturnOption struct {
 	RETURN RETURN
 	Expr   *Expr
+	SEMI   SEMI
 }
 
 type Statement_IfOption struct {
-	IF               IF
-	LPAREN           LPAREN
-	Expr             *Expr
-	RPAREN           RPAREN
-	BlockOrStatement *BlockOrStatement
-	Else             *Else
+	IF        IF
+	LPAREN    LPAREN
+	Expr      *Expr
+	RPAREN    RPAREN
+	Statement *Statement
+	Else      *Else
 }
 
 type Statement_WhileOption struct {
-	WHILE            WHILE
-	LPAREN           LPAREN
-	Expr             *Expr
-	RPAREN           RPAREN
-	BlockOrStatement *BlockOrStatement
+	WHILE     WHILE
+	LPAREN    LPAREN
+	Expr      *Expr
+	RPAREN    RPAREN
+	Statement *Statement
 }
 
 type Statement_ForOption struct {
-	FOR              FOR
-	LPAREN           LPAREN
-	Statement0       *Statement
-	SEMI0            SEMI
-	Statement1       *Statement
-	SEMI1            SEMI
-	Statement2       *Statement
-	RPAREN           RPAREN
-	BlockOrStatement *BlockOrStatement
+	FOR        FOR
+	LPAREN     LPAREN
+	Statement0 *Statement
+	SEMI0      SEMI
+	Statement1 *Statement
+	SEMI1      SEMI
+	Statement2 *Statement
+	RPAREN     RPAREN
+	Statement3 *Statement
 }
 
 type Statement_CompoundOption struct {
 	Block *Block
-}
-
-type StatementCommaType string
-
-const (
-	StatementCommaTypeStatement StatementCommaType = "statement"
-)
-
-type StatementComma struct {
-	Type      StatementCommaType
-	Statement *StatementComma_StatementOption
-}
-type StatementComma_StatementOption struct {
-	Statement *Statement
-	SEMI      SEMI
 }
 
 type SubExprType string

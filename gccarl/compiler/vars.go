@@ -40,39 +40,35 @@ func (lv *StackVars) Add(size semantic.Size) Offset {
 	return offset
 }
 
-func (lv *StackVars) AddNamed(name semantic.VarID, size semantic.Size) Offset {
-	offset := Offset(lv.size + size)
-
-	lv.vars[name] = &Var{
-		address: Address{
-			stack: offset,
-		},
-	}
-
-	lv.size += size
-
-	return offset
-}
-
-func (lv *StackVars) AddLabelled(name semantic.VarID, label DataLabel) {
-	lv.vars[name] = &Var{
+func (lv *StackVars) AddLabelled(v semantic.Var, label DataLabel) {
+	lv.vars[v.ID] = &Var{
 		address: Address{
 			label: label,
 		},
 	}
 }
 
-func (lv *StackVars) Offset(id semantic.VarID) (Offset, bool) {
-	v, ok := lv.vars[id]
+func (lv *StackVars) Offset(v semantic.Var) Offset {
+	varOffset, ok := lv.vars[v.ID]
 	if !ok {
-		return 0, false
+		size := v.Type.Size()
+		offset := Offset(lv.size + size)
+
+		varOffset = &Var{
+			address: Address{
+				stack: offset,
+			},
+		}
+
+		lv.vars[v.ID] = varOffset
+		lv.size += size
 	}
 
-	return v.address.stack, true
+	return varOffset.address.stack
 }
 
-func (lv *StackVars) Address(id semantic.VarID) (Address, bool) {
-	v, ok := lv.vars[id]
+func (lv *StackVars) Address(id semantic.Var) (Address, bool) {
+	v, ok := lv.vars[id.ID]
 	if !ok {
 		return Address{}, false
 	}

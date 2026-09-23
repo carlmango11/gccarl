@@ -46,11 +46,11 @@ func (c *Compiler) compileFuncDef(f *semantic.FuncDef) (*Instrs, error) {
 	return funcInstrs, nil
 }
 
-func (c *Compiler) handleParamsDef(instrs *Instrs, ps []*semantic.ParamDef) {
+func (c *Compiler) handleParamsDef(instrs *Instrs, ps []semantic.Var) {
 	for i, p := range ps {
 		instrs.addComment("receive %s", p.Name)
 
-		offset := c.locals.AddNamed(p.Name, p.Type.Size())
+		offset := c.varOffset(p)
 		instrs.movFromReg(p.Type.Size(), paramReg[i], offset)
 	}
 }

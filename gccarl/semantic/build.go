@@ -11,12 +11,7 @@ type builder struct {
 	funcs     map[cparser.IDEN]Type
 	strs      []string
 	scopes    []*Scope
-	nextVarID int
-}
-
-type Var struct {
-	ID   VarID
-	Type Type
+	nextVarID VarID
 }
 
 type Scope struct {
@@ -98,6 +93,23 @@ func (b *builder) toFuncDef(f *cparser.DecDef_FuncDefOption) (*FuncDef, error) {
 
 	b.funcs[f.IDEN] = returnType
 
+	var paramVars []Var
+	if f.ParamsDef != nil {
+		ps := []*cparser.ParamDef{f.ParamsDef.Params.ParamDef}
+		for _, x := range f.ParamsDef.Params.CommaParamDef {
+			ps = append(ps, x.Param.ParamDef)
+		}
+
+		for _, astParam := range ps {
+			v, err := b.declareVar(astParam.Param.Type, astParam.Param.VariableDef, true)
+			if err != nil {
+				return nil, err
+			}
+
+			paramVars = append(paramVars, v)
+		}
+	}
+
 	var statements []*Statement
 	for _, s := range f.Block.Block.Statement {
 		statement, err := b.toStatement(s)
@@ -108,32 +120,10 @@ func (b *builder) toFuncDef(f *cparser.DecDef_FuncDefOption) (*FuncDef, error) {
 		statements = append(statements, statement)
 	}
 
-	var paramDefs []*ParamDef
-	if f.ParamsDef != nil {
-		ps := []*cparser.ParamDef{f.ParamsDef.Params.ParamDef}
-		for _, x := range f.ParamsDef.Params.CommaParamDef {
-			ps = append(ps, x.Param.ParamDef)
-		}
-
-		for _, astParam := range ps {
-			pd, err := b.toParamDec(astParam)
-			if err != nil {
-				return nil, err
-			}
-
-			_, err = b.declareVar(astParam.Param.Type, astParam.Param.VariableDef, true)
-			if err != nil {
-				return nil, err
-			}
-
-			paramDefs = append(paramDefs, pd)
-		}
-	}
-
 	return &FuncDef{
 		ReturnType: returnType,
 		Name:       FuncName(f.IDEN),
-		Params:     paramDefs,
+		Params:     paramVars,
 		Statements: statements,
 	}, nil
 }
@@ -151,10 +141,7 @@ func (b *builder) declareVar(astType *cparser.Type, v *cparser.VariableDef, isPa
 		return Var{}, fmt.Errorf("variable %s already declared", varName)
 	}
 
-	newVar := Var{
-		ID:   b.newVarID(varName),
-		Type: typ,
-	}
+	newVar := b.newVar(varName, typ)
 
 	b.scope().vars[varName] = newVar
 
@@ -314,18 +301,6 @@ func (b *builder) toReturnType(i *cparser.Type) (Type, error) {
 	}, nil
 }
 
-func (b *builder) toParamDec(p *cparser.ParamDef) (*ParamDef, error) {
-	typ, err := b.toType(p.Param.Type, p.Param.VariableDef, true)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ParamDef{
-		Type: typ,
-		Name: b.newVarID(p.Param.VariableDef.Variable.IDEN),
-	}, nil
-}
-
 func (b *builder) toStatement(s *cparser.Statement) (*Statement, error) {
 	switch s.Type {
 	case cparser.StatementTypeIf:
@@ -369,6 +344,8 @@ func (b *builder) toStatement(s *cparser.Statement) (*Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		return nil, nil
 	case cparser.StatementTypeReturn:
 		expr, err := b.toExpr(s.Return.Expr)
 		if err != nil {
@@ -387,12 +364,29 @@ func (b *builder) toStatement(s *cparser.Statement) (*Statement, error) {
 		return &Statement{
 			Expr: expr,
 		}, nil
+	case cparser.StatementTypeCompound:
+		var ss []*Statement
+
+		for _, cs := range s.Compound.Block.Block.Statement {
+			compoundS, err := b.toStatement(cs)
+			if err != nil {
+				return nil, err
+			}
+
+			ss = append(ss, compoundS)
+		}
+
+		return &Statement{
+			Compound: &Compound{
+				Statements: ss,
+			},
+		}, nil
 	}
 
 	panic("invalid statement: " + s.Type)
 }
 
-func (b *builder) toDecAssign(a *cparser.DecAssign_StandardOption) (*DeclareInit, error) {
+func (b *builder) toDecAssign(a *cparser.DecAssign_StandardOption) (*InitVar, error) {
 	v, err := b.declareVar(a.Type, a.VariableDef, false)
 	if err != nil {
 		return nil, err
@@ -403,9 +397,8 @@ func (b *builder) toDecAssign(a *cparser.DecAssign_StandardOption) (*DeclareInit
 		return nil, err
 	}
 
-	return &DeclareInit{
-		Type:        v.Type,
-		Var:         v.ID,
+	return &InitVar{
+		Var:         v,
 		Initialiser: init,
 	}, nil
 }
@@ -567,7 +560,13 @@ func (b *builder) fromVarOption(vo *cparser.SubExpr_VariableOption) (*Expr, erro
 
 	e := &Expr{
 		Type: v.Type,
-		Var:  &v.ID,
+		Var:  &v,
+	}
+
+	// array indexing
+	e, err = wrapArrayIndexing(e, string(vo.SubVariableAccess.V.IDEN), vo.SubVariableAccess.V.ArrayIndexAccess)
+	if err != nil {
+		return nil, err
 	}
 
 	return b.fromVarOptionRecursive(e, string(vo.SubVariableAccess.V.IDEN), vo.InnerSubVariableAccess)
@@ -811,24 +810,24 @@ func (b *builder) toIf(i *cparser.Statement_IfOption) (*If, error) {
 		return nil, fmt.Errorf("if condition must be a boolean")
 	}
 
-	ifLines, err := b.bosToStatements(i.BlockOrStatement)
+	ifStatement, err := b.toStatement(i.Statement)
 	if err != nil {
 		return nil, err
 	}
 
-	var elseStatements []*Statement
+	var elseStatement *Statement
 
 	if i.Else != nil {
-		elseStatements, err = b.bosToStatements(i.Else.Else.BlockOrStatement)
+		elseStatement, err = b.toStatement(i.Else.Else.Statement)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &If{
-		Condition:      expr,
-		Statements:     ifLines,
-		ElseStatements: elseStatements,
+		Condition:     expr,
+		Statement:     ifStatement,
+		ElseStatement: elseStatement,
 	}, nil
 }
 
@@ -839,17 +838,17 @@ func (b *builder) toWhile(w *cparser.Statement_WhileOption) (*While, error) {
 	}
 
 	if expr.Type.Prim != PrimBool {
-		return nil, fmt.Errorf("if condition must be a boolean")
+		return nil, fmt.Errorf("while condition must be a boolean")
 	}
 
-	statements, err := b.bosToStatements(w.BlockOrStatement)
+	s, err := b.toStatement(w.Statement)
 	if err != nil {
 		return nil, err
 	}
 
 	return &While{
-		Condition:  expr,
-		Statements: statements,
+		Condition: expr,
+		Statement: s,
 	}, nil
 }
 
@@ -869,46 +868,17 @@ func (b *builder) toFor(f *cparser.Statement_ForOption) (*For, error) {
 		return nil, err
 	}
 
-	lines, err := b.bosToStatements(f.BlockOrStatement)
+	s, err := b.toStatement(f.Statement3)
 	if err != nil {
 		return nil, err
 	}
 
 	return &For{
-		Init:       init,
-		Condition:  cond,
-		Action:     action,
-		Statements: lines,
+		Init:      init,
+		Condition: cond,
+		Action:    action,
+		Statement: s,
 	}, nil
-}
-
-func (b *builder) bosToStatements(e *cparser.BlockOrStatement) ([]*Statement, error) {
-	switch e.Type {
-	case cparser.BlockOrStatementTypeStatement:
-		l, err := b.toStatement(e.Statement.Statement)
-		if err != nil {
-			return nil, err
-		}
-
-		return []*Statement{l}, nil
-	case cparser.BlockOrStatementTypeBlock:
-		b.newScope()
-		defer b.dropScope()
-
-		var all []*Statement
-		for _, n := range e.Block.Block.Block.Statement {
-			l, err := b.toStatement(n)
-			if err != nil {
-				return nil, err
-			}
-
-			all = append(all, l)
-		}
-
-		return all, nil
-	}
-
-	panic("invalid block or statement")
 }
 
 func (b *builder) defineType(d *cparser.DecDef_TypeDefOption) error {
@@ -1014,12 +984,13 @@ func (b *builder) handleExprType(varType Type, expr *Expr) (*Expr, error) {
 	return expr, nil
 }
 
-func (b *builder) newVarID(iden cparser.IDEN) VarID {
+func (b *builder) newVar(iden cparser.IDEN, typ Type) Var {
 	b.nextVarID++
 
-	return VarID{
+	return Var{
 		ID:   b.nextVarID,
 		Name: VarName(iden),
+		Type: typ,
 	}
 }
 

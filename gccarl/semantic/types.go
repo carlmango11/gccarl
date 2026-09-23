@@ -4,12 +4,15 @@ import (
 	"fmt"
 )
 
-type VarName string
+type (
+	VarName string
+	VarID   int
+)
 
-// todo: this shold be just Var and contain Type too
-type VarID struct {
-	ID   int
+type Var struct {
+	ID   VarID
 	Name VarName
+	Type Type
 }
 
 type TypeName string
@@ -177,39 +180,44 @@ type Program struct {
 type FuncDef struct {
 	ReturnType Type
 	Name       FuncName
-	Params     []*ParamDef
+	Params     []Var
 	Statements []*Statement
 }
 
 type StructDef struct {
-	Vars map[VarID]Type
+	Fields map[FieldName]Type
 }
 
 type While struct {
-	Condition  *Expr
-	Statements []*Statement
+	Condition *Expr
+	Statement *Statement
 }
 
 type For struct {
-	Init       *Statement
-	Condition  *Statement
-	Action     *Statement
-	Statements []*Statement
+	Init      *Statement
+	Condition *Statement
+	Action    *Statement
+	Statement *Statement
 }
 
 type Statement struct {
-	DeclareInit *DeclareInit
+	DeclareInit *InitVar
 	Expr        *Expr
 	Return      *Expr
 	If          *If
 	While       *While
 	For         *For
+	Compound    *Compound
+}
+
+type Compound struct {
+	Statements []*Statement
 }
 
 type If struct {
-	Condition      *Expr
-	Statements     []*Statement
-	ElseStatements []*Statement
+	Condition     *Expr
+	Statement     *Statement
+	ElseStatement *Statement
 }
 
 type StringID int
@@ -279,7 +287,7 @@ type Expr struct {
 	Index       *IndexExpr
 	Literal     *Literal
 	AddressOf   *Expr
-	Var         *VarID
+	Var         *Var
 	Deref       *Expr
 	Cast        *Cast
 	CompLiteral *CompLiteral
@@ -299,7 +307,7 @@ func (e *Expr) Writeable() bool {
 }
 
 type IndexedVar struct {
-	Name  VarID
+	Name  Var
 	Index int
 }
 
@@ -337,19 +345,12 @@ type Assign struct {
 	Expr *Expr
 }
 
-// todo: rename to Initialise or something
-type DeclareInit struct {
-	Type        Type // todo: move into VarID and rename to Var
-	Var         VarID
+type InitVar struct {
+	Var         Var
 	Initialiser *Initialiser
 }
 
 type Initialiser struct {
 	Expr *Expr
 	List *InitList
-}
-
-type ParamDef struct {
-	Type Type
-	Name VarID
 }

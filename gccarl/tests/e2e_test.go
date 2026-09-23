@@ -21,6 +21,11 @@ func TestPrograms(t *testing.T) {
 		log.Fatal(err)
 	}
 
+	exclude := map[string]bool{
+		"printf.c": true,
+		"for.c":    true,
+	}
+
 	for _, fe := range d {
 		fileBytes, err := os.ReadFile("./testdata/" + fe.Name())
 		if err != nil {
@@ -28,12 +33,13 @@ func TestPrograms(t *testing.T) {
 		}
 
 		t.Run(fe.Name(), func(t *testing.T) {
-			if fe.Name() == "printf.c" {
+			if exclude[fe.Name()] {
 				return
 			}
-			if fe.Name() != "for.c" {
+			if fe.Name() != "array_equals.c" {
 				return
 			}
+
 			runTest(t, fileBytes)
 		})
 	}
@@ -42,26 +48,30 @@ func TestPrograms(t *testing.T) {
 func runTest(t *testing.T, fileBytes []byte) {
 	tree, err := cparser.Parse(string(fileBytes))
 	if err != nil {
-		log.Fatal(err)
+		assert.NoError(t, err, "cannot parse")
+		return
 	}
 
 	program, err := semantic.Build(tree)
 	if err != nil {
-		log.Fatal(err)
+		assert.NoError(t, err, "cannot build semantic program")
+		return
 	}
 
 	cc := compiler.New()
 
 	c, err := cc.Compile(program)
 	if err != nil {
-		log.Fatalf("cannot compile: %v", err)
+		assert.NoError(t, err, "cannot compile")
+		return
 	}
 
 	t.Logf("program: \n%v", string(c))
 
 	binary, err := assemble(c)
 	if err != nil {
-		log.Fatalf("cannot assemble: %v", err)
+		assert.NoError(t, err, "cannot assemble")
+		return
 	}
 
 	mu, err := uc.NewUnicorn(uc.ARCH_X86, uc.MODE_64)

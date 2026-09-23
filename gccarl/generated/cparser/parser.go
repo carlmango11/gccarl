@@ -158,7 +158,6 @@ type parseState struct {
 	cacheArrayIndexAccess       map[int][]parseMatch[*ArrayIndexAccess]
 	cacheArrayIndexDef          map[int][]parseMatch[*ArrayIndexDef]
 	cacheBlock                  map[int][]parseMatch[*Block]
-	cacheBlockOrStatement       map[int][]parseMatch[*BlockOrStatement]
 	cacheCommaCompEntry         map[int][]parseMatch[*CommaCompEntry]
 	cacheCommaExpr              map[int][]parseMatch[*CommaExpr]
 	cacheCommaParamDef          map[int][]parseMatch[*CommaParamDef]
@@ -178,7 +177,6 @@ type parseState struct {
 	cacheParams                 map[int][]parseMatch[*Params]
 	cacheParamsDef              map[int][]parseMatch[*ParamsDef]
 	cacheStatement              map[int][]parseMatch[*Statement]
-	cacheStatementComma         map[int][]parseMatch[*StatementComma]
 	cacheSubExpr                map[int][]parseMatch[*SubExpr]
 	cacheSubVariableAccess      map[int][]parseMatch[*SubVariableAccess]
 	cacheType                   map[int][]parseMatch[*Type]
@@ -271,33 +269,6 @@ func (p *parseState) parseBlock(pos int) []parseMatch[*Block] {
 		p.cacheBlock = map[int][]parseMatch[*Block]{}
 	}
 	p.cacheBlock[pos] = matches
-	return matches
-}
-func (p *parseState) parseBlockOrStatement(pos int) []parseMatch[*BlockOrStatement] {
-	if matches, ok := p.cacheBlockOrStatement[pos]; ok {
-		return matches
-	}
-	var matches []parseMatch[*BlockOrStatement]
-	{
-		states := []parseMatch[BlockOrStatement_BlockOption]{{end: pos}}
-		states = extendMatches(states, p.parseBlock, func(value *BlockOrStatement_BlockOption, child *Block) { value.Block = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*BlockOrStatement]{value: &BlockOrStatement{Type: BlockOrStatementTypeBlock, Block: &value}, end: state.end})
-		}
-	}
-	{
-		states := []parseMatch[BlockOrStatement_StatementOption]{{end: pos}}
-		states = extendMatches(states, p.parseStatement, func(value *BlockOrStatement_StatementOption, child *Statement) { value.Statement = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*BlockOrStatement]{value: &BlockOrStatement{Type: BlockOrStatementTypeStatement, Statement: &value}, end: state.end})
-		}
-	}
-	if p.cacheBlockOrStatement == nil {
-		p.cacheBlockOrStatement = map[int][]parseMatch[*BlockOrStatement]{}
-	}
-	p.cacheBlockOrStatement[pos] = matches
 	return matches
 }
 func (p *parseState) parseCommaCompEntry(pos int) []parseMatch[*CommaCompEntry] {
@@ -501,7 +472,7 @@ func (p *parseState) parseElse(pos int) []parseMatch[*Else] {
 	{
 		states := []parseMatch[Else_ElseOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[ELSE] { return matchToken[ELSE](p, pos, "ELSE") }, func(value *Else_ElseOption, child ELSE) { value.ELSE = child })
-		states = extendMatches(states, p.parseBlockOrStatement, func(value *Else_ElseOption, child *BlockOrStatement) { value.BlockOrStatement = child })
+		states = extendMatches(states, p.parseStatement, func(value *Else_ElseOption, child *Statement) { value.Statement = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Else]{value: &Else{Type: ElseTypeElse, Else: &value}, end: state.end})
@@ -760,6 +731,7 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 	{
 		states := []parseMatch[Statement_DecAssignOption]{{end: pos}}
 		states = extendMatches(states, p.parseDecAssign, func(value *Statement_DecAssignOption, child *DecAssign) { value.DecAssign = child })
+		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_DecAssignOption, child SEMI) { value.SEMI = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeDecAssign, DecAssign: &value}, end: state.end})
@@ -768,6 +740,7 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 	{
 		states := []parseMatch[Statement_VarDecOption]{{end: pos}}
 		states = extendMatches(states, p.parseVarDec, func(value *Statement_VarDecOption, child *VarDec) { value.VarDec = child })
+		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_VarDecOption, child SEMI) { value.SEMI = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeVarDec, VarDec: &value}, end: state.end})
@@ -776,6 +749,7 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 	{
 		states := []parseMatch[Statement_ExprOption]{{end: pos}}
 		states = extendMatches(states, p.parseExpr, func(value *Statement_ExprOption, child *Expr) { value.Expr = child })
+		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_ExprOption, child SEMI) { value.SEMI = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeExpr, Expr: &value}, end: state.end})
@@ -785,6 +759,7 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		states := []parseMatch[Statement_ReturnOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[RETURN] { return matchToken[RETURN](p, pos, "RETURN") }, func(value *Statement_ReturnOption, child RETURN) { value.RETURN = child })
 		states = extendMatches(states, p.parseExpr, func(value *Statement_ReturnOption, child *Expr) { value.Expr = child })
+		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_ReturnOption, child SEMI) { value.SEMI = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeReturn, Return: &value}, end: state.end})
@@ -796,7 +771,7 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Statement_IfOption, child LPAREN) { value.LPAREN = child })
 		states = extendMatches(states, p.parseExpr, func(value *Statement_IfOption, child *Expr) { value.Expr = child })
 		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Statement_IfOption, child RPAREN) { value.RPAREN = child })
-		states = extendMatches(states, p.parseBlockOrStatement, func(value *Statement_IfOption, child *BlockOrStatement) { value.BlockOrStatement = child })
+		states = extendMatches(states, p.parseStatement, func(value *Statement_IfOption, child *Statement) { value.Statement = child })
 		states = extendMatches(states, optionalMatch(p.parseElse), func(value *Statement_IfOption, child *Else) { value.Else = child })
 		for _, state := range states {
 			value := state.value
@@ -809,7 +784,7 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Statement_WhileOption, child LPAREN) { value.LPAREN = child })
 		states = extendMatches(states, p.parseExpr, func(value *Statement_WhileOption, child *Expr) { value.Expr = child })
 		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Statement_WhileOption, child RPAREN) { value.RPAREN = child })
-		states = extendMatches(states, p.parseBlockOrStatement, func(value *Statement_WhileOption, child *BlockOrStatement) { value.BlockOrStatement = child })
+		states = extendMatches(states, p.parseStatement, func(value *Statement_WhileOption, child *Statement) { value.Statement = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeWhile, While: &value}, end: state.end})
@@ -825,7 +800,7 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_ForOption, child SEMI) { value.SEMI1 = child })
 		states = extendMatches(states, optionalMatch(p.parseStatement), func(value *Statement_ForOption, child *Statement) { value.Statement2 = child })
 		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Statement_ForOption, child RPAREN) { value.RPAREN = child })
-		states = extendMatches(states, p.parseBlockOrStatement, func(value *Statement_ForOption, child *BlockOrStatement) { value.BlockOrStatement = child })
+		states = extendMatches(states, p.parseStatement, func(value *Statement_ForOption, child *Statement) { value.Statement3 = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeFor, For: &value}, end: state.end})
@@ -843,26 +818,6 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		p.cacheStatement = map[int][]parseMatch[*Statement]{}
 	}
 	p.cacheStatement[pos] = matches
-	return matches
-}
-func (p *parseState) parseStatementComma(pos int) []parseMatch[*StatementComma] {
-	if matches, ok := p.cacheStatementComma[pos]; ok {
-		return matches
-	}
-	var matches []parseMatch[*StatementComma]
-	{
-		states := []parseMatch[StatementComma_StatementOption]{{end: pos}}
-		states = extendMatches(states, p.parseStatement, func(value *StatementComma_StatementOption, child *Statement) { value.Statement = child })
-		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *StatementComma_StatementOption, child SEMI) { value.SEMI = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*StatementComma]{value: &StatementComma{Type: StatementCommaTypeStatement, Statement: &value}, end: state.end})
-		}
-	}
-	if p.cacheStatementComma == nil {
-		p.cacheStatementComma = map[int][]parseMatch[*StatementComma]{}
-	}
-	p.cacheStatementComma[pos] = matches
 	return matches
 }
 func (p *parseState) parseSubExpr(pos int) []parseMatch[*SubExpr] {
