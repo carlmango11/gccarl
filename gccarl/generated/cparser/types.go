@@ -409,9 +409,11 @@ const (
 	StatementTypeVarDec    StatementType = "var-dec"
 	StatementTypeExpr      StatementType = "expr"
 	StatementTypeReturn    StatementType = "return"
+	StatementTypeBreak     StatementType = "break"
 	StatementTypeIf        StatementType = "if"
 	StatementTypeWhile     StatementType = "while"
 	StatementTypeFor       StatementType = "for"
+	StatementTypeSwitch    StatementType = "switch"
 	StatementTypeCompound  StatementType = "compound"
 )
 
@@ -421,9 +423,11 @@ type Statement struct {
 	VarDec    *Statement_VarDecOption
 	Expr      *Statement_ExprOption
 	Return    *Statement_ReturnOption
+	Break     *Statement_BreakOption
 	If        *Statement_IfOption
 	While     *Statement_WhileOption
 	For       *Statement_ForOption
+	Switch    *Statement_SwitchOption
 	Compound  *Statement_CompoundOption
 }
 type Statement_DecAssignOption struct {
@@ -445,6 +449,10 @@ type Statement_ReturnOption struct {
 	RETURN RETURN
 	Expr   *Expr
 	SEMI   SEMI
+}
+
+type Statement_BreakOption struct {
+	BREAK BREAK
 }
 
 type Statement_IfOption struct {
@@ -474,6 +482,16 @@ type Statement_ForOption struct {
 	Expr2     *Expr
 	RPAREN    RPAREN
 	Statement *Statement
+}
+
+type Statement_SwitchOption struct {
+	SWITCH      SWITCH
+	LPAREN      LPAREN
+	Expr        *Expr
+	RPAREN      RPAREN
+	LBRACE      LBRACE
+	SwitchCases []*SwitchCases
+	RBRACE      RBRACE
 }
 
 type Statement_CompoundOption struct {
@@ -545,6 +563,23 @@ type SubVariableAccess struct {
 type SubVariableAccess_VOption struct {
 	IDEN             IDEN
 	ArrayIndexAccess []*ArrayIndexAccess
+}
+
+type SwitchCasesType string
+
+const (
+	SwitchCasesTypeC SwitchCasesType = "c"
+)
+
+type SwitchCases struct {
+	Type SwitchCasesType
+	C    *SwitchCases_COption
+}
+type SwitchCases_COption struct {
+	CASE      CASE
+	Expr      *Expr
+	COLON     COLON
+	Statement []*Statement
 }
 
 type TypeType string
@@ -727,8 +762,11 @@ type VariableDef_VariableOption struct {
 
 type AMPERSAND string
 type ASTERISKS string
+type BREAK string
+type CASE string
 type CHAR string
 type CHAR_TYPE string
+type COLON string
 type COMMA string
 type EEQUALS string
 type ELSE string
@@ -753,6 +791,7 @@ type RSQUARE string
 type SEMI string
 type STR string
 type STRUCT string
+type SWITCH string
 type UNSIGNED string
 type VOID string
 type WHILE string

@@ -21,6 +21,10 @@ func (i *Instrs) addInstrsIndent(inner *Instrs) {
 	}
 }
 
+func (i *Instrs) movInt64ToReg(n int64, to Register) {
+	i.addInstr("mov %s, %d", to.Raw(4), n)
+}
+
 func (i *Instrs) movInt32ToReg(n int32, to Register) {
 	i.addInstr("mov %s, %d", to.Raw(4), n)
 }

@@ -32,6 +32,7 @@ var tokenDefinitions = []*tokens.TokenDef{
 	{Name: "RBRACE", Literal: "}"},
 	{Name: "COMMA", Literal: ","},
 	{Name: "SEMI", Literal: ";"},
+	{Name: "COLON", Literal: ":"},
 	{Name: "LSQUARE", Literal: "["},
 	{Name: "RSQUARE", Literal: "]"},
 	{Name: "PLUS", Literal: "+"},
@@ -41,10 +42,13 @@ var tokenDefinitions = []*tokens.TokenDef{
 	{Name: "RIGHT_ARROW", Literal: "->"},
 	{Name: "INCLUDE", Literal: "include"},
 	{Name: "RETURN", Literal: "return"},
+	{Name: "BREAK", Literal: "break"},
 	{Name: "IF", Literal: "if"},
 	{Name: "ELSE", Literal: "else"},
 	{Name: "WHILE", Literal: "while"},
 	{Name: "FOR", Literal: "for"},
+	{Name: "SWITCH", Literal: "switch"},
+	{Name: "CASE", Literal: "case"},
 }
 
 // Parse constructs a fresh typed AST for text. The entire input must match main.
@@ -179,6 +183,7 @@ type parseState struct {
 	cacheStatement              map[int][]parseMatch[*Statement]
 	cacheSubExpr                map[int][]parseMatch[*SubExpr]
 	cacheSubVariableAccess      map[int][]parseMatch[*SubVariableAccess]
+	cacheSwitchCases            map[int][]parseMatch[*SwitchCases]
 	cacheType                   map[int][]parseMatch[*Type]
 	cacheTypeDef                map[int][]parseMatch[*TypeDef]
 	cacheValue                  map[int][]parseMatch[*Value]
@@ -766,6 +771,14 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		}
 	}
 	{
+		states := []parseMatch[Statement_BreakOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[BREAK] { return matchToken[BREAK](p, pos, "BREAK") }, func(value *Statement_BreakOption, child BREAK) { value.BREAK = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeBreak, Break: &value}, end: state.end})
+		}
+	}
+	{
 		states := []parseMatch[Statement_IfOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[IF] { return matchToken[IF](p, pos, "IF") }, func(value *Statement_IfOption, child IF) { value.IF = child })
 		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Statement_IfOption, child LPAREN) { value.LPAREN = child })
@@ -804,6 +817,20 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeFor, For: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Statement_SwitchOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[SWITCH] { return matchToken[SWITCH](p, pos, "SWITCH") }, func(value *Statement_SwitchOption, child SWITCH) { value.SWITCH = child })
+		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Statement_SwitchOption, child LPAREN) { value.LPAREN = child })
+		states = extendMatches(states, p.parseExpr, func(value *Statement_SwitchOption, child *Expr) { value.Expr = child })
+		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Statement_SwitchOption, child RPAREN) { value.RPAREN = child })
+		states = extendMatches(states, func(pos int) []parseMatch[LBRACE] { return matchToken[LBRACE](p, pos, "LBRACE") }, func(value *Statement_SwitchOption, child LBRACE) { value.LBRACE = child })
+		states = extendMatches(states, repeatedMatches(p.parseSwitchCases, 0), func(value *Statement_SwitchOption, child []*SwitchCases) { value.SwitchCases = child })
+		states = extendMatches(states, func(pos int) []parseMatch[RBRACE] { return matchToken[RBRACE](p, pos, "RBRACE") }, func(value *Statement_SwitchOption, child RBRACE) { value.RBRACE = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeSwitch, Switch: &value}, end: state.end})
 		}
 	}
 	{
@@ -907,6 +934,28 @@ func (p *parseState) parseSubVariableAccess(pos int) []parseMatch[*SubVariableAc
 		p.cacheSubVariableAccess = map[int][]parseMatch[*SubVariableAccess]{}
 	}
 	p.cacheSubVariableAccess[pos] = matches
+	return matches
+}
+func (p *parseState) parseSwitchCases(pos int) []parseMatch[*SwitchCases] {
+	if matches, ok := p.cacheSwitchCases[pos]; ok {
+		return matches
+	}
+	var matches []parseMatch[*SwitchCases]
+	{
+		states := []parseMatch[SwitchCases_COption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[CASE] { return matchToken[CASE](p, pos, "CASE") }, func(value *SwitchCases_COption, child CASE) { value.CASE = child })
+		states = extendMatches(states, p.parseExpr, func(value *SwitchCases_COption, child *Expr) { value.Expr = child })
+		states = extendMatches(states, func(pos int) []parseMatch[COLON] { return matchToken[COLON](p, pos, "COLON") }, func(value *SwitchCases_COption, child COLON) { value.COLON = child })
+		states = extendMatches(states, repeatedMatches(p.parseStatement, 0), func(value *SwitchCases_COption, child []*Statement) { value.Statement = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*SwitchCases]{value: &SwitchCases{Type: SwitchCasesTypeC, C: &value}, end: state.end})
+		}
+	}
+	if p.cacheSwitchCases == nil {
+		p.cacheSwitchCases = map[int][]parseMatch[*SwitchCases]{}
+	}
+	p.cacheSwitchCases[pos] = matches
 	return matches
 }
 func (p *parseState) parseType(pos int) []parseMatch[*Type] {

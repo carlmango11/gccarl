@@ -303,6 +303,15 @@ func (b *builder) toReturnType(i *cparser.Type) (Type, error) {
 
 func (b *builder) toStatement(s *cparser.Statement) (*Statement, error) {
 	switch s.Type {
+	case cparser.StatementTypeSwitch:
+		sw, err := b.toSwitch(s.Switch)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Statement{
+			Switch: sw,
+		}, nil
 	case cparser.StatementTypeIf:
 		ifC, err := b.toIf(s.If)
 		if err != nil {
@@ -1007,6 +1016,42 @@ func (b *builder) newVar(iden cparser.IDEN, typ Type) Var {
 		Name: VarName(iden),
 		Type: typ,
 	}
+}
+
+func (b *builder) toSwitch(s *cparser.Statement_SwitchOption) (*Switch, error) {
+	check, err := b.toExpr(s.Expr)
+	if err != nil {
+		return nil, err
+	}
+
+	var cases []*SwitchCase
+
+	for _, sc := range s.SwitchCases {
+		scExpr, err := b.toExpr(sc.C.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		var scStatements []*Statement
+		for _, x := range sc.C.Statement {
+			scStatement, err := b.toStatement(x)
+			if err != nil {
+				return nil, err
+			}
+
+			scStatements = append(scStatements, scStatement)
+		}
+
+		cases = append(cases, &SwitchCase{
+			Expr: scExpr,
+			Body: scStatements,
+		})
+	}
+
+	return &Switch{
+		Check: check,
+		Cases: cases,
+	}, nil
 }
 
 func int32Type() Type {

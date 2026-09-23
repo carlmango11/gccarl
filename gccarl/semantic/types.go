@@ -199,9 +199,21 @@ type Statement struct {
 	DeclareInit *InitVar
 	Expr        *Expr
 	Return      *Expr
+	Break       bool
 	If          *If
 	Loop        *Loop
 	Compound    *Compound
+	Switch      *Switch
+}
+
+type Switch struct {
+	Check *Expr
+	Cases []*SwitchCase
+}
+
+type SwitchCase struct {
+	Expr *Expr
+	Body []*Statement
 }
 
 type Compound struct {
@@ -286,6 +298,22 @@ type Expr struct {
 	Cast        *Cast
 	CompLiteral *CompLiteral
 	StringID    StringID
+}
+
+func (e *Expr) ConstantValue() int64 {
+	switch {
+	case e.Literal != nil:
+		switch e.Type.Prim {
+		case PrimInt32:
+			return int64(e.Literal.Int32)
+		case PrimChar:
+			return int64(e.Literal.Char)
+		default:
+			panic("impl")
+		}
+	}
+
+	panic("not constant")
 }
 
 func (e *Expr) Writeable() bool {

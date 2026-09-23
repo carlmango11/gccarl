@@ -87,10 +87,15 @@ statement:
     var-dec:var-dec SEMI
     expr:expr SEMI
     return:RETURN expr SEMI
+    break:BREAK
     if:IF LPAREN expr RPAREN statement else?
     while:WHILE LPAREN expr RPAREN statement
     for:FOR LPAREN expr? SEMI expr? SEMI expr? RPAREN statement
+    switch:SWITCH LPAREN expr RPAREN LBRACE switch-cases* RBRACE
     compound:block
+
+switch-cases:
+    c:CASE expr COLON statement*
 
 var-dec:
     var-dec:type variable-def
