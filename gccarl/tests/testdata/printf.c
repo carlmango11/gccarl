@@ -3,7 +3,7 @@ void put_char(char c) {
 }
 
 void put_string(const char *s) {
-    if (s == NULL) {
+    if (s == 0) {
         s = "(null)";
     }
 

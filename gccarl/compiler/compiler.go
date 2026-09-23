@@ -147,10 +147,8 @@ func (c *Compiler) compileStatement(instrs *Instrs, s *semantic.Statement) error
 		return nil
 	case s.If != nil:
 		return c.compileIf(instrs, s.If)
-	case s.While != nil:
-		return c.compileWhile(instrs, s.While)
-	case s.For != nil:
-		return c.compileFor(instrs, s.For)
+	case s.Loop != nil:
+		return c.compileFor(instrs, s.Loop)
 	case s.Compound != nil:
 		for _, cs := range s.Compound.Statements {
 			err := c.compileStatement(instrs, cs)
@@ -504,39 +502,12 @@ func (c *Compiler) compileNumeric(instrs *Instrs, n *semantic.NumericOpExpr) (Lo
 	}, nil
 }
 
-func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While) error {
-	repeat := c.newLabel("repeat")
-	instrs.addInstr("%v:", repeat)
-
-	loc, err := c.compileExpr(instrs, w.Condition)
-	if err != nil {
-		return err
-	}
-
-	instrs.movLocToReg(w.Condition.Type.Size(), loc, RegA)
-	instrs.addInstr("mov %s, 1", RawRBX)
-
-	instrs.addInstr("cmp %s, %s", RawRAX, RawRBX)
-
-	skip := c.newLabel("skip")
-	instrs.addInstr("jne %s", skip)
-
-	err = c.compileStatement(instrs, w.Statement)
-	if err != nil {
-		return err
-	}
-
-	instrs.addComment("start again")
-	instrs.addInstr("jmp %s", repeat)
-
-	instrs.addInstr("%v:", skip)
-	return nil
-}
-
-func (c *Compiler) compileFor(instrs *Instrs, w *semantic.For) error {
-	_, err := c.compileExpr(instrs, w.Init)
-	if err != nil {
-		return err
+func (c *Compiler) compileFor(instrs *Instrs, w *semantic.Loop) error {
+	if w.Init != nil {
+		_, err := c.compileExpr(instrs, w.Init)
+		if err != nil {
+			return err
+		}
 	}
 
 	repeat := c.newLabel("repeat")
@@ -560,10 +531,12 @@ func (c *Compiler) compileFor(instrs *Instrs, w *semantic.For) error {
 		return err
 	}
 
-	instrs.addComment("finished body; do action")
-	_, err = c.compileExpr(instrs, w.Action)
-	if err != nil {
-		return err
+	if w.Action != nil {
+		instrs.addComment("finished body; do action")
+		_, err = c.compileExpr(instrs, w.Action)
+		if err != nil {
+			return err
+		}
 	}
 
 	instrs.addComment("start again")

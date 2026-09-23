@@ -313,13 +313,13 @@ func (b *builder) toStatement(s *cparser.Statement) (*Statement, error) {
 			If: ifC,
 		}, nil
 	case cparser.StatementTypeWhile:
-		w, err := b.toWhile(s.While)
+		w, err := b.fromWhile(s.While)
 		if err != nil {
 			return nil, err
 		}
 
 		return &Statement{
-			While: w,
+			Loop: w,
 		}, nil
 	case cparser.StatementTypeFor:
 		f, err := b.toFor(s.For)
@@ -328,7 +328,7 @@ func (b *builder) toStatement(s *cparser.Statement) (*Statement, error) {
 		}
 
 		return &Statement{
-			For: f,
+			Loop: f,
 		}, nil
 	case cparser.StatementTypeDecAssign:
 		a, err := b.toDecAssign(s.DecAssign.DecAssign.Standard)
@@ -843,7 +843,7 @@ func (b *builder) toIf(i *cparser.Statement_IfOption) (*If, error) {
 	}, nil
 }
 
-func (b *builder) toWhile(w *cparser.Statement_WhileOption) (*While, error) {
+func (b *builder) fromWhile(w *cparser.Statement_WhileOption) (*Loop, error) {
 	expr, err := b.toExpr(w.Expr)
 	if err != nil {
 		return nil, err
@@ -858,13 +858,13 @@ func (b *builder) toWhile(w *cparser.Statement_WhileOption) (*While, error) {
 		return nil, err
 	}
 
-	return &While{
+	return &Loop{
 		Condition: expr,
-		Statement: s,
+		Body:      s,
 	}, nil
 }
 
-func (b *builder) toFor(f *cparser.Statement_ForOption) (*For, error) {
+func (b *builder) toFor(f *cparser.Statement_ForOption) (*Loop, error) {
 	b.newScope()
 	defer b.dropScope()
 
@@ -888,7 +888,7 @@ func (b *builder) toFor(f *cparser.Statement_ForOption) (*For, error) {
 		return nil, err
 	}
 
-	return &For{
+	return &Loop{
 		Init:      init,
 		Condition: expr,
 		Action:    action,

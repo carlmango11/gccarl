@@ -188,12 +188,7 @@ type StructDef struct {
 	Fields map[FieldName]Type
 }
 
-type While struct {
-	Condition *Expr
-	Statement *Statement
-}
-
-type For struct {
+type Loop struct {
 	Init      *Expr
 	Condition *Expr
 	Action    *Expr
@@ -205,8 +200,7 @@ type Statement struct {
 	Expr        *Expr
 	Return      *Expr
 	If          *If
-	While       *While
-	For         *For
+	Loop        *Loop
 	Compound    *Compound
 }
 
