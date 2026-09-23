@@ -23,7 +23,6 @@ func TestPrograms(t *testing.T) {
 
 	exclude := map[string]bool{
 		"printf.c": true,
-		"for.c":    true,
 	}
 
 	for _, fe := range d {
@@ -34,9 +33,6 @@ func TestPrograms(t *testing.T) {
 
 		t.Run(fe.Name(), func(t *testing.T) {
 			if exclude[fe.Name()] {
-				return
-			}
-			if fe.Name() != "array_equals.c" {
 				return
 			}
 

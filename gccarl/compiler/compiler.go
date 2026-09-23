@@ -533,36 +533,43 @@ func (c *Compiler) compileWhile(instrs *Instrs, w *semantic.While) error {
 	return nil
 }
 
-func (c *Compiler) compileFor(instrs *Instrs, f *semantic.For) error {
-	c.compileStatement(instrs, f.Init)
+func (c *Compiler) compileFor(instrs *Instrs, w *semantic.For) error {
+	_, err := c.compileExpr(instrs, w.Init)
+	if err != nil {
+		return err
+	}
 
 	repeat := c.newLabel("repeat")
 	instrs.addInstr("%v:", repeat)
 
-	//loc, err := c.compileExpr(instrs, w.Condition)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//instrs.movLocToReg(w.Condition.Type.Size(), loc, RegA)
-	//instrs.addInstr("mov %s, 1", RawRBX)
-	//
-	//instrs.addInstr("cmp %s, %s", RawRAX, RawRBX)
-	//
-	//skip := c.newLabel("skip")
-	//instrs.addInstr("jne %s", skip)
-	//
-	//for _, l := range w.Lines {
-	//	err := c.compileLine(instrs, l)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
-	//
-	//instrs.addComment("start again")
-	//instrs.addInstr("jmp %s", repeat)
-	//
-	//instrs.addInstr("%v:", skip)
+	loc, err := c.compileExpr(instrs, w.Condition)
+	if err != nil {
+		return err
+	}
+
+	instrs.movLocToReg(w.Condition.Type.Size(), loc, RegA)
+	instrs.addInstr("mov %s, 1", RawRBX)
+
+	instrs.addInstr("cmp %s, %s", RawRAX, RawRBX)
+
+	skip := c.newLabel("skip")
+	instrs.addInstr("jne %s", skip)
+
+	err = c.compileStatement(instrs, w.Body)
+	if err != nil {
+		return err
+	}
+
+	instrs.addComment("finished body; do action")
+	_, err = c.compileExpr(instrs, w.Action)
+	if err != nil {
+		return err
+	}
+
+	instrs.addComment("start again")
+	instrs.addInstr("jmp %s", repeat)
+
+	instrs.addInstr("%v:", skip)
 	return nil
 }
 

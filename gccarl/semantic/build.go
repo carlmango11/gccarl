@@ -365,25 +365,37 @@ func (b *builder) toStatement(s *cparser.Statement) (*Statement, error) {
 			Expr: expr,
 		}, nil
 	case cparser.StatementTypeCompound:
-		var ss []*Statement
-
-		for _, cs := range s.Compound.Block.Block.Statement {
-			compoundS, err := b.toStatement(cs)
-			if err != nil {
-				return nil, err
-			}
-
-			ss = append(ss, compoundS)
+		c, err := b.toCompoundStatement(s.Compound)
+		if err != nil {
+			return nil, err
 		}
 
 		return &Statement{
-			Compound: &Compound{
-				Statements: ss,
-			},
+			Compound: c,
 		}, nil
 	}
 
 	panic("invalid statement: " + s.Type)
+}
+
+func (b *builder) toCompoundStatement(s *cparser.Statement_CompoundOption) (*Compound, error) {
+	b.newScope()
+	defer b.dropScope()
+
+	var statements []*Statement
+
+	for _, sNode := range s.Block.Block.Statement {
+		compoundS, err := b.toStatement(sNode)
+		if err != nil {
+			return nil, err
+		}
+
+		statements = append(statements, compoundS)
+	}
+
+	return &Compound{
+		Statements: statements,
+	}, nil
 }
 
 func (b *builder) toDecAssign(a *cparser.DecAssign_StandardOption) (*InitVar, error) {
@@ -853,31 +865,34 @@ func (b *builder) toWhile(w *cparser.Statement_WhileOption) (*While, error) {
 }
 
 func (b *builder) toFor(f *cparser.Statement_ForOption) (*For, error) {
-	init, err := b.toStatement(f.Statement0)
+	b.newScope()
+	defer b.dropScope()
+
+	init, err := b.toExpr(f.Expr0)
 	if err != nil {
 		return nil, err
 	}
 
-	cond, err := b.toStatement(f.Statement1)
+	expr, err := b.toExpr(f.Expr1)
 	if err != nil {
 		return nil, err
 	}
 
-	action, err := b.toStatement(f.Statement2)
+	action, err := b.toExpr(f.Expr2)
 	if err != nil {
 		return nil, err
 	}
 
-	s, err := b.toStatement(f.Statement3)
+	body, err := b.toStatement(f.Statement)
 	if err != nil {
 		return nil, err
 	}
 
 	return &For{
 		Init:      init,
-		Condition: cond,
+		Condition: expr,
 		Action:    action,
-		Statement: s,
+		Body:      body,
 	}, nil
 }
 

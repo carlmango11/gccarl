@@ -11,3 +11,6 @@ casts
 NULL
 ++
 +=
+
+
+for loop should have optional init statement

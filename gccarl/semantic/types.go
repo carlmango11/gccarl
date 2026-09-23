@@ -194,10 +194,10 @@ type While struct {
 }
 
 type For struct {
-	Init      *Statement
-	Condition *Statement
-	Action    *Statement
-	Statement *Statement
+	Init      *Expr
+	Condition *Expr
+	Action    *Expr
+	Body      *Statement
 }
 
 type Statement struct {

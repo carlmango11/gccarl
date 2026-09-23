@@ -465,15 +465,15 @@ type Statement_WhileOption struct {
 }
 
 type Statement_ForOption struct {
-	FOR        FOR
-	LPAREN     LPAREN
-	Statement0 *Statement
-	SEMI0      SEMI
-	Statement1 *Statement
-	SEMI1      SEMI
-	Statement2 *Statement
-	RPAREN     RPAREN
-	Statement3 *Statement
+	FOR       FOR
+	LPAREN    LPAREN
+	Expr0     *Expr
+	SEMI0     SEMI
+	Expr1     *Expr
+	SEMI1     SEMI
+	Expr2     *Expr
+	RPAREN    RPAREN
+	Statement *Statement
 }
 
 type Statement_CompoundOption struct {

@@ -794,13 +794,13 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		states := []parseMatch[Statement_ForOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[FOR] { return matchToken[FOR](p, pos, "FOR") }, func(value *Statement_ForOption, child FOR) { value.FOR = child })
 		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Statement_ForOption, child LPAREN) { value.LPAREN = child })
-		states = extendMatches(states, optionalMatch(p.parseStatement), func(value *Statement_ForOption, child *Statement) { value.Statement0 = child })
+		states = extendMatches(states, optionalMatch(p.parseExpr), func(value *Statement_ForOption, child *Expr) { value.Expr0 = child })
 		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_ForOption, child SEMI) { value.SEMI0 = child })
-		states = extendMatches(states, optionalMatch(p.parseStatement), func(value *Statement_ForOption, child *Statement) { value.Statement1 = child })
+		states = extendMatches(states, optionalMatch(p.parseExpr), func(value *Statement_ForOption, child *Expr) { value.Expr1 = child })
 		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_ForOption, child SEMI) { value.SEMI1 = child })
-		states = extendMatches(states, optionalMatch(p.parseStatement), func(value *Statement_ForOption, child *Statement) { value.Statement2 = child })
+		states = extendMatches(states, optionalMatch(p.parseExpr), func(value *Statement_ForOption, child *Expr) { value.Expr2 = child })
 		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Statement_ForOption, child RPAREN) { value.RPAREN = child })
-		states = extendMatches(states, p.parseStatement, func(value *Statement_ForOption, child *Statement) { value.Statement3 = child })
+		states = extendMatches(states, p.parseStatement, func(value *Statement_ForOption, child *Statement) { value.Statement = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeFor, For: &value}, end: state.end})

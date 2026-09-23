@@ -89,7 +89,7 @@ statement:
     return:RETURN expr SEMI
     if:IF LPAREN expr RPAREN statement else?
     while:WHILE LPAREN expr RPAREN statement
-    for:FOR LPAREN statement? SEMI statement? SEMI statement? RPAREN statement
+    for:FOR LPAREN expr? SEMI expr? SEMI expr? RPAREN statement
     compound:block
 
 var-dec:
