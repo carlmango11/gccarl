@@ -465,6 +465,20 @@ func (c *Compiler) compileCompare(instrs *Instrs, e *semantic.CompareOpExpr) (Lo
 		instrs.addInstr("jl %s", jump)
 	case semantic.OpEquals:
 		instrs.addInstr("je %s", jump)
+	case semantic.OpNotEquals:
+		instrs.addInstr("jne %s", jump)
+	case semantic.OpLTE:
+		if e.Left.Type.Prim.Signed() {
+			instrs.addInstr("jle %s", jump)
+		} else {
+			instrs.addInstr("jbe %s", jump)
+		}
+	case semantic.OpGTE:
+		if e.Left.Type.Prim.Signed() {
+			instrs.addInstr("jge %s", jump)
+		} else {
+			instrs.addInstr("jae %s", jump)
+		}
 	default:
 		panic("missing op")
 	}
@@ -484,7 +498,10 @@ func (c *Compiler) compileNumeric(instrs *Instrs, n *semantic.NumericOpExpr) (Lo
 		return Location{}, err
 	}
 
-	instrs.movLocToReg(n.Left.Type.Size(), rightLoc, RegD)
+	const rightReg = RegDI
+	result := rightReg
+
+	instrs.movLocToReg(n.Left.Type.Size(), rightLoc, rightReg)
 
 	leftLoc, err := c.compileExpr(instrs, n.Left)
 	if err != nil {
@@ -493,14 +510,27 @@ func (c *Compiler) compileNumeric(instrs *Instrs, n *semantic.NumericOpExpr) (Lo
 
 	switch n.Op {
 	case semantic.NumOpAdd:
-		instrs.add(n.Left.Type.Size(), RegD, leftLoc)
+		instrs.add(n.Left.Type.Size(), rightReg, leftLoc)
+	case semantic.NumOpSub:
+		instrs.sub(n.Left.Type.Size(), rightReg, leftLoc)
+	case semantic.NumOpMultiply:
+		// todo handle usigned
+		instrs.multiplySigned(n.Left.Type.Size(), rightReg, leftLoc)
+	case semantic.NumOpDivide, semantic.NumOpMod:
+		instrs.divideSigned(n.Left.Type.Size(), regLocation(rightReg), leftLoc) // todo: don't actually need to copy to reg for this
+
+		if n.Op == semantic.NumOpMod {
+			result = RegD
+		} else {
+			result = RegA
+		}
 	default:
 		panic("missing op")
 	}
 
 	return Location{
 		Type:     LTRegister,
-		Register: RegD,
+		Register: result,
 	}, nil
 }
 

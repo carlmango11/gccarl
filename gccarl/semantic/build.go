@@ -20,12 +20,18 @@ type Scope struct {
 }
 
 var compareOp = map[cparser.OperatorType]CompareOp{
-	cparser.OperatorTypeLess:  OpLessThan,
-	cparser.OperatorTypeEqual: OpEquals,
+	cparser.OperatorTypeLess:     OpLessThan,
+	cparser.OperatorTypeEqual:    OpEquals,
+	cparser.OperatorTypeNotEqual: OpNotEquals,
+	cparser.OperatorTypeLte:      OpLTE,
+	cparser.OperatorTypeGte:      OpGTE,
 }
 
 var numericalOps = map[cparser.OperatorType]NumericOp{
-	cparser.OperatorTypePlus: NumOpAdd,
+	cparser.OperatorTypePlus:     NumOpAdd,
+	cparser.OperatorTypeMultiply: NumOpMultiply,
+	cparser.OperatorTypeDivide:   NumOpDivide,
+	cparser.OperatorTypeMod:      NumOpMod,
 }
 
 func Build(program *cparser.Main) (*Program, error) {
@@ -270,7 +276,7 @@ func astTypeToPrim(typ *cparser.Type) PrimitiveType {
 	case cparser.TypeTypeChar:
 		return PrimChar
 	case cparser.TypeTypeUnsignedInt:
-		return PrimUChar
+		return PrimUInt32
 	default:
 		// custom
 		panic("impl")
@@ -427,54 +433,7 @@ func (b *builder) toDecAssign(a *cparser.DecAssign_StandardOption) (*InitVar, er
 func (b *builder) toExpr(expr *cparser.Expr) (*Expr, error) {
 	switch expr.Type {
 	case cparser.ExprTypeComp:
-		compExpr := expr.Comp.CompExpr.CompExpr
-
-		rightExpr, err := b.toExpr(compExpr.Expr)
-		if err != nil {
-			return nil, err
-		}
-
-		leftExpr, err := b.fromSubExpr(compExpr.SubExpr)
-		if err != nil {
-			return nil, err
-		}
-
-		if compExpr.Operator.Type == cparser.OperatorTypeAssign {
-			if !leftExpr.Writeable() {
-				return nil, fmt.Errorf("cannot assign to expression %v", rightExpr)
-			}
-
-			return &Expr{
-				Type: leftExpr.Type,
-				Assign: &Assign{
-					To:   leftExpr,
-					Expr: rightExpr,
-				},
-			}, nil
-		}
-
-		op, ok := compareOp[compExpr.Operator.Type]
-		if ok {
-			return &Expr{
-				Type: boolType(),
-				Compare: &CompareOpExpr{
-					Left:  rightExpr,
-					Op:    op,
-					Right: leftExpr,
-				},
-			}, nil
-		}
-
-		// todo: check for casts
-
-		return &Expr{
-			Type: rightExpr.Type,
-			Numeric: &NumericOpExpr{
-				Left:  rightExpr,
-				Op:    numericalOps[compExpr.Operator.Type],
-				Right: leftExpr,
-			},
-		}, nil
+		return b.fromCompoundExpr(expr.Comp)
 	case cparser.ExprTypeSubExpr:
 		return b.fromSubExpr(expr.SubExpr.SubExpr)
 	}
@@ -965,10 +924,7 @@ func (b *builder) toInitialiser(typ Type, init *cparser.Initialiser) (*Initialis
 			return nil, err
 		}
 
-		expr, err = b.handleExprType(typ, expr)
-		if err != nil {
-			return nil, err
-		}
+		// TODO cast?
 
 		return &Initialiser{
 			Expr: expr,
@@ -989,23 +945,6 @@ func (b *builder) toInitialiser(typ Type, init *cparser.Initialiser) (*Initialis
 	default:
 		panic("invalid initialiser")
 	}
-}
-
-func (b *builder) handleExprType(varType Type, expr *Expr) (*Expr, error) {
-	if !varType.Equals(expr.Type) {
-		if compatibleTypes(varType, expr.Type) {
-			expr = &Expr{
-				Cast: &Cast{
-					To:   varType,
-					Expr: expr,
-				},
-			}
-		} else {
-			panic("not compatible")
-		}
-	}
-
-	return expr, nil
 }
 
 func (b *builder) newVar(iden cparser.IDEN, typ Type) Var {
@@ -1054,6 +993,108 @@ func (b *builder) toSwitch(s *cparser.Statement_SwitchOption) (*Switch, error) {
 	}, nil
 }
 
+func (b *builder) fromCompoundExpr(comp *cparser.Expr_CompOption) (*Expr, error) {
+	switch comp.CompExpr.Type {
+	case cparser.CompExprTypeCompExpr:
+		return b.fromOperatorExp(comp.CompExpr.CompExpr)
+	case cparser.CompExprTypeIncr:
+		subExpr, err := b.fromSubExpr(comp.CompExpr.Incr.SubExpr)
+		if err != nil {
+			return nil, err
+		}
+
+		return toNumericOp(subExpr, NumOpAdd), nil
+	case cparser.CompExprTypeDecr:
+		subExpr, err := b.fromSubExpr(comp.CompExpr.Decr.SubExpr)
+		if err != nil {
+			return nil, err
+		}
+
+		return toNumericOp(subExpr, NumOpSub), nil
+	}
+
+	panic("invalid comp expr")
+}
+
+func toNumericOp(subExpr *Expr, op NumericOp) *Expr {
+	// TODO check is int
+	numExpr := &Expr{
+		Type: subExpr.Type,
+		Numeric: &NumericOpExpr{
+			Left: subExpr,
+			Op:   op,
+			Right: &Expr{
+				Type: subExpr.Type,
+				Literal: &Literal{
+					Int32: 1, // TODO other types
+				},
+			},
+		},
+	}
+
+	return &Expr{
+		Type: subExpr.Type,
+		Assign: &Assign{
+			To:   subExpr,
+			Expr: numExpr,
+		},
+	}
+}
+
+func (b *builder) fromOperatorExp(compExpr *cparser.CompExpr_CompExprOption) (*Expr, error) {
+	rightExpr, err := b.toExpr(compExpr.Expr)
+	if err != nil {
+		return nil, err
+	}
+
+	leftExpr, err := b.fromSubExpr(compExpr.SubExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	if compExpr.Operator.Type == cparser.OperatorTypeAssign {
+		if !leftExpr.Writeable() {
+			return nil, fmt.Errorf("cannot assign to expression %v", rightExpr)
+		}
+
+		return &Expr{
+			Type: leftExpr.Type,
+			Assign: &Assign{
+				To:   leftExpr,
+				Expr: rightExpr,
+			},
+		}, nil
+	}
+
+	op, ok := compareOp[compExpr.Operator.Type]
+	if ok {
+		leftExpr, rightExpr, err = handleCompareOpConversion(leftExpr, rightExpr)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Expr{
+			Type: boolType(),
+			Compare: &CompareOpExpr{
+				Left:  rightExpr,
+				Op:    op,
+				Right: leftExpr,
+			},
+		}, nil
+	}
+
+	// todo: check for casts
+
+	return &Expr{
+		Type: rightExpr.Type,
+		Numeric: &NumericOpExpr{
+			Left:  rightExpr,
+			Op:    numericalOps[compExpr.Operator.Type],
+			Right: leftExpr,
+		},
+	}, nil
+}
+
 func int32Type() Type {
 	return Type{Kind: KindPrimitive, Prim: PrimInt32}
 }
@@ -1071,16 +1112,6 @@ func compatibleTypes(t1, t2 Type) bool {
 		return t2.Kind == KindArray
 	}
 
-	//switch t1.Kind {
-	//case KindPointer:
-	//	switch t2.Kind {
-	//	case KindPointer:
-	//		return compatibleTypes(*t1.SubType, *t2.SubType)
-	//	case
-	//	}
-	//}
-	//
-	//return false
 	panic("imlp")
 }
 
@@ -1088,5 +1119,35 @@ func newScope() *Scope {
 	return &Scope{
 		vars:    make(map[cparser.IDEN]Var),
 		structs: make(map[cparser.IDEN]Type),
+	}
+}
+
+func handleCompareOpConversion(l, r *Expr) (*Expr, *Expr, error) {
+	if l.Type.Equals(r.Type) {
+		return l, r, nil
+	}
+
+	if l.Type.Kind != r.Type.Kind {
+		return nil, nil, fmt.Errorf("cannot compare %s with %s", l.Type, r.Type)
+	}
+
+	if l.Type.Kind == KindPrimitive {
+		if l.Type.Prim.Higher(r.Type.Prim) {
+			return l, promoteExpr(r, l.Type), nil
+		} else {
+			return promoteExpr(l, r.Type), r, nil
+		}
+	}
+
+	panic("impl")
+}
+
+func promoteExpr(e *Expr, t Type) *Expr {
+	return &Expr{
+		Type: t,
+		Cast: &Cast{
+			To:   t,
+			Expr: e,
+		},
 	}
 }

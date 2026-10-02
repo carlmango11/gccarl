@@ -23,16 +23,16 @@ type PrimitiveType int
 const (
 	PrimUnset PrimitiveType = iota
 	PrimInt32
+	PrimUInt32
 	PrimInt64
 	PrimChar
-	PrimUChar
 	PrimBool
 	PrimFloat32
 )
 
 func (p PrimitiveType) Size() Size {
 	switch p {
-	case PrimInt32:
+	case PrimInt32, PrimUInt32:
 		return 4
 	case PrimChar:
 		return 1
@@ -41,6 +41,31 @@ func (p PrimitiveType) Size() Size {
 	}
 
 	panic("unset primitive type")
+}
+
+var primRanking = []PrimitiveType{
+	PrimBool, PrimChar, PrimInt32, PrimInt64, PrimUInt32,
+}
+
+var primRankingMap = map[PrimitiveType]int{}
+
+func init() {
+	for i, prim := range primRanking {
+		primRankingMap[prim] = i
+	}
+}
+
+func (p PrimitiveType) Higher(other PrimitiveType) bool {
+	return primRankingMap[p] > primRankingMap[other]
+}
+
+func (p PrimitiveType) Signed() bool {
+	switch p {
+	case PrimUInt32:
+		return false
+	default:
+		return true
+	}
 }
 
 type Kind int
@@ -235,6 +260,8 @@ const (
 	OpEquals
 	OpNotEquals
 	OpLessThan
+	OpLTE
+	OpGTE
 )
 
 type NumericOp int
@@ -242,6 +269,10 @@ type NumericOp int
 const (
 	NumOpUnset NumericOp = iota
 	NumOpAdd
+	NumOpSub
+	NumOpMultiply
+	NumOpDivide
+	NumOpMod
 )
 
 type CompareOpExpr struct {
@@ -285,7 +316,6 @@ type Expr struct {
 	Type Type
 
 	Assign      *Assign
-	Add         *AddExpr
 	Compare     *CompareOpExpr
 	Numeric     *NumericOpExpr
 	FuncCall    *FuncCall
@@ -341,11 +371,6 @@ type Cast struct {
 type Literal struct {
 	Int32 int32
 	Char  byte
-}
-
-type AddExpr struct {
-	Expr1 *Expr
-	Expr2 *Expr
 }
 
 type FuncCall struct {

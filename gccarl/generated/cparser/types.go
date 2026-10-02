@@ -151,16 +151,30 @@ type CompExprType string
 
 const (
 	CompExprTypeCompExpr CompExprType = "comp-expr"
+	CompExprTypeIncr     CompExprType = "incr"
+	CompExprTypeDecr     CompExprType = "decr"
 )
 
 type CompExpr struct {
 	Type     CompExprType
 	CompExpr *CompExpr_CompExprOption
+	Incr     *CompExpr_IncrOption
+	Decr     *CompExpr_DecrOption
 }
 type CompExpr_CompExprOption struct {
 	SubExpr  *SubExpr
 	Operator *Operator
 	Expr     *Expr
+}
+
+type CompExpr_IncrOption struct {
+	SubExpr  *SubExpr
+	PLUSPLUS PLUSPLUS
+}
+
+type CompExpr_DecrOption struct {
+	SubExpr    *SubExpr
+	MINUSMINUS MINUSMINUS
 }
 
 type DecAssignType string
@@ -322,21 +336,45 @@ type Main_MainOption struct {
 type OperatorType string
 
 const (
-	OperatorTypeLess   OperatorType = "less"
-	OperatorTypeEqual  OperatorType = "equal"
-	OperatorTypePlus   OperatorType = "plus"
-	OperatorTypeMinus  OperatorType = "minus"
-	OperatorTypeAssign OperatorType = "assign"
+	OperatorTypeGte      OperatorType = "gte"
+	OperatorTypeLte      OperatorType = "lte"
+	OperatorTypeMod      OperatorType = "mod"
+	OperatorTypeLess     OperatorType = "less"
+	OperatorTypeEqual    OperatorType = "equal"
+	OperatorTypeNotEqual OperatorType = "not-equal"
+	OperatorTypePlus     OperatorType = "plus"
+	OperatorTypeMinus    OperatorType = "minus"
+	OperatorTypeDivide   OperatorType = "divide"
+	OperatorTypeMultiply OperatorType = "multiply"
+	OperatorTypeAssign   OperatorType = "assign"
 )
 
 type Operator struct {
-	Type   OperatorType
-	Less   *Operator_LessOption
-	Equal  *Operator_EqualOption
-	Plus   *Operator_PlusOption
-	Minus  *Operator_MinusOption
-	Assign *Operator_AssignOption
+	Type     OperatorType
+	Gte      *Operator_GteOption
+	Lte      *Operator_LteOption
+	Mod      *Operator_ModOption
+	Less     *Operator_LessOption
+	Equal    *Operator_EqualOption
+	NotEqual *Operator_NotEqualOption
+	Plus     *Operator_PlusOption
+	Minus    *Operator_MinusOption
+	Divide   *Operator_DivideOption
+	Multiply *Operator_MultiplyOption
+	Assign   *Operator_AssignOption
 }
+type Operator_GteOption struct {
+	GTE GTE
+}
+
+type Operator_LteOption struct {
+	LTE LTE
+}
+
+type Operator_ModOption struct {
+	PERCENT PERCENT
+}
+
 type Operator_LessOption struct {
 	LESS_THAN LESS_THAN
 }
@@ -345,12 +383,24 @@ type Operator_EqualOption struct {
 	EEQUALS EEQUALS
 }
 
+type Operator_NotEqualOption struct {
+	NOT_EQUALS NOT_EQUALS
+}
+
 type Operator_PlusOption struct {
 	PLUS PLUS
 }
 
 type Operator_MinusOption struct {
 	MINUS MINUS
+}
+
+type Operator_DivideOption struct {
+	FSLASH FSLASH
+}
+
+type Operator_MultiplyOption struct {
+	ASTERISKS ASTERISKS
 }
 
 type Operator_AssignOption struct {
@@ -772,7 +822,9 @@ type EEQUALS string
 type ELSE string
 type EQUALS string
 type FOR string
+type FSLASH string
 type FULL_STOP string
+type GTE string
 type IDEN string
 type IF string
 type INT_TYPE string
@@ -780,9 +832,14 @@ type LBRACE string
 type LESS_THAN string
 type LPAREN string
 type LSQUARE string
+type LTE string
 type MINUS string
+type MINUSMINUS string
+type NOT_EQUALS string
 type NUM string
+type PERCENT string
 type PLUS string
+type PLUSPLUS string
 type RBRACE string
 type RETURN string
 type RIGHT_ARROW string

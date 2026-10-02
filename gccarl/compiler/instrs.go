@@ -57,6 +57,33 @@ func (i *Instrs) addComment(format string, args ...any) {
 	i.addInstr("; "+format, args...)
 }
 
+func (i *Instrs) sub(s semantic.Size, reg Register, l2 Location) {
+	i.addInstr("sub %s, %s", reg.Raw(s), locOperand(s, l2))
+}
+
+func (i *Instrs) multiplySigned(s semantic.Size, reg Register, l2 Location) {
+	i.addInstr("imul %s, %s", reg.Raw(s), locOperand(s, l2))
+}
+
+// res = RAX; remainder: RDX
+func (i *Instrs) divideSigned(s semantic.Size, numerator Location, denom Location) {
+	i.movLocToReg(s, denom, RegB) // save this
+
+	i.movLocToReg(s, numerator, RegA)
+
+	switch s {
+	case semantic.Size32:
+		i.addInstr("cdq")
+	case semantic.Size64:
+		i.addInstr("cqo")
+	default:
+		panic("impl")
+	}
+
+	i.movLocToReg(s, regLocation(RegB), RegDI) // TODO can't assume this is free
+	i.addInstr("idiv %s", RegDI.Raw(s))
+}
+
 func (i *Instrs) add(s semantic.Size, reg Register, l2 Location) {
 	i.addInstr("add %s, %s", reg.Raw(s), locOperand(s, l2))
 }

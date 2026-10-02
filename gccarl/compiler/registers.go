@@ -56,6 +56,9 @@ var sizedReg = map[Register]map[semantic.Size]RawReg{
 		4: RawEAX,
 		8: RawRAX,
 	},
+	RegB: {
+		4: RawEBX,
+	},
 	RegR10: {
 		1: RawR10B,
 		4: RawR10D,

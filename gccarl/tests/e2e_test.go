@@ -35,6 +35,9 @@ func TestPrograms(t *testing.T) {
 			if exclude[fe.Name()] {
 				return
 			}
+			//if fe.Name() != "incr_decr.c" {
+			//	return
+			//}
 
 			runTest(t, fileBytes)
 		})

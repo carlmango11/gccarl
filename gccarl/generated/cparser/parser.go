@@ -24,8 +24,11 @@ var tokenDefinitions = []*tokens.TokenDef{
 	{Name: "ASTERISKS", Literal: "*"},
 	{Name: "HASH", Literal: "#"},
 	{Name: "LESS_THAN", Literal: "<"},
+	{Name: "GTE", Literal: ">="},
+	{Name: "LTE", Literal: "<="},
 	{Name: "GREATER_THAN", Literal: ">"},
 	{Name: "EQUALS", Literal: "="},
+	{Name: "NOT_EQUALS", Literal: "!="},
 	{Name: "LPAREN", Literal: "("},
 	{Name: "RPAREN", Literal: ")"},
 	{Name: "LBRACE", Literal: "{"},
@@ -35,8 +38,12 @@ var tokenDefinitions = []*tokens.TokenDef{
 	{Name: "COLON", Literal: ":"},
 	{Name: "LSQUARE", Literal: "["},
 	{Name: "RSQUARE", Literal: "]"},
+	{Name: "PLUSPLUS", Literal: "++"},
 	{Name: "PLUS", Literal: "+"},
 	{Name: "MINUS", Literal: "-"},
+	{Name: "FSLASH", Literal: "/"},
+	{Name: "PERCENT", Literal: "%"},
+	{Name: "MINUSMINUS", Literal: "--"},
 	{Name: "EEQUALS", Literal: "=="},
 	{Name: "FULL_STOP", Literal: "."},
 	{Name: "RIGHT_ARROW", Literal: "->"},
@@ -401,6 +408,24 @@ func (p *parseState) parseCompExpr(pos int) []parseMatch[*CompExpr] {
 			matches = append(matches, parseMatch[*CompExpr]{value: &CompExpr{Type: CompExprTypeCompExpr, CompExpr: &value}, end: state.end})
 		}
 	}
+	{
+		states := []parseMatch[CompExpr_IncrOption]{{end: pos}}
+		states = extendMatches(states, p.parseSubExpr, func(value *CompExpr_IncrOption, child *SubExpr) { value.SubExpr = child })
+		states = extendMatches(states, func(pos int) []parseMatch[PLUSPLUS] { return matchToken[PLUSPLUS](p, pos, "PLUSPLUS") }, func(value *CompExpr_IncrOption, child PLUSPLUS) { value.PLUSPLUS = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*CompExpr]{value: &CompExpr{Type: CompExprTypeIncr, Incr: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[CompExpr_DecrOption]{{end: pos}}
+		states = extendMatches(states, p.parseSubExpr, func(value *CompExpr_DecrOption, child *SubExpr) { value.SubExpr = child })
+		states = extendMatches(states, func(pos int) []parseMatch[MINUSMINUS] { return matchToken[MINUSMINUS](p, pos, "MINUSMINUS") }, func(value *CompExpr_DecrOption, child MINUSMINUS) { value.MINUSMINUS = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*CompExpr]{value: &CompExpr{Type: CompExprTypeDecr, Decr: &value}, end: state.end})
+		}
+	}
 	if p.cacheCompExpr == nil {
 		p.cacheCompExpr = map[int][]parseMatch[*CompExpr]{}
 	}
@@ -623,6 +648,30 @@ func (p *parseState) parseOperator(pos int) []parseMatch[*Operator] {
 	}
 	var matches []parseMatch[*Operator]
 	{
+		states := []parseMatch[Operator_GteOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[GTE] { return matchToken[GTE](p, pos, "GTE") }, func(value *Operator_GteOption, child GTE) { value.GTE = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Operator]{value: &Operator{Type: OperatorTypeGte, Gte: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Operator_LteOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[LTE] { return matchToken[LTE](p, pos, "LTE") }, func(value *Operator_LteOption, child LTE) { value.LTE = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Operator]{value: &Operator{Type: OperatorTypeLte, Lte: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Operator_ModOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[PERCENT] { return matchToken[PERCENT](p, pos, "PERCENT") }, func(value *Operator_ModOption, child PERCENT) { value.PERCENT = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Operator]{value: &Operator{Type: OperatorTypeMod, Mod: &value}, end: state.end})
+		}
+	}
+	{
 		states := []parseMatch[Operator_LessOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[LESS_THAN] { return matchToken[LESS_THAN](p, pos, "LESS_THAN") }, func(value *Operator_LessOption, child LESS_THAN) { value.LESS_THAN = child })
 		for _, state := range states {
@@ -639,6 +688,14 @@ func (p *parseState) parseOperator(pos int) []parseMatch[*Operator] {
 		}
 	}
 	{
+		states := []parseMatch[Operator_NotEqualOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[NOT_EQUALS] { return matchToken[NOT_EQUALS](p, pos, "NOT_EQUALS") }, func(value *Operator_NotEqualOption, child NOT_EQUALS) { value.NOT_EQUALS = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Operator]{value: &Operator{Type: OperatorTypeNotEqual, NotEqual: &value}, end: state.end})
+		}
+	}
+	{
 		states := []parseMatch[Operator_PlusOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[PLUS] { return matchToken[PLUS](p, pos, "PLUS") }, func(value *Operator_PlusOption, child PLUS) { value.PLUS = child })
 		for _, state := range states {
@@ -652,6 +709,22 @@ func (p *parseState) parseOperator(pos int) []parseMatch[*Operator] {
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Operator]{value: &Operator{Type: OperatorTypeMinus, Minus: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Operator_DivideOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[FSLASH] { return matchToken[FSLASH](p, pos, "FSLASH") }, func(value *Operator_DivideOption, child FSLASH) { value.FSLASH = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Operator]{value: &Operator{Type: OperatorTypeDivide, Divide: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Operator_MultiplyOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[ASTERISKS] { return matchToken[ASTERISKS](p, pos, "ASTERISKS") }, func(value *Operator_MultiplyOption, child ASTERISKS) { value.ASTERISKS = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Operator]{value: &Operator{Type: OperatorTypeMultiply, Multiply: &value}, end: state.end})
 		}
 	}
 	{

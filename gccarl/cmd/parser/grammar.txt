@@ -74,12 +74,20 @@ sub-expr:
 
 comp-expr:
     comp-expr:sub-expr operator expr
+    incr:sub-expr PLUSPLUS
+    decr:sub-expr MINUSMINUS
 
 operator:
+    gte:GTE
+    lte:LTE
+    mod:PERCENT
     less:LESS_THAN
     equal:EEQUALS
+    not-equal:NOT_EQUALS
     plus:PLUS
     minus:MINUS
+    divide:FSLASH
+    multiply:ASTERISKS
     assign:EQUALS
 
 statement:
