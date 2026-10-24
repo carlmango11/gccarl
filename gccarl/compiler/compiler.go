@@ -343,12 +343,25 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr) (Location, erro
 }
 
 func (c *Compiler) compileIndexExpr(instrs *Instrs, f *semantic.IndexExpr) (Location, error) {
-	loc, err := c.compileExpr(instrs, f.Expr)
+	indexLoc, err := c.compileExpr(instrs, f.Index)
 	if err != nil {
 		return Location{}, err
 	}
 
-	offset := Offset(f.Expr.Type.SubType.Size()) * Offset(f.Index)
+	baseOffset := Offset(f.Expr.Type.SubType.Size())
+	instrs.multiplyConstUnsigned(int64(baseOffset), indexLoc)
+
+	// result is in acc
+
+	// TODO: optimisation here for indices known at compile time
+	// need to move into memory so the next bit doesn't wipe it
+	offset := c.locals.Add(semantic.Size8)
+	instrs.movFromReg(semantic.Size8, RegA, offset)
+
+	loc, err := c.compileExpr(instrs, f.Expr)
+	if err != nil {
+		return Location{}, err
+	}
 
 	switch loc.Type {
 	case LTOffset:

@@ -28,7 +28,7 @@ type ArrayIndexAccess struct {
 }
 type ArrayIndexAccess_ArrayIndexOption struct {
 	LSQUARE LSQUARE
-	NUM     NUM
+	Expr    *Expr
 	RSQUARE RSQUARE
 }
 
@@ -641,6 +641,7 @@ const (
 	TypeTypeVoid        TypeType = "void"
 	TypeTypeCustom      TypeType = "custom"
 	TypeTypeStruct      TypeType = "struct"
+	TypeTypeConst       TypeType = "const"
 )
 
 type Type struct {
@@ -651,6 +652,7 @@ type Type struct {
 	Void        *Type_VoidOption
 	Custom      *Type_CustomOption
 	Struct      *Type_StructOption
+	Const       *Type_ConstOption
 }
 type Type_IntOption struct {
 	INT_TYPE INT_TYPE
@@ -676,6 +678,11 @@ type Type_CustomOption struct {
 type Type_StructOption struct {
 	STRUCT STRUCT
 	IDEN   IDEN
+}
+
+type Type_ConstOption struct {
+	CONST CONST
+	Type  *Type
 }
 
 type TypeDefType string
@@ -818,6 +825,7 @@ type CHAR string
 type CHAR_TYPE string
 type COLON string
 type COMMA string
+type CONST string
 type EEQUALS string
 type ELSE string
 type EQUALS string

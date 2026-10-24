@@ -8,6 +8,7 @@ import (
 
 	"github.com/carlmango11/gccarl/gccarl/compiler"
 	"github.com/carlmango11/gccarl/gccarl/generated/cparser"
+	"github.com/carlmango11/gccarl/gccarl/preprocessor"
 	"github.com/carlmango11/gccarl/gccarl/semantic"
 )
 
@@ -27,11 +28,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	text, err := os.ReadFile(flag.Arg(0))
+	textBytes, err := os.ReadFile(flag.Arg(0))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
+
+	text := preprocessor.Process(textBytes)
 
 	tree, err := cparser.Parse(string(text))
 	if err != nil {

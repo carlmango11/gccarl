@@ -65,6 +65,11 @@ func (i *Instrs) multiplySigned(s semantic.Size, reg Register, l2 Location) {
 	i.addInstr("imul %s, %s", reg.Raw(s), locOperand(s, l2))
 }
 
+func (i *Instrs) multiplyConstUnsigned(c int64, l2 Location) {
+	i.movInt64ToReg(c, RegA)
+	i.addInstr("mul %s", locOperand(semantic.Size8, l2))
+}
+
 // res = RAX; remainder: RDX
 func (i *Instrs) divideSigned(s semantic.Size, numerator Location, denom Location) {
 	i.movLocToReg(s, denom, RegB) // save this

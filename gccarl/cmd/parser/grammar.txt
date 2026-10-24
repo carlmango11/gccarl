@@ -55,7 +55,7 @@ variable-def:
     variable:IDEN array-index-def*
 
 array-index-access:
-    array-index:LSQUARE NUM RSQUARE
+    array-index:LSQUARE expr RSQUARE
 
 array-index-def:
     array-index:LSQUARE NUM? RSQUARE
@@ -141,3 +141,4 @@ type:
     void:VOID
     custom:IDEN
     struct:STRUCT IDEN
+    const:CONST type

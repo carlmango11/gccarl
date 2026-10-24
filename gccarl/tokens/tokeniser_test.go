@@ -3,6 +3,8 @@ package tokens
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRejectMalformedDefinitions(t *testing.T) {
@@ -23,4 +25,23 @@ func TestRegexAlternativesAreAnchored(t *testing.T) {
 	if _, err := reader.Next(); err == nil {
 		t.Fatal("skipped unmatched input before regex alternative")
 	}
+}
+
+func TestRegexChar(t *testing.T) {
+	const def = `CHAR: \'[^']*\'`
+	const text = `'\n'`
+
+	reader, err := New(strings.NewReader(def), strings.NewReader(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := &Token{
+		Name: "CHAR",
+		Val:  `'\n'`,
+	}
+
+	token, err := reader.Next()
+	assert.NoError(t, err)
+	assert.Equal(t, expected, token)
 }

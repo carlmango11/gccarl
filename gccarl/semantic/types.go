@@ -309,7 +309,7 @@ type FieldExpr struct {
 
 type IndexExpr struct {
 	Expr  *Expr
-	Index int
+	Index *Expr
 }
 
 type Expr struct {

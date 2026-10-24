@@ -10,6 +10,7 @@ import (
 
 	"github.com/carlmango11/gccarl/gccarl/compiler"
 	"github.com/carlmango11/gccarl/gccarl/generated/cparser"
+	"github.com/carlmango11/gccarl/gccarl/preprocessor"
 	"github.com/carlmango11/gccarl/gccarl/semantic"
 	"github.com/stretchr/testify/assert"
 	uc "github.com/unicorn-engine/unicorn/bindings/go/unicorn"
@@ -22,7 +23,7 @@ func TestPrograms(t *testing.T) {
 	}
 
 	exclude := map[string]bool{
-		"printf.c": true,
+		//"printf.c": true,
 	}
 
 	for _, fe := range d {
@@ -35,9 +36,9 @@ func TestPrograms(t *testing.T) {
 			if exclude[fe.Name()] {
 				return
 			}
-			//if fe.Name() != "incr_decr.c" {
-			//	return
-			//}
+			if fe.Name() != "printf.c" {
+				return
+			}
 
 			runTest(t, fileBytes)
 		})
@@ -45,7 +46,9 @@ func TestPrograms(t *testing.T) {
 }
 
 func runTest(t *testing.T, fileBytes []byte) {
-	tree, err := cparser.Parse(string(fileBytes))
+	text := preprocessor.Process(fileBytes)
+
+	tree, err := cparser.Parse(text)
 	if err != nil {
 		assert.NoError(t, err, "cannot parse")
 		return

@@ -13,7 +13,7 @@ import "regexp"
 var tokenDefinitions = []*tokens.TokenDef{
 	{Name: "IDEN", Literal: "", Regex: regexp.MustCompile("^(?:[a-zA-Z_][a-zA-Z0-9_]*)")},
 	{Name: "NUM", Literal: "", Regex: regexp.MustCompile("^(?:[0-9]+)")},
-	{Name: "CHAR", Literal: "", Regex: regexp.MustCompile("^(?:'.')")},
+	{Name: "CHAR", Literal: "", Regex: regexp.MustCompile("^(?:'[^']*')")},
 	{Name: "STR", Literal: "", Regex: regexp.MustCompile("^(?:\"[^\"]*\")")},
 	{Name: "INT_TYPE", Literal: "int"},
 	{Name: "CHAR_TYPE", Literal: "char"},
@@ -56,6 +56,7 @@ var tokenDefinitions = []*tokens.TokenDef{
 	{Name: "FOR", Literal: "for"},
 	{Name: "SWITCH", Literal: "switch"},
 	{Name: "CASE", Literal: "case"},
+	{Name: "CONST", Literal: "const"},
 }
 
 // Parse constructs a fresh typed AST for text. The entire input must match main.
@@ -228,7 +229,7 @@ func (p *parseState) parseArrayIndexAccess(pos int) []parseMatch[*ArrayIndexAcce
 	{
 		states := []parseMatch[ArrayIndexAccess_ArrayIndexOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[LSQUARE] { return matchToken[LSQUARE](p, pos, "LSQUARE") }, func(value *ArrayIndexAccess_ArrayIndexOption, child LSQUARE) { value.LSQUARE = child })
-		states = extendMatches(states, func(pos int) []parseMatch[NUM] { return matchToken[NUM](p, pos, "NUM") }, func(value *ArrayIndexAccess_ArrayIndexOption, child NUM) { value.NUM = child })
+		states = extendMatches(states, p.parseExpr, func(value *ArrayIndexAccess_ArrayIndexOption, child *Expr) { value.Expr = child })
 		states = extendMatches(states, func(pos int) []parseMatch[RSQUARE] { return matchToken[RSQUARE](p, pos, "RSQUARE") }, func(value *ArrayIndexAccess_ArrayIndexOption, child RSQUARE) { value.RSQUARE = child })
 		for _, state := range states {
 			value := state.value
@@ -1084,6 +1085,15 @@ func (p *parseState) parseType(pos int) []parseMatch[*Type] {
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Type]{value: &Type{Type: TypeTypeStruct, Struct: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Type_ConstOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[CONST] { return matchToken[CONST](p, pos, "CONST") }, func(value *Type_ConstOption, child CONST) { value.CONST = child })
+		states = extendMatches(states, p.parseType, func(value *Type_ConstOption, child *Type) { value.Type = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Type]{value: &Type{Type: TypeTypeConst, Const: &value}, end: state.end})
 		}
 	}
 	if p.cacheType == nil {

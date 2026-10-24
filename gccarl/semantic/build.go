@@ -520,10 +520,39 @@ func (b *builder) fromSubExpr(sub *cparser.SubExpr) (*Expr, error) {
 				},
 			}, nil
 		case cparser.ValueTypeChar:
+			chStr := v.Value.Char.CHAR[1 : len(v.Value.Char.CHAR)-1]
+
+			if len(chStr) == 0 {
+				return nil, fmt.Errorf("empty char")
+			}
+
+			if len(chStr) > 2 {
+				return nil, fmt.Errorf("char too long")
+			}
+
+			if len(chStr) == 1 {
+				return &Expr{
+					Type: charType(),
+					Literal: &Literal{
+						Char: chStr[0],
+					},
+				}, nil
+			}
+
+			// escaped
+			if chStr[0:1] != `\` {
+				return nil, fmt.Errorf("expected \\ in char %s", chStr)
+			}
+
+			unquoted, err := strconv.Unquote(`"` + string(chStr) + `"`)
+			if err != nil {
+				return nil, err
+			}
+
 			return &Expr{
 				Type: charType(),
 				Literal: &Literal{
-					Char: v.Value.Char.CHAR[1],
+					Char: unquoted[0],
 				},
 			}, nil
 		}
@@ -544,7 +573,7 @@ func (b *builder) fromVarOption(vo *cparser.SubExpr_VariableOption) (*Expr, erro
 	}
 
 	// array indexing
-	e, err = wrapArrayIndexing(e, string(vo.SubVariableAccess.V.IDEN), vo.SubVariableAccess.V.ArrayIndexAccess)
+	e, err = b.wrapArrayIndexing(e, string(vo.SubVariableAccess.V.IDEN), vo.SubVariableAccess.V.ArrayIndexAccess)
 	if err != nil {
 		return nil, err
 	}
@@ -608,7 +637,7 @@ func (b *builder) fromVarOptionRecursive(inner *Expr, parentName string, sub []*
 
 	// array indexing
 	var err error
-	inner, err = wrapArrayIndexing(inner, string(f.Name), subVar.V.ArrayIndexAccess)
+	inner, err = b.wrapArrayIndexing(inner, string(f.Name), subVar.V.ArrayIndexAccess)
 	if err != nil {
 		return nil, err
 	}
@@ -616,7 +645,7 @@ func (b *builder) fromVarOptionRecursive(inner *Expr, parentName string, sub []*
 	return b.fromVarOptionRecursive(inner, string(f.Name), rest)
 }
 
-func wrapArrayIndexing(inner *Expr, parentName string, arr []*cparser.ArrayIndexAccess) (*Expr, error) {
+func (b *builder) wrapArrayIndexing(inner *Expr, parentName string, arr []*cparser.ArrayIndexAccess) (*Expr, error) {
 	if len(arr) == 0 {
 		return inner, nil
 	}
@@ -628,9 +657,9 @@ func wrapArrayIndexing(inner *Expr, parentName string, arr []*cparser.ArrayIndex
 		return nil, fmt.Errorf("%v is not indexable", parentName)
 	}
 
-	idx, err := strconv.Atoi(string(x.ArrayIndex.NUM))
+	idx, err := b.toExpr(x.ArrayIndex.Expr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid array index %v: %v", x.ArrayIndex.NUM, err)
+		return nil, fmt.Errorf("invalid array index expr %v: %v", x.ArrayIndex.Expr, err)
 	}
 
 	inner = &Expr{
@@ -641,7 +670,7 @@ func wrapArrayIndexing(inner *Expr, parentName string, arr []*cparser.ArrayIndex
 		},
 	}
 
-	return wrapArrayIndexing(inner, "fix me", rest) // todo fix parent
+	return b.wrapArrayIndexing(inner, "fix me", rest) // todo fix parent
 }
 
 func (b *builder) toArrayLit(av *cparser.ArrayEntries_EntriesOption) ([]*Expr, error) {

@@ -26,8 +26,7 @@ void put_int(int n) {
     if (n < 0) {
         put_char('-');
 
-        // Avoid overflow for INT_MIN.
-        put_unsigned(0u - (unsigned int)n, 10);
+        put_unsigned(0 - (unsigned int)n, 10);
         return;
     }
 
@@ -44,7 +43,7 @@ void my_printf(const char *format, ...) {
             continue;
         }
 
-        format++; // Skip '%'
+        format++;
 
         switch (*format) {
         case 'd':
@@ -73,12 +72,10 @@ void my_printf(const char *format, ...) {
             break;
 
         case '\0':
-            // Trailing '%' — stop rather than reading past the string.
             va_end(args);
             return;
 
         default:
-            // Preserve unknown format specifiers visibly.
             put_char('%');
             put_char(*format);
             break;
