@@ -17,3 +17,6 @@ FOUR
 
 #include <lib1.h>
 FOUR
+
+#define va_arg(ap, Type) (*(Type *)((ap += sizeof(Type)) - sizeof(Type)))
+va_arg(x, int);

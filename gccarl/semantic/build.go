@@ -1154,7 +1154,9 @@ func (b *builder) processDeclaration(d *cparser.Declaration) error {
 			return err
 		}
 
-		b.scope().types[d.Typedef.VariableDef.Variable.IDEN] = typ
+		name := varDefName(d.Typedef.VariableDef)
+
+		b.scope().types[name] = typ
 		return nil
 	}
 

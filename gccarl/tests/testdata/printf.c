@@ -1,3 +1,7 @@
+#define va_arg(ap, Type) (*(Type *)((ap += sizeof(Type)) - sizeof(Type)))
+
+typedef char *va_list;
+
 void put_char(char c) {
     write(1, &c, 1);
 }

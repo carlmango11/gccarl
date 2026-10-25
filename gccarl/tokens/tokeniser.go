@@ -122,14 +122,11 @@ func (tk *Reader) Next() (*Token, error) {
 	}
 
 	sort.Slice(matches, func(i, j int) bool {
-		m1 := matches[i]
-		m2 := matches[j]
-
-		if m1.Literal && m2.Literal {
-			return len(matches[i].Val) > len(matches[j].Val)
+		if matches[i].Val == matches[j].Val {
+			return matches[i].Literal
 		}
 
-		return m1.Literal
+		return len(matches[i].Val) > len(matches[j].Val)
 	})
 
 	longest := matches[0]

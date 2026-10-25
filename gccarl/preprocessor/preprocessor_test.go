@@ -7,7 +7,7 @@ import (
 )
 
 func TestProcess(t *testing.T) {
-	expected := ` 4 ifndef   FOUR   4 `
+	expected := `4 ifndef FOUR 4 ( * ( int * ) ( ( x + = sizeof ( int ) ) - sizeof ( int ) ) ) ; `
 
 	actual, err := New([]string{"testdata/testlib"}).Process("testdata/test1.h")
 	assert.NoError(t, err)

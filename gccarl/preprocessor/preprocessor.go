@@ -28,7 +28,7 @@ func New(includePaths []string) *Processor {
 
 type Define struct {
 	Name   string
-	Params []string
+	Args   []string
 	Tokens []*tokens.Token
 }
 
@@ -236,7 +236,7 @@ func parseDefine(rest string) (Define, error) {
 
 	return Define{
 		Name:   name,
-		Params: params,
+		Args:   params,
 		Tokens: tokens,
 	}, nil
 }
@@ -344,10 +344,6 @@ func (p *Processor) processSections(sections []section) (string, error) {
 		case DirUndefine:
 			delete(p.macros, s.dir.MacroName)
 		case DirDefine:
-			if len(s.dir.Define.Params) > 0 {
-				panic("impl")
-			}
-
 			p.macros[s.dir.Define.Name] = s.dir.Define
 		case DirInclude:
 			includeCode, err := p.processFile(s.dir.Include.Name, s.dir.Include.System)
@@ -396,16 +392,76 @@ func (p *Processor) processCode(code *bytes.Buffer) (string, error) {
 			continue
 		}
 
-		if len(macro.Params) > 0 {
-			panic("impl")
+		var params map[string][]*tokens.Token
+		if len(macro.Args) > 0 {
+			params = readParams(reader, macro.Args)
 		}
 
 		for _, r := range macro.Tokens {
+			if paramTokens, ok := params[r.Val]; ok {
+				for _, t := range paramTokens {
+					out.WriteString(t.Val + " ")
+				}
+
+				continue
+			}
+
 			out.WriteString(r.Val + " ") // TODO this is shit but I've lost the whitespace
 		}
 	}
 
 	return out.String(), nil
+}
+
+func readParams(reader *tokens.Reader, args []string) map[string][]*tokens.Token {
+	var depth int
+	var paramIdx int
+	params := make(map[string][]*tokens.Token)
+
+	add := func(t *tokens.Token) {
+		params[args[paramIdx]] = append(params[args[paramIdx]], t)
+	}
+
+	for {
+		tk, err := reader.Next()
+		if err != nil {
+			if err == io.EOF {
+				panic("unexpected EOF")
+			}
+			panic(err)
+		}
+
+		switch tk.Name {
+		case "LPAREN":
+			depth++
+			if depth != 1 {
+				add(tk)
+			}
+		case "RPAREN":
+			depth--
+			if depth != 0 {
+				add(tk)
+			}
+		case "COMMA":
+			if depth == 1 {
+				paramIdx++
+			} else {
+				add(tk)
+			}
+		default:
+			add(tk)
+		}
+
+		if depth == 0 {
+			break
+		}
+	}
+
+	if paramIdx != len(args)-1 {
+		panic("error")
+	}
+
+	return params
 }
 
 func (p *Processor) readFile(filename string, system bool) ([]byte, error) {

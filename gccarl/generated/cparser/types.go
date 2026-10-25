@@ -444,16 +444,22 @@ type Operator_AssignOption struct {
 type ParamDefType string
 
 const (
-	ParamDefTypeParam ParamDefType = "param"
+	ParamDefTypeParam    ParamDefType = "param"
+	ParamDefTypeVariadic ParamDefType = "variadic"
 )
 
 type ParamDef struct {
-	Type  ParamDefType
-	Param *ParamDef_ParamOption
+	Type     ParamDefType
+	Param    *ParamDef_ParamOption
+	Variadic *ParamDef_VariadicOption
 }
 type ParamDef_ParamOption struct {
 	Type        *Type
 	VariableDef *VariableDef
+}
+
+type ParamDef_VariadicOption struct {
+	THREE_FULL_STOPS THREE_FULL_STOPS
 }
 
 type ParamsType string
@@ -871,6 +877,7 @@ type SEMI string
 type STR string
 type STRUCT string
 type SWITCH string
+type THREE_FULL_STOPS string
 type TYPEDEF string
 type UNSIGNED string
 type VOID string

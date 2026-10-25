@@ -35,6 +35,7 @@ comma-param-def:
 
 param-def:
     param:type variable-def
+    variadic:THREE_FULL_STOPS
 
 value:
     int:NUM

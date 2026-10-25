@@ -46,6 +46,7 @@ var TokenDefinitions = []*tokens.TokenDef{
 	{Name: "EEQUALS", Literal: "=="},
 	{Name: "FULL_STOP", Literal: "."},
 	{Name: "RIGHT_ARROW", Literal: "->"},
+	{Name: "THREE_FULL_STOPS", Literal: "..."},
 	{Name: "RETURN", Literal: "return"},
 	{Name: "BREAK", Literal: "break"},
 	{Name: "IF", Literal: "if"},
@@ -802,6 +803,16 @@ func (p *parseState) parseParamDef(pos int) []parseMatch[*ParamDef] {
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*ParamDef]{value: &ParamDef{Type: ParamDefTypeParam, Param: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[ParamDef_VariadicOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[THREE_FULL_STOPS] {
+			return matchToken[THREE_FULL_STOPS](p, pos, "THREE_FULL_STOPS")
+		}, func(value *ParamDef_VariadicOption, child THREE_FULL_STOPS) { value.THREE_FULL_STOPS = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*ParamDef]{value: &ParamDef{Type: ParamDefTypeVariadic, Variadic: &value}, end: state.end})
 		}
 	}
 	if p.cacheParamDef == nil {

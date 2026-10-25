@@ -35,6 +35,7 @@ MINUSMINUS: '--'
 EEQUALS: '=='
 FULL_STOP: '.'
 RIGHT_ARROW: '->'
+THREE_FULL_STOPS: '...'
 
 RETURN: 'return'
 BREAK: 'break'

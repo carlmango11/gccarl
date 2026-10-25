@@ -34,9 +34,9 @@ func TestPrograms(t *testing.T) {
 			if exclude[name] {
 				return
 			}
-			if name == "printf.c" {
-				return
-			}
+			//if name != "printf.c" {
+			//	return
+			//}
 
 			runTest(t, "./testdata/"+name)
 		})
