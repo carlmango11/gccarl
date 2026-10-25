@@ -1,6 +1,6 @@
 // Parse constructs a fresh typed AST for text. The entire input must match main.
 func Parse(text string) (*Main, error) {
- reader := tokens.NewReader(tokenDefinitions, text)
+ reader := tokens.NewReader(TokenDefinitions, text)
  p := &parseState{}
  for {
   token, err := reader.Next()
@@ -21,7 +21,11 @@ func Parse(text string) (*Main, error) {
  if p.farthest == len(p.tokens) {
   return nil, fmt.Errorf("unexpected end of input at token %d; expected %s", p.farthest+1, strings.Join(expected, ", "))
  }
- return nil, fmt.Errorf("unexpected token %d (%q); expected %s", p.farthest+1, p.tokens[p.farthest].Val, strings.Join(expected, ", "))
+ token := p.tokens[p.farthest]
+ lineStart := strings.LastIndexByte(text[:token.Offset], '\n') + 1
+ lineEnd := len(text)
+ if end := strings.IndexByte(text[token.Offset:], '\n'); end >= 0 { lineEnd = token.Offset + end }
+ return nil, fmt.Errorf("unexpected token %d (%q); expected %s\n%s", p.farthest+1, token.Val, strings.Join(expected, ", "), text[lineStart:lineEnd])
 }
 
 type parseMatch[T any] struct { value T; end int }

@@ -1,0 +1,21 @@
+IDEN: [a-zA-Z_][a-zA-Z0-9_]*
+NUM: [0-9]+
+
+AMPERSAND: '&'
+ASTERISKS: '*'
+HASH: '#'
+LESS_THAN: '<'
+GTE: '>='
+LTE: '<='
+GREATER_THAN: '>'
+EQUALS: '='
+NOT_EQUALS: '!='
+LPAREN: '('
+RPAREN: ')'
+PLUS: '+'
+MINUS: '-'
+FSLASH: '/'
+PERCENT: '%'
+EEQUALS: '=='
+
+DEFINED: 'defined'

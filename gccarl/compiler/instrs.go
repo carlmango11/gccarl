@@ -66,6 +66,10 @@ func (i *Instrs) multiplySigned(s semantic.Size, reg Register, l2 Location) {
 }
 
 func (i *Instrs) multiplyConstUnsigned(c int64, l2 Location) {
+	if l2.Register == RegA {
+		panic("accumulator in use")
+	}
+
 	i.movInt64ToReg(c, RegA)
 	i.addInstr("mul %s", locOperand(semantic.Size8, l2))
 }

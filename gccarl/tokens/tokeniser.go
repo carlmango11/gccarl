@@ -20,6 +20,8 @@ type TokenDef struct {
 type Name string
 
 type Token struct {
+	// Offset is the zero-based byte position in the source text.
+	Offset  int
 	Name    Name
 	Val     string
 	Literal bool
@@ -131,6 +133,7 @@ func (tk *Reader) Next() (*Token, error) {
 	})
 
 	longest := matches[0]
+	longest.Offset = tk.i
 	tk.i += len(longest.Val)
 
 	return matches[0], nil

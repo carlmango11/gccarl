@@ -59,9 +59,9 @@ type Block struct {
 	Block *Block_BlockOption
 }
 type Block_BlockOption struct {
-	LBRACE    LBRACE
-	Statement []*Statement
-	RBRACE    RBRACE
+	LBRACE               LBRACE
+	StatementDeclaration []*StatementDeclaration
+	RBRACE               RBRACE
 }
 
 type CommaCompEntryType string
@@ -197,16 +197,16 @@ type DecAssign_StandardOption struct {
 type DecDefType string
 
 const (
-	DecDefTypeFuncDef   DecDefType = "func-def"
-	DecDefTypeDecAssign DecDefType = "dec-assign"
-	DecDefTypeTypeDef   DecDefType = "type-def"
+	DecDefTypeFuncDef     DecDefType = "func-def"
+	DecDefTypeDecAssign   DecDefType = "dec-assign"
+	DecDefTypeDeclaration DecDefType = "declaration"
 )
 
 type DecDef struct {
-	Type      DecDefType
-	FuncDef   *DecDef_FuncDefOption
-	DecAssign *DecDef_DecAssignOption
-	TypeDef   *DecDef_TypeDefOption
+	Type        DecDefType
+	FuncDef     *DecDef_FuncDefOption
+	DecAssign   *DecDef_DecAssignOption
+	Declaration *DecDef_DeclarationOption
 }
 type DecDef_FuncDefOption struct {
 	Type      *Type
@@ -221,8 +221,42 @@ type DecDef_DecAssignOption struct {
 	DecAssign *DecAssign
 }
 
-type DecDef_TypeDefOption struct {
-	TypeDef *TypeDef
+type DecDef_DeclarationOption struct {
+	Declaration *Declaration
+}
+
+type DeclarationType string
+
+const (
+	DeclarationTypeVarDec    DeclarationType = "var-dec"
+	DeclarationTypeStructDef DeclarationType = "struct-def"
+	DeclarationTypeTypedef   DeclarationType = "typedef"
+)
+
+type Declaration struct {
+	Type      DeclarationType
+	VarDec    *Declaration_VarDecOption
+	StructDef *Declaration_StructDefOption
+	Typedef   *Declaration_TypedefOption
+}
+type Declaration_VarDecOption struct {
+	VarDec *VarDec
+	SEMI   SEMI
+}
+
+type Declaration_StructDefOption struct {
+	STRUCT      STRUCT
+	IDEN        IDEN
+	LBRACE      LBRACE
+	VarDecColon []*VarDecColon
+	RBRACE      RBRACE
+}
+
+type Declaration_TypedefOption struct {
+	TYPEDEF     TYPEDEF
+	Type        *Type
+	VariableDef *VariableDef
+	SEMI        SEMI
 }
 
 type ElseType string
@@ -456,7 +490,6 @@ type StatementType string
 
 const (
 	StatementTypeDecAssign StatementType = "dec-assign"
-	StatementTypeVarDec    StatementType = "var-dec"
 	StatementTypeExpr      StatementType = "expr"
 	StatementTypeReturn    StatementType = "return"
 	StatementTypeBreak     StatementType = "break"
@@ -470,7 +503,6 @@ const (
 type Statement struct {
 	Type      StatementType
 	DecAssign *Statement_DecAssignOption
-	VarDec    *Statement_VarDecOption
 	Expr      *Statement_ExprOption
 	Return    *Statement_ReturnOption
 	Break     *Statement_BreakOption
@@ -483,11 +515,6 @@ type Statement struct {
 type Statement_DecAssignOption struct {
 	DecAssign *DecAssign
 	SEMI      SEMI
-}
-
-type Statement_VarDecOption struct {
-	VarDec *VarDec
-	SEMI   SEMI
 }
 
 type Statement_ExprOption struct {
@@ -546,6 +573,26 @@ type Statement_SwitchOption struct {
 
 type Statement_CompoundOption struct {
 	Block *Block
+}
+
+type StatementDeclarationType string
+
+const (
+	StatementDeclarationTypeS StatementDeclarationType = "s"
+	StatementDeclarationTypeD StatementDeclarationType = "d"
+)
+
+type StatementDeclaration struct {
+	Type StatementDeclarationType
+	S    *StatementDeclaration_SOption
+	D    *StatementDeclaration_DOption
+}
+type StatementDeclaration_SOption struct {
+	Statement *Statement
+}
+
+type StatementDeclaration_DOption struct {
+	Declaration *Declaration
 }
 
 type SubExprType string
@@ -685,24 +732,6 @@ type Type_ConstOption struct {
 	Type  *Type
 }
 
-type TypeDefType string
-
-const (
-	TypeDefTypeStructDef TypeDefType = "struct-def"
-)
-
-type TypeDef struct {
-	Type      TypeDefType
-	StructDef *TypeDef_StructDefOption
-}
-type TypeDef_StructDefOption struct {
-	STRUCT      STRUCT
-	IDEN        IDEN
-	LBRACE      LBRACE
-	VarDecColon []*VarDecColon
-	RBRACE      RBRACE
-}
-
 type ValueType string
 
 const (
@@ -737,7 +766,7 @@ type Value_CastOption struct {
 	LPAREN LPAREN
 	Type   *Type
 	RPAREN RPAREN
-	Value  *Value
+	Expr   *Expr
 }
 
 type Value_CompLitOption struct {
@@ -778,21 +807,6 @@ type VarDecColon struct {
 type VarDecColon_COption struct {
 	VarDec *VarDec
 	SEMI   SEMI
-}
-
-type VarDecCommaType string
-
-const (
-	VarDecCommaTypeDecComma VarDecCommaType = "dec-comma"
-)
-
-type VarDecComma struct {
-	Type     VarDecCommaType
-	DecComma *VarDecComma_DecCommaOption
-}
-type VarDecComma_DecCommaOption struct {
-	COMMA       COMMA
-	VarDecColon *VarDecColon
 }
 
 type VariableDefType string
@@ -857,6 +871,7 @@ type SEMI string
 type STR string
 type STRUCT string
 type SWITCH string
+type TYPEDEF string
 type UNSIGNED string
 type VOID string
 type WHILE string

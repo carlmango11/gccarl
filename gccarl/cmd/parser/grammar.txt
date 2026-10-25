@@ -4,19 +4,25 @@ main:
 dec-def:
     func-def:type IDEN LPAREN params-def? RPAREN block
     dec-assign:dec-assign
-    type-def:type-def
+    declaration:declaration
 
-type-def:
+declaration:
+    var-dec:var-dec SEMI
     struct-def:STRUCT IDEN LBRACE var-dec-colon* RBRACE
+    typedef:TYPEDEF type variable-def SEMI
+
+var-dec:
+    var-dec:type variable-def
 
 var-dec-colon:
     c:var-dec SEMI
 
-var-dec-comma:
-    dec-comma:COMMA var-dec-colon
-
 block:
-    block:LBRACE statement* RBRACE
+    block:LBRACE statement-declaration* RBRACE
+
+statement-declaration:
+    s:statement
+    d:declaration
 
 else:
     else:ELSE statement
@@ -34,7 +40,7 @@ value:
     int:NUM
     str:STR
     char:CHAR
-    cast:LPAREN type RPAREN value
+    cast:LPAREN type RPAREN expr
     comp-lit:LPAREN type array-index-def* RPAREN LBRACE comp-entries? RBRACE
 
 array-entries:
@@ -92,9 +98,8 @@ operator:
 
 statement:
     dec-assign:dec-assign SEMI
-    var-dec:var-dec SEMI
     expr:expr SEMI
-    return:RETURN expr SEMI
+    return:RETURN expr? SEMI
     break:BREAK
     if:IF LPAREN expr RPAREN statement else?
     while:WHILE LPAREN expr RPAREN statement
@@ -104,9 +109,6 @@ statement:
 
 switch-cases:
     c:CASE expr COLON statement*
-
-var-dec:
-    var-dec:type variable-def
 
 dec-assign:
     standard:type variable-def EQUALS initialiser
@@ -140,5 +142,5 @@ type:
     char:CHAR_TYPE
     void:VOID
     custom:IDEN
-    struct:STRUCT IDEN
+    struct:STRUCT IDEN?
     const:CONST type

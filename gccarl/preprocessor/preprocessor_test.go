@@ -7,14 +7,9 @@ import (
 )
 
 func TestProcess(t *testing.T) {
-	const input = `void main() { // main func
-	int x = 1; // comment // another
-}`
+	expected := ` 4 ifndef   FOUR   4 `
 
-	const expected = `void main() { 
-	int x = 1; 
-}`
-
-	actual := Process([]byte(input))
+	actual, err := New([]string{"testdata/testlib"}).Process("testdata/test1.h")
+	assert.NoError(t, err)
 	assert.Equal(t, expected, actual)
 }

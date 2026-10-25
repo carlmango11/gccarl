@@ -10,7 +10,7 @@ import (
 )
 import "regexp"
 
-var tokenDefinitions = []*tokens.TokenDef{
+var TokenDefinitions = []*tokens.TokenDef{
 	{Name: "IDEN", Literal: "", Regex: regexp.MustCompile("^(?:[a-zA-Z_][a-zA-Z0-9_]*)")},
 	{Name: "NUM", Literal: "", Regex: regexp.MustCompile("^(?:[0-9]+)")},
 	{Name: "CHAR", Literal: "", Regex: regexp.MustCompile("^(?:'[^']*')")},
@@ -22,7 +22,6 @@ var tokenDefinitions = []*tokens.TokenDef{
 	{Name: "UNSIGNED", Literal: "unsigned"},
 	{Name: "AMPERSAND", Literal: "&"},
 	{Name: "ASTERISKS", Literal: "*"},
-	{Name: "HASH", Literal: "#"},
 	{Name: "LESS_THAN", Literal: "<"},
 	{Name: "GTE", Literal: ">="},
 	{Name: "LTE", Literal: "<="},
@@ -47,7 +46,6 @@ var tokenDefinitions = []*tokens.TokenDef{
 	{Name: "EEQUALS", Literal: "=="},
 	{Name: "FULL_STOP", Literal: "."},
 	{Name: "RIGHT_ARROW", Literal: "->"},
-	{Name: "INCLUDE", Literal: "include"},
 	{Name: "RETURN", Literal: "return"},
 	{Name: "BREAK", Literal: "break"},
 	{Name: "IF", Literal: "if"},
@@ -57,11 +55,12 @@ var tokenDefinitions = []*tokens.TokenDef{
 	{Name: "SWITCH", Literal: "switch"},
 	{Name: "CASE", Literal: "case"},
 	{Name: "CONST", Literal: "const"},
+	{Name: "TYPEDEF", Literal: "typedef"},
 }
 
 // Parse constructs a fresh typed AST for text. The entire input must match main.
 func Parse(text string) (*Main, error) {
-	reader := tokens.NewReader(tokenDefinitions, text)
+	reader := tokens.NewReader(TokenDefinitions, text)
 	p := &parseState{}
 	for {
 		token, err := reader.Next()
@@ -95,7 +94,13 @@ func Parse(text string) (*Main, error) {
 	if p.farthest == len(p.tokens) {
 		return nil, fmt.Errorf("unexpected end of input at token %d; expected %s", p.farthest+1, strings.Join(expected, ", "))
 	}
-	return nil, fmt.Errorf("unexpected token %d (%q); expected %s", p.farthest+1, p.tokens[p.farthest].Val, strings.Join(expected, ", "))
+	token := p.tokens[p.farthest]
+	lineStart := strings.LastIndexByte(text[:token.Offset], '\n') + 1
+	lineEnd := len(text)
+	if end := strings.IndexByte(text[token.Offset:], '\n'); end >= 0 {
+		lineEnd = token.Offset + end
+	}
+	return nil, fmt.Errorf("unexpected token %d (%q); expected %s\n%s", p.farthest+1, token.Val, strings.Join(expected, ", "), text[lineStart:lineEnd])
 }
 
 type parseMatch[T any] struct {
@@ -178,6 +183,7 @@ type parseState struct {
 	cacheCompExpr               map[int][]parseMatch[*CompExpr]
 	cacheDecAssign              map[int][]parseMatch[*DecAssign]
 	cacheDecDef                 map[int][]parseMatch[*DecDef]
+	cacheDeclaration            map[int][]parseMatch[*Declaration]
 	cacheElse                   map[int][]parseMatch[*Else]
 	cacheEntryLabelField        map[int][]parseMatch[*EntryLabelField]
 	cacheExpr                   map[int][]parseMatch[*Expr]
@@ -189,15 +195,14 @@ type parseState struct {
 	cacheParams                 map[int][]parseMatch[*Params]
 	cacheParamsDef              map[int][]parseMatch[*ParamsDef]
 	cacheStatement              map[int][]parseMatch[*Statement]
+	cacheStatementDeclaration   map[int][]parseMatch[*StatementDeclaration]
 	cacheSubExpr                map[int][]parseMatch[*SubExpr]
 	cacheSubVariableAccess      map[int][]parseMatch[*SubVariableAccess]
 	cacheSwitchCases            map[int][]parseMatch[*SwitchCases]
 	cacheType                   map[int][]parseMatch[*Type]
-	cacheTypeDef                map[int][]parseMatch[*TypeDef]
 	cacheValue                  map[int][]parseMatch[*Value]
 	cacheVarDec                 map[int][]parseMatch[*VarDec]
 	cacheVarDecColon            map[int][]parseMatch[*VarDecColon]
-	cacheVarDecComma            map[int][]parseMatch[*VarDecComma]
 	cacheVariableDef            map[int][]parseMatch[*VariableDef]
 }
 
@@ -271,7 +276,7 @@ func (p *parseState) parseBlock(pos int) []parseMatch[*Block] {
 	{
 		states := []parseMatch[Block_BlockOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[LBRACE] { return matchToken[LBRACE](p, pos, "LBRACE") }, func(value *Block_BlockOption, child LBRACE) { value.LBRACE = child })
-		states = extendMatches(states, repeatedMatches(p.parseStatement, 0), func(value *Block_BlockOption, child []*Statement) { value.Statement = child })
+		states = extendMatches(states, repeatedMatches(p.parseStatementDeclaration, 0), func(value *Block_BlockOption, child []*StatementDeclaration) { value.StatementDeclaration = child })
 		states = extendMatches(states, func(pos int) []parseMatch[RBRACE] { return matchToken[RBRACE](p, pos, "RBRACE") }, func(value *Block_BlockOption, child RBRACE) { value.RBRACE = child })
 		for _, state := range states {
 			value := state.value
@@ -482,17 +487,60 @@ func (p *parseState) parseDecDef(pos int) []parseMatch[*DecDef] {
 		}
 	}
 	{
-		states := []parseMatch[DecDef_TypeDefOption]{{end: pos}}
-		states = extendMatches(states, p.parseTypeDef, func(value *DecDef_TypeDefOption, child *TypeDef) { value.TypeDef = child })
+		states := []parseMatch[DecDef_DeclarationOption]{{end: pos}}
+		states = extendMatches(states, p.parseDeclaration, func(value *DecDef_DeclarationOption, child *Declaration) { value.Declaration = child })
 		for _, state := range states {
 			value := state.value
-			matches = append(matches, parseMatch[*DecDef]{value: &DecDef{Type: DecDefTypeTypeDef, TypeDef: &value}, end: state.end})
+			matches = append(matches, parseMatch[*DecDef]{value: &DecDef{Type: DecDefTypeDeclaration, Declaration: &value}, end: state.end})
 		}
 	}
 	if p.cacheDecDef == nil {
 		p.cacheDecDef = map[int][]parseMatch[*DecDef]{}
 	}
 	p.cacheDecDef[pos] = matches
+	return matches
+}
+func (p *parseState) parseDeclaration(pos int) []parseMatch[*Declaration] {
+	if matches, ok := p.cacheDeclaration[pos]; ok {
+		return matches
+	}
+	var matches []parseMatch[*Declaration]
+	{
+		states := []parseMatch[Declaration_VarDecOption]{{end: pos}}
+		states = extendMatches(states, p.parseVarDec, func(value *Declaration_VarDecOption, child *VarDec) { value.VarDec = child })
+		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Declaration_VarDecOption, child SEMI) { value.SEMI = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Declaration]{value: &Declaration{Type: DeclarationTypeVarDec, VarDec: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Declaration_StructDefOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[STRUCT] { return matchToken[STRUCT](p, pos, "STRUCT") }, func(value *Declaration_StructDefOption, child STRUCT) { value.STRUCT = child })
+		states = extendMatches(states, func(pos int) []parseMatch[IDEN] { return matchToken[IDEN](p, pos, "IDEN") }, func(value *Declaration_StructDefOption, child IDEN) { value.IDEN = child })
+		states = extendMatches(states, func(pos int) []parseMatch[LBRACE] { return matchToken[LBRACE](p, pos, "LBRACE") }, func(value *Declaration_StructDefOption, child LBRACE) { value.LBRACE = child })
+		states = extendMatches(states, repeatedMatches(p.parseVarDecColon, 0), func(value *Declaration_StructDefOption, child []*VarDecColon) { value.VarDecColon = child })
+		states = extendMatches(states, func(pos int) []parseMatch[RBRACE] { return matchToken[RBRACE](p, pos, "RBRACE") }, func(value *Declaration_StructDefOption, child RBRACE) { value.RBRACE = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Declaration]{value: &Declaration{Type: DeclarationTypeStructDef, StructDef: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[Declaration_TypedefOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[TYPEDEF] { return matchToken[TYPEDEF](p, pos, "TYPEDEF") }, func(value *Declaration_TypedefOption, child TYPEDEF) { value.TYPEDEF = child })
+		states = extendMatches(states, p.parseType, func(value *Declaration_TypedefOption, child *Type) { value.Type = child })
+		states = extendMatches(states, p.parseVariableDef, func(value *Declaration_TypedefOption, child *VariableDef) { value.VariableDef = child })
+		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Declaration_TypedefOption, child SEMI) { value.SEMI = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Declaration]{value: &Declaration{Type: DeclarationTypeTypedef, Typedef: &value}, end: state.end})
+		}
+	}
+	if p.cacheDeclaration == nil {
+		p.cacheDeclaration = map[int][]parseMatch[*Declaration]{}
+	}
+	p.cacheDeclaration[pos] = matches
 	return matches
 }
 func (p *parseState) parseElse(pos int) []parseMatch[*Else] {
@@ -817,15 +865,6 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		}
 	}
 	{
-		states := []parseMatch[Statement_VarDecOption]{{end: pos}}
-		states = extendMatches(states, p.parseVarDec, func(value *Statement_VarDecOption, child *VarDec) { value.VarDec = child })
-		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_VarDecOption, child SEMI) { value.SEMI = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*Statement]{value: &Statement{Type: StatementTypeVarDec, VarDec: &value}, end: state.end})
-		}
-	}
-	{
 		states := []parseMatch[Statement_ExprOption]{{end: pos}}
 		states = extendMatches(states, p.parseExpr, func(value *Statement_ExprOption, child *Expr) { value.Expr = child })
 		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_ExprOption, child SEMI) { value.SEMI = child })
@@ -837,7 +876,7 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 	{
 		states := []parseMatch[Statement_ReturnOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[RETURN] { return matchToken[RETURN](p, pos, "RETURN") }, func(value *Statement_ReturnOption, child RETURN) { value.RETURN = child })
-		states = extendMatches(states, p.parseExpr, func(value *Statement_ReturnOption, child *Expr) { value.Expr = child })
+		states = extendMatches(states, optionalMatch(p.parseExpr), func(value *Statement_ReturnOption, child *Expr) { value.Expr = child })
 		states = extendMatches(states, func(pos int) []parseMatch[SEMI] { return matchToken[SEMI](p, pos, "SEMI") }, func(value *Statement_ReturnOption, child SEMI) { value.SEMI = child })
 		for _, state := range states {
 			value := state.value
@@ -919,6 +958,33 @@ func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
 		p.cacheStatement = map[int][]parseMatch[*Statement]{}
 	}
 	p.cacheStatement[pos] = matches
+	return matches
+}
+func (p *parseState) parseStatementDeclaration(pos int) []parseMatch[*StatementDeclaration] {
+	if matches, ok := p.cacheStatementDeclaration[pos]; ok {
+		return matches
+	}
+	var matches []parseMatch[*StatementDeclaration]
+	{
+		states := []parseMatch[StatementDeclaration_SOption]{{end: pos}}
+		states = extendMatches(states, p.parseStatement, func(value *StatementDeclaration_SOption, child *Statement) { value.Statement = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*StatementDeclaration]{value: &StatementDeclaration{Type: StatementDeclarationTypeS, S: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[StatementDeclaration_DOption]{{end: pos}}
+		states = extendMatches(states, p.parseDeclaration, func(value *StatementDeclaration_DOption, child *Declaration) { value.Declaration = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*StatementDeclaration]{value: &StatementDeclaration{Type: StatementDeclarationTypeD, D: &value}, end: state.end})
+		}
+	}
+	if p.cacheStatementDeclaration == nil {
+		p.cacheStatementDeclaration = map[int][]parseMatch[*StatementDeclaration]{}
+	}
+	p.cacheStatementDeclaration[pos] = matches
 	return matches
 }
 func (p *parseState) parseSubExpr(pos int) []parseMatch[*SubExpr] {
@@ -1081,7 +1147,7 @@ func (p *parseState) parseType(pos int) []parseMatch[*Type] {
 	{
 		states := []parseMatch[Type_StructOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[STRUCT] { return matchToken[STRUCT](p, pos, "STRUCT") }, func(value *Type_StructOption, child STRUCT) { value.STRUCT = child })
-		states = extendMatches(states, func(pos int) []parseMatch[IDEN] { return matchToken[IDEN](p, pos, "IDEN") }, func(value *Type_StructOption, child IDEN) { value.IDEN = child })
+		states = extendMatches(states, optionalMatch(func(pos int) []parseMatch[IDEN] { return matchToken[IDEN](p, pos, "IDEN") }), func(value *Type_StructOption, child IDEN) { value.IDEN = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Type]{value: &Type{Type: TypeTypeStruct, Struct: &value}, end: state.end})
@@ -1100,29 +1166,6 @@ func (p *parseState) parseType(pos int) []parseMatch[*Type] {
 		p.cacheType = map[int][]parseMatch[*Type]{}
 	}
 	p.cacheType[pos] = matches
-	return matches
-}
-func (p *parseState) parseTypeDef(pos int) []parseMatch[*TypeDef] {
-	if matches, ok := p.cacheTypeDef[pos]; ok {
-		return matches
-	}
-	var matches []parseMatch[*TypeDef]
-	{
-		states := []parseMatch[TypeDef_StructDefOption]{{end: pos}}
-		states = extendMatches(states, func(pos int) []parseMatch[STRUCT] { return matchToken[STRUCT](p, pos, "STRUCT") }, func(value *TypeDef_StructDefOption, child STRUCT) { value.STRUCT = child })
-		states = extendMatches(states, func(pos int) []parseMatch[IDEN] { return matchToken[IDEN](p, pos, "IDEN") }, func(value *TypeDef_StructDefOption, child IDEN) { value.IDEN = child })
-		states = extendMatches(states, func(pos int) []parseMatch[LBRACE] { return matchToken[LBRACE](p, pos, "LBRACE") }, func(value *TypeDef_StructDefOption, child LBRACE) { value.LBRACE = child })
-		states = extendMatches(states, repeatedMatches(p.parseVarDecColon, 0), func(value *TypeDef_StructDefOption, child []*VarDecColon) { value.VarDecColon = child })
-		states = extendMatches(states, func(pos int) []parseMatch[RBRACE] { return matchToken[RBRACE](p, pos, "RBRACE") }, func(value *TypeDef_StructDefOption, child RBRACE) { value.RBRACE = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*TypeDef]{value: &TypeDef{Type: TypeDefTypeStructDef, StructDef: &value}, end: state.end})
-		}
-	}
-	if p.cacheTypeDef == nil {
-		p.cacheTypeDef = map[int][]parseMatch[*TypeDef]{}
-	}
-	p.cacheTypeDef[pos] = matches
 	return matches
 }
 func (p *parseState) parseValue(pos int) []parseMatch[*Value] {
@@ -1159,7 +1202,7 @@ func (p *parseState) parseValue(pos int) []parseMatch[*Value] {
 		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Value_CastOption, child LPAREN) { value.LPAREN = child })
 		states = extendMatches(states, p.parseType, func(value *Value_CastOption, child *Type) { value.Type = child })
 		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Value_CastOption, child RPAREN) { value.RPAREN = child })
-		states = extendMatches(states, p.parseValue, func(value *Value_CastOption, child *Value) { value.Value = child })
+		states = extendMatches(states, p.parseExpr, func(value *Value_CastOption, child *Expr) { value.Expr = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Value]{value: &Value{Type: ValueTypeCast, Cast: &value}, end: state.end})
@@ -1223,26 +1266,6 @@ func (p *parseState) parseVarDecColon(pos int) []parseMatch[*VarDecColon] {
 		p.cacheVarDecColon = map[int][]parseMatch[*VarDecColon]{}
 	}
 	p.cacheVarDecColon[pos] = matches
-	return matches
-}
-func (p *parseState) parseVarDecComma(pos int) []parseMatch[*VarDecComma] {
-	if matches, ok := p.cacheVarDecComma[pos]; ok {
-		return matches
-	}
-	var matches []parseMatch[*VarDecComma]
-	{
-		states := []parseMatch[VarDecComma_DecCommaOption]{{end: pos}}
-		states = extendMatches(states, func(pos int) []parseMatch[COMMA] { return matchToken[COMMA](p, pos, "COMMA") }, func(value *VarDecComma_DecCommaOption, child COMMA) { value.COMMA = child })
-		states = extendMatches(states, p.parseVarDecColon, func(value *VarDecComma_DecCommaOption, child *VarDecColon) { value.VarDecColon = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*VarDecComma]{value: &VarDecComma{Type: VarDecCommaTypeDecComma, DecComma: &value}, end: state.end})
-		}
-	}
-	if p.cacheVarDecComma == nil {
-		p.cacheVarDecComma = map[int][]parseMatch[*VarDecComma]{}
-	}
-	p.cacheVarDecComma[pos] = matches
 	return matches
 }
 func (p *parseState) parseVariableDef(pos int) []parseMatch[*VariableDef] {

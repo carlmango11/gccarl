@@ -17,6 +17,7 @@ type builder struct {
 type Scope struct {
 	vars    map[cparser.IDEN]Var
 	structs map[cparser.IDEN]Type
+	types   map[cparser.IDEN]Type
 }
 
 var compareOp = map[cparser.OperatorType]CompareOp{
@@ -66,8 +67,8 @@ func (b *builder) build(p *cparser.Main) (*Program, error) {
 			}
 
 			funcDecs = append(funcDecs, f)
-		case cparser.DecDefTypeTypeDef:
-			err := b.defineType(dd.TypeDef)
+		case cparser.DecDefTypeDeclaration:
+			err := b.processDeclaration(dd.Declaration.Declaration)
 			if err != nil {
 				return nil, err
 			}
@@ -117,13 +118,21 @@ func (b *builder) toFuncDef(f *cparser.DecDef_FuncDefOption) (*FuncDef, error) {
 	}
 
 	var statements []*Statement
-	for _, s := range f.Block.Block.Statement {
-		statement, err := b.toStatement(s)
-		if err != nil {
-			return nil, err
-		}
+	for _, s := range f.Block.Block.StatementDeclaration {
+		switch s.Type {
+		case cparser.StatementDeclarationTypeS:
+			statement, err := b.toStatement(s.S.Statement)
+			if err != nil {
+				return nil, err
+			}
 
-		statements = append(statements, statement)
+			statements = append(statements, statement)
+		case cparser.StatementDeclarationTypeD:
+			err := b.processDeclaration(s.D.Declaration)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return &FuncDef{
@@ -224,13 +233,21 @@ func (b *builder) toVarType(typ *cparser.Type, arrs []*cparser.ArrayIndexDef, is
 		}, nil
 	}
 
-	if typ.Type == cparser.TypeTypeStruct {
+	switch typ.Type {
+	case cparser.TypeTypeStruct:
 		st, ok := b.structType(typ.Struct.IDEN)
 		if !ok {
 			panicf("%v is not defined", typ.Struct.IDEN)
 		}
 
 		return st, nil
+	case cparser.TypeTypeCustom:
+		t, ok := b.customType(typ.Custom.IDEN)
+		if !ok {
+			panicf("%v is not defined", typ.Custom.IDEN)
+		}
+
+		return t, nil
 	}
 
 	return Type{
@@ -242,6 +259,17 @@ func (b *builder) toVarType(typ *cparser.Type, arrs []*cparser.ArrayIndexDef, is
 func (b *builder) structType(n cparser.IDEN) (Type, bool) {
 	for i := len(b.scopes) - 1; i >= 0; i-- {
 		s, ok := b.scopes[i].structs[n]
+		if ok {
+			return s, true
+		}
+	}
+
+	return Type{}, false
+}
+
+func (b *builder) customType(n cparser.IDEN) (Type, bool) {
+	for i := len(b.scopes) - 1; i >= 0; i-- {
+		s, ok := b.scopes[i].types[n]
 		if ok {
 			return s, true
 		}
@@ -354,13 +382,6 @@ func (b *builder) toStatement(s *cparser.Statement) (*Statement, error) {
 		return &Statement{
 			DeclareInit: a,
 		}, nil
-	case cparser.StatementTypeVarDec:
-		_, err := b.declareVar(s.VarDec.VarDec.VarDec.Type, s.VarDec.VarDec.VarDec.VariableDef, false)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, nil
 	case cparser.StatementTypeReturn:
 		expr, err := b.toExpr(s.Return.Expr)
 		if err != nil {
@@ -399,13 +420,18 @@ func (b *builder) toCompoundStatement(s *cparser.Statement_CompoundOption) (*Com
 
 	var statements []*Statement
 
-	for _, sNode := range s.Block.Block.Statement {
-		compoundS, err := b.toStatement(sNode)
-		if err != nil {
-			return nil, err
-		}
+	for _, sNode := range s.Block.Block.StatementDeclaration {
+		switch sNode.Type {
+		case cparser.StatementDeclarationTypeS:
+			compoundS, err := b.toStatement(sNode.S.Statement)
+			if err != nil {
+				return nil, err
+			}
 
-		statements = append(statements, compoundS)
+			statements = append(statements, compoundS)
+		case cparser.StatementDeclarationTypeD:
+			panic("impl")
+		}
 	}
 
 	return &Compound{
@@ -893,16 +919,7 @@ func (b *builder) toFor(f *cparser.Statement_ForOption) (*Loop, error) {
 	}, nil
 }
 
-func (b *builder) defineType(d *cparser.DecDef_TypeDefOption) error {
-	switch d.TypeDef.Type {
-	case cparser.TypeDefTypeStructDef:
-		return b.toStructDef(d.TypeDef.StructDef)
-	}
-
-	panic("invalid type")
-}
-
-func (b *builder) toStructDef(td *cparser.TypeDef_StructDefOption) error {
+func (b *builder) toStructDef(td *cparser.Declaration_StructDefOption) error {
 	var vars []StructField
 	structVars := map[cparser.IDEN]bool{}
 
@@ -1124,6 +1141,26 @@ func (b *builder) fromOperatorExp(compExpr *cparser.CompExpr_CompExprOption) (*E
 	}, nil
 }
 
+func (b *builder) processDeclaration(d *cparser.Declaration) error {
+	switch d.Type {
+	case cparser.DeclarationTypeVarDec:
+		_, err := b.declareVar(d.VarDec.VarDec.VarDec.Type, d.VarDec.VarDec.VarDec.VariableDef, false)
+		return err
+	case cparser.DeclarationTypeStructDef:
+		return b.toStructDef(d.StructDef)
+	case cparser.DeclarationTypeTypedef:
+		typ, err := b.toType(d.Typedef.Type, d.Typedef.VariableDef, false)
+		if err != nil {
+			return err
+		}
+
+		b.scope().types[d.Typedef.VariableDef.Variable.IDEN] = typ
+		return nil
+	}
+
+	panic("unreachable")
+}
+
 func int32Type() Type {
 	return Type{Kind: KindPrimitive, Prim: PrimInt32}
 }
@@ -1148,6 +1185,7 @@ func newScope() *Scope {
 	return &Scope{
 		vars:    make(map[cparser.IDEN]Var),
 		structs: make(map[cparser.IDEN]Type),
+		types:   make(map[cparser.IDEN]Type),
 	}
 }
 

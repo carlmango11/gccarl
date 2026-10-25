@@ -37,7 +37,7 @@ func (p *Parser) Generate(tokenInput io.Reader, outDir, packageName string) erro
 			break
 		}
 	}
-	code.WriteString("var tokenDefinitions = []*tokens.TokenDef{\n")
+	code.WriteString("var TokenDefinitions = []*tokens.TokenDef{\n")
 	for _, d := range definitions {
 		fmt.Fprintf(&code, "{Name:%q, Literal:%q", d.Name, d.Literal)
 		if d.Regex != nil {
@@ -153,7 +153,7 @@ func validateGeneration(rules map[grammar.RuleName]*grammar.Rule, definitions []
 	if rules["main"] == nil {
 		return fmt.Errorf("grammar requires a main rule")
 	}
-	symbols := map[string]bool{"Parse": true, "parseState": true, "parseMatch": true, "tokenDefinitions": true, "matchToken": true, "extendMatches": true, "optionalMatch": true, "repeatedMatches": true, "tokens": true, "fmt": true, "io": true, "sort": true, "strings": true, "regexp": true}
+	symbols := map[string]bool{"Parse": true, "parseState": true, "parseMatch": true, "TokenDefinitions": true, "matchToken": true, "extendMatches": true, "optionalMatch": true, "repeatedMatches": true, "tokens": true, "fmt": true, "io": true, "sort": true, "strings": true, "regexp": true}
 	add := func(name string) error {
 		if !gotoken.IsIdentifier(name) || name == "_" {
 			return fmt.Errorf("invalid generated identifier %q", name)

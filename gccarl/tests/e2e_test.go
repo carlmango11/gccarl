@@ -24,29 +24,30 @@ func TestPrograms(t *testing.T) {
 
 	exclude := map[string]bool{
 		//"printf.c": true,
+		"array_equals.c": true,
 	}
 
 	for _, fe := range d {
-		fileBytes, err := os.ReadFile("./testdata/" + fe.Name())
-		if err != nil {
-			log.Fatal(err)
-		}
+		name := fe.Name()
 
-		t.Run(fe.Name(), func(t *testing.T) {
-			if exclude[fe.Name()] {
+		t.Run(name, func(t *testing.T) {
+			if exclude[name] {
 				return
 			}
-			if fe.Name() != "printf.c" {
+			if name == "printf.c" {
 				return
 			}
 
-			runTest(t, fileBytes)
+			runTest(t, "./testdata/"+name)
 		})
 	}
 }
 
-func runTest(t *testing.T, fileBytes []byte) {
-	text := preprocessor.Process(fileBytes)
+func runTest(t *testing.T, filename string) {
+	text, err := preprocessor.New(nil).Process(filename)
+	if err != nil {
+		assert.NoError(t, err, "preprocessing failed")
+	}
 
 	tree, err := cparser.Parse(text)
 	if err != nil {

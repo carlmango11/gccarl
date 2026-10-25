@@ -348,6 +348,12 @@ func (c *Compiler) compileIndexExpr(instrs *Instrs, f *semantic.IndexExpr) (Loca
 		return Location{}, err
 	}
 
+	if indexLoc.Type == LTRegister && indexLoc.Register == RegA {
+		// need to move it because mul needs it
+		instrs.movLocToReg(semantic.Size64, indexLoc, RegD)
+		indexLoc = regLocation(RegD)
+	}
+
 	baseOffset := Offset(f.Expr.Type.SubType.Size())
 	instrs.multiplyConstUnsigned(int64(baseOffset), indexLoc)
 
@@ -355,8 +361,8 @@ func (c *Compiler) compileIndexExpr(instrs *Instrs, f *semantic.IndexExpr) (Loca
 
 	// TODO: optimisation here for indices known at compile time
 	// need to move into memory so the next bit doesn't wipe it
-	offset := c.locals.Add(semantic.Size8)
-	instrs.movFromReg(semantic.Size8, RegA, offset)
+	offset := c.locals.Add(semantic.Size64)
+	instrs.movFromReg(semantic.Size64, RegA, offset)
 
 	loc, err := c.compileExpr(instrs, f.Expr)
 	if err != nil {
@@ -365,9 +371,11 @@ func (c *Compiler) compileIndexExpr(instrs *Instrs, f *semantic.IndexExpr) (Loca
 
 	switch loc.Type {
 	case LTOffset:
+		panic("need a new type of runtime offset?")
 		loc.Offset -= offset
 	case LTRegister:
-		instrs.addN(8, loc.Register, int(offset))
+		panic("how is this possible?")
+		instrs.add(8, loc.Register, offsetLoc(offset))
 	default:
 		panic("invalid location")
 	}

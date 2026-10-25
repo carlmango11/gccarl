@@ -24,6 +24,7 @@ statement:
 	const tests = `package example
 import "testing"
 func TestRuntime(t *testing.T) {
+ if len(TokenDefinitions) == 0 || TokenDefinitions[0].Name != "IDEN" { t.Fatal("missing exported token definitions") }
  for _, text := range []string{"1 + 2;", "3 + 4"} {
   tree, err := Parse(text)
   if err != nil { t.Fatal(err) }
@@ -104,6 +105,23 @@ func TestNullableAndAmbiguous(t *testing.T) {
  tree,err=Parse("name")
  if err!=nil || tree.Empty.Item.Value.IDEN!="name" {t.Fatalf("nonempty: %#v %v",tree,err)}
  if tree,err:=Parse("1");tree!=nil || err==nil || !strings.Contains(err.Error(),"ambiguous") {t.Fatalf("ambiguous: %#v %v",tree,err)}
+}
+`)
+}
+
+func TestGeneratedUnexpectedTokenLine(t *testing.T) {
+	runGeneratedTests(t, "main:\n  main:NUM*\n", `package example
+import ("strings"; "testing")
+func TestSourceLine(t *testing.T) {
+ for _,tc:=range []struct{text,line string}{
+  {"  + 1\n", "  + 1"},
+  {"1\n\t2 + 3  \n4", "\t2 + 3  "},
+  {"1\n  2 +", "  2 +"},
+  {"1\n  2 2\n  2 + 2", "  2 + 2"},
+ } {
+  _,err:=Parse(tc.text)
+  if err==nil || !strings.Contains(err.Error(),"unexpected token") || !strings.HasSuffix(err.Error(),"\n"+tc.line) {t.Fatalf("expected source line %q in error: %v",tc.line,err)}
+ }
 }
 `)
 }

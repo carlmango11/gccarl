@@ -1,0 +1,20 @@
+main:
+    sub-expr:sub-expr
+    comp:sub-expr operator main
+
+sub-expr:
+    iden:IDEN
+    defined:DEFINED LPAREN? IDEN RPAREN?
+    parens:LPAREN main RPAREN
+
+operator:
+    gte:GTE
+    lte:LTE
+    mod:PERCENT
+    less:LESS_THAN
+    equal:EEQUALS
+    not-equal:NOT_EQUALS
+    plus:PLUS
+    minus:MINUS
+    divide:FSLASH
+    multiply:ASTERISKS
