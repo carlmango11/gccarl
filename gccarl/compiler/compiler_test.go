@@ -3,7 +3,9 @@ package compiler
 import (
 	"testing"
 
+	"github.com/carlmango11/gccarl/gccarl/generated/cparser"
 	"github.com/carlmango11/gccarl/gccarl/semantic"
+	"github.com/carlmango11/gccarl/gccarl/tokens"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,7 +18,7 @@ func TestGenerator(t *testing.T) {
 	}
 
 	for _, text := range texts {
-		astProg, err := cparser.Parse(text)
+		astProg, err := cparser.Parse(tokens.NewReader(cparser.TokenDefinitions, text))
 		require.NoError(t, err)
 
 		prog, err := semantic.Build(astProg)
@@ -30,7 +32,7 @@ func TestGenerator(t *testing.T) {
 
 func TestRuntimePrograms(t *testing.T) {
 	for _, text := range []string{"int main() { return 7; }", "int main() { return 42; }"} {
-		tree, err := cparser.Parse(text)
+		tree, err := cparser.Parse(tokens.NewReader(cparser.TokenDefinitions, text))
 		require.NoError(t, err)
 		program, err := semantic.Build(tree)
 		require.NoError(t, err)

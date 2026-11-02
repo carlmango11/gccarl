@@ -15,6 +15,7 @@ var TokenDefinitions = []*tokens.TokenDef{
 	{Name: "NUM", Literal: "", Regex: regexp.MustCompile("^(?:[0-9]+)")},
 	{Name: "CHAR", Literal: "", Regex: regexp.MustCompile("^(?:'[^']*')")},
 	{Name: "STR", Literal: "", Regex: regexp.MustCompile("^(?:\"[^\"]*\")")},
+	{Name: "NEWLINE", Literal: "", Regex: regexp.MustCompile("^(?:(\\r\\n|\\r|\\n))")},
 	{Name: "INT_TYPE", Literal: "int"},
 	{Name: "CHAR_TYPE", Literal: "char"},
 	{Name: "VOID", Literal: "void"},
@@ -41,6 +42,7 @@ var TokenDefinitions = []*tokens.TokenDef{
 	{Name: "PLUS", Literal: "+"},
 	{Name: "MINUS", Literal: "-"},
 	{Name: "FSLASH", Literal: "/"},
+	{Name: "BSLASH", Literal: "\\"},
 	{Name: "PERCENT", Literal: "%"},
 	{Name: "MINUSMINUS", Literal: "--"},
 	{Name: "EEQUALS", Literal: "=="},
@@ -57,11 +59,20 @@ var TokenDefinitions = []*tokens.TokenDef{
 	{Name: "CASE", Literal: "case"},
 	{Name: "CONST", Literal: "const"},
 	{Name: "TYPEDEF", Literal: "typedef"},
+	{Name: "HASH", Literal: "#"},
+	{Name: "DEFINED", Literal: "defined"},
+	{Name: "INCLUDE", Literal: "include"},
+	{Name: "ELIF", Literal: "elif"},
+	{Name: "END_IF", Literal: "endif"},
+	{Name: "IF_DEF", Literal: "ifdef"},
+	{Name: "IF_NOT_DEF", Literal: "ifndef"},
+	{Name: "DEFINE", Literal: "define"},
+	{Name: "UNDEFINE", Literal: "undef"},
+	{Name: "SYS_INCLUDE_STR", Literal: "", Regex: regexp.MustCompile("^(?:<[^<>]*>)")},
 }
 
-// Parse constructs a fresh typed AST for text. The entire input must match main.
-func Parse(text string) (*Main, error) {
-	reader := tokens.NewReader(TokenDefinitions, text)
+// Parse consumes reader and constructs a fresh typed AST. The remaining input must match main.
+func Parse(reader tokens.Reader) (*Main, error) {
 	p := &parseState{}
 	for {
 		token, err := reader.Next()
@@ -96,12 +107,11 @@ func Parse(text string) (*Main, error) {
 		return nil, fmt.Errorf("unexpected end of input at token %d; expected %s", p.farthest+1, strings.Join(expected, ", "))
 	}
 	token := p.tokens[p.farthest]
-	lineStart := strings.LastIndexByte(text[:token.Offset], '\n') + 1
-	lineEnd := len(text)
-	if end := strings.IndexByte(text[token.Offset:], '\n'); end >= 0 {
-		lineEnd = token.Offset + end
+	message := fmt.Sprintf("unexpected token %d (%q); expected %s", p.farthest+1, token.Val, strings.Join(expected, ", "))
+	if source, ok := reader.(interface{ SourceLine(int) string }); ok {
+		message += "\n" + source.SourceLine(token.Offset)
 	}
-	return nil, fmt.Errorf("unexpected token %d (%q); expected %s\n%s", p.farthest+1, token.Val, strings.Join(expected, ", "), text[lineStart:lineEnd])
+	return nil, fmt.Errorf("%s", message)
 }
 
 type parseMatch[T any] struct {

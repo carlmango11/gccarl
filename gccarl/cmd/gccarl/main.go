@@ -36,13 +36,13 @@ func main() {
 
 	pp := preprocessor.New([]string{"/Users/carl/dev/gcclib"})
 
-	text, err := pp.Process(string(textBytes))
+	tokenStream, err := pp.Process(string(textBytes))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
-	tree, err := cparser.Parse(string(text))
+	tree, err := cparser.Parse(tokenStream)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

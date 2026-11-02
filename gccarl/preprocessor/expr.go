@@ -1,6 +1,11 @@
 package preprocessor
 
-import "github.com/carlmango11/gccarl/gccarl/generated/dparser"
+import (
+	"io"
+
+	"github.com/carlmango11/gccarl/gccarl/generated/dparser"
+	"github.com/carlmango11/gccarl/gccarl/tokens"
+)
 
 type Expr struct {
 	ID      dparser.IDEN
@@ -15,8 +20,28 @@ type OpExpr struct {
 	Expr2 *Expr
 }
 
-func parseExpr(s string) (*Expr, error) {
-	raw, err := dparser.Parse(s)
+type exprTokenReader struct {
+	i   int
+	tks []*tokens.Token
+}
+
+func (r *exprTokenReader) Next() (*tokens.Token, error) {
+	if r.i == len(r.tks) {
+		return nil, io.EOF
+	}
+
+	tk := r.tks[r.i]
+	r.i++
+
+	return tk, nil
+}
+
+func parseExpr(tks []*tokens.Token) (*Expr, error) {
+	r := &exprTokenReader{
+		tks: tks,
+	}
+
+	raw, err := dparser.Parse(r)
 	if err != nil {
 		return nil, err
 	}
@@ -73,11 +98,16 @@ func parseSub(s *dparser.SubExpr) (*Expr, error) {
 	panic("unreachable")
 }
 
-func (p *Processor) evalExpr(e *Expr) bool {
+func (r *reader) evalExpr(exprTokens []*tokens.Token) (bool, error) {
+	e, err := parseExpr(exprTokens)
+	if err != nil {
+		return false, err
+	}
+
 	switch {
 	case e.Defined != nil:
-		_, ok := p.macros[string(*e.Defined)]
-		return ok
+		_, ok := r.macros[string(*e.Defined)]
+		return ok, nil
 	}
 
 	panic("unreachable")

@@ -12,6 +12,7 @@ import (
 	"github.com/carlmango11/gccarl/gccarl/generated/cparser"
 	"github.com/carlmango11/gccarl/gccarl/preprocessor"
 	"github.com/carlmango11/gccarl/gccarl/semantic"
+	"github.com/carlmango11/gccarl/gccarl/tokens"
 	"github.com/stretchr/testify/assert"
 	uc "github.com/unicorn-engine/unicorn/bindings/go/unicorn"
 )
@@ -49,7 +50,7 @@ func runTest(t *testing.T, filename string) {
 		assert.NoError(t, err, "preprocessing failed")
 	}
 
-	tree, err := cparser.Parse(text)
+	tree, err := cparser.Parse(tokens.NewReader(cparser.TokenDefinitions, text))
 	if err != nil {
 		assert.NoError(t, err, "cannot parse")
 		return

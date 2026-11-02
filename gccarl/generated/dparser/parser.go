@@ -13,9 +13,16 @@ import "regexp"
 var TokenDefinitions = []*tokens.TokenDef{
 	{Name: "IDEN", Literal: "", Regex: regexp.MustCompile("^(?:[a-zA-Z_][a-zA-Z0-9_]*)")},
 	{Name: "NUM", Literal: "", Regex: regexp.MustCompile("^(?:[0-9]+)")},
+	{Name: "CHAR", Literal: "", Regex: regexp.MustCompile("^(?:'[^']*')")},
+	{Name: "STR", Literal: "", Regex: regexp.MustCompile("^(?:\"[^\"]*\")")},
+	{Name: "NEWLINE", Literal: "", Regex: regexp.MustCompile("^(?:(\\r\\n|\\r|\\n))")},
+	{Name: "INT_TYPE", Literal: "int"},
+	{Name: "CHAR_TYPE", Literal: "char"},
+	{Name: "VOID", Literal: "void"},
+	{Name: "STRUCT", Literal: "struct"},
+	{Name: "UNSIGNED", Literal: "unsigned"},
 	{Name: "AMPERSAND", Literal: "&"},
 	{Name: "ASTERISKS", Literal: "*"},
-	{Name: "HASH", Literal: "#"},
 	{Name: "LESS_THAN", Literal: "<"},
 	{Name: "GTE", Literal: ">="},
 	{Name: "LTE", Literal: "<="},
@@ -24,17 +31,47 @@ var TokenDefinitions = []*tokens.TokenDef{
 	{Name: "NOT_EQUALS", Literal: "!="},
 	{Name: "LPAREN", Literal: "("},
 	{Name: "RPAREN", Literal: ")"},
+	{Name: "LBRACE", Literal: "{"},
+	{Name: "RBRACE", Literal: "}"},
+	{Name: "COMMA", Literal: ","},
+	{Name: "SEMI", Literal: ";"},
+	{Name: "COLON", Literal: ":"},
+	{Name: "LSQUARE", Literal: "["},
+	{Name: "RSQUARE", Literal: "]"},
+	{Name: "PLUSPLUS", Literal: "++"},
 	{Name: "PLUS", Literal: "+"},
 	{Name: "MINUS", Literal: "-"},
 	{Name: "FSLASH", Literal: "/"},
+	{Name: "BSLASH", Literal: "\\"},
 	{Name: "PERCENT", Literal: "%"},
+	{Name: "MINUSMINUS", Literal: "--"},
 	{Name: "EEQUALS", Literal: "=="},
+	{Name: "FULL_STOP", Literal: "."},
+	{Name: "RIGHT_ARROW", Literal: "->"},
+	{Name: "THREE_FULL_STOPS", Literal: "..."},
+	{Name: "RETURN", Literal: "return"},
+	{Name: "BREAK", Literal: "break"},
+	{Name: "IF", Literal: "if"},
+	{Name: "ELSE", Literal: "else"},
+	{Name: "WHILE", Literal: "while"},
+	{Name: "FOR", Literal: "for"},
+	{Name: "SWITCH", Literal: "switch"},
+	{Name: "CASE", Literal: "case"},
+	{Name: "CONST", Literal: "const"},
+	{Name: "TYPEDEF", Literal: "typedef"},
+	{Name: "HASH", Literal: "#"},
 	{Name: "DEFINED", Literal: "defined"},
+	{Name: "INCLUDE", Literal: "include"},
+	{Name: "ELIF", Literal: "elif"},
+	{Name: "IF_DEF", Literal: "ifdef"},
+	{Name: "IF_NOT_DEF", Literal: "ifndef"},
+	{Name: "DEFINE", Literal: "define"},
+	{Name: "UNDEFINE", Literal: "undef"},
+	{Name: "SYS_INCLUDE_STR", Literal: "", Regex: regexp.MustCompile("^(?:<[^<>]*>)")},
 }
 
-// Parse constructs a fresh typed AST for text. The entire input must match main.
-func Parse(text string) (*Main, error) {
-	reader := tokens.NewReader(TokenDefinitions, text)
+// Parse consumes reader and constructs a fresh typed AST. The remaining input must match main.
+func Parse(reader tokens.Reader) (*Main, error) {
 	p := &parseState{}
 	for {
 		token, err := reader.Next()
@@ -69,12 +106,11 @@ func Parse(text string) (*Main, error) {
 		return nil, fmt.Errorf("unexpected end of input at token %d; expected %s", p.farthest+1, strings.Join(expected, ", "))
 	}
 	token := p.tokens[p.farthest]
-	lineStart := strings.LastIndexByte(text[:token.Offset], '\n') + 1
-	lineEnd := len(text)
-	if end := strings.IndexByte(text[token.Offset:], '\n'); end >= 0 {
-		lineEnd = token.Offset + end
+	message := fmt.Sprintf("unexpected token %d (%q); expected %s", p.farthest+1, token.Val, strings.Join(expected, ", "))
+	if source, ok := reader.(interface{ SourceLine(int) string }); ok {
+		message += "\n" + source.SourceLine(token.Offset)
 	}
-	return nil, fmt.Errorf("unexpected token %d (%q); expected %s\n%s", p.farthest+1, token.Val, strings.Join(expected, ", "), text[lineStart:lineEnd])
+	return nil, fmt.Errorf("%s", message)
 }
 
 type parseMatch[T any] struct {

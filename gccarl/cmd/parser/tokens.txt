@@ -3,6 +3,8 @@ NUM: [0-9]+
 CHAR: \'[^']*\'
 STR: "[^"]*"
 
+NEWLINE: (\r\n|\r|\n)
+
 INT_TYPE: 'int'
 CHAR_TYPE: 'char'
 VOID: 'void'
@@ -30,6 +32,7 @@ PLUSPLUS: '++'
 PLUS: '+'
 MINUS: '-'
 FSLASH: '/'
+BSLASH: '\'
 PERCENT: '%'
 MINUSMINUS: '--'
 EEQUALS: '=='
@@ -47,3 +50,14 @@ SWITCH: 'switch'
 CASE: 'case'
 CONST: 'const'
 TYPEDEF: 'typedef'
+
+HASH: '#'
+DEFINED: 'defined'
+INCLUDE: 'include'
+ELIF: 'elif'
+END_IF: 'endif'
+IF_DEF: 'ifdef'
+IF_NOT_DEF: 'ifndef'
+DEFINE: 'define'
+UNDEFINE: 'undef'
+SYS_INCLUDE_STR: <[^<>]*>

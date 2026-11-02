@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-var whitespace = regexp.MustCompile(`^[ \t\n]+`)
+var whitespace = regexp.MustCompile(`^[ \t]+`)
 
 type TokenDef struct {
 	Name    string
@@ -27,13 +27,22 @@ type Token struct {
 	Literal bool
 }
 
-type Reader struct {
+type Reader interface {
+	Next() (*Token, error)
+}
+
+type ReaderPeeker interface {
+	Reader
+	Peek() (*Token, error)
+}
+
+type reader struct {
 	tokens []*TokenDef
 	text   string
 	i      int
 }
 
-func New(tokenDef, textR io.Reader) (*Reader, error) {
+func New(tokenDef, textR io.Reader) (Reader, error) {
 	tokenDefs, err := ParseDefinitions(tokenDef)
 	if err != nil {
 		return nil, err
@@ -99,7 +108,17 @@ func ParseDefinitions(r io.Reader) ([]*TokenDef, error) {
 	return defs, nil
 }
 
-func (tk *Reader) Next() (*Token, error) {
+func (tk *reader) Peek() (*Token, error) {
+	oldI := tk.i
+
+	t, err := tk.Next()
+
+	tk.i = oldI
+
+	return t, err
+}
+
+func (tk *reader) Next() (*Token, error) {
 	tk.skipWhitespace()
 
 	if tk.i == len(tk.text) {
@@ -136,7 +155,7 @@ func (tk *Reader) Next() (*Token, error) {
 	return matches[0], nil
 }
 
-func (tk *Reader) match(t *TokenDef) (*Token, bool) {
+func (tk *reader) match(t *TokenDef) (*Token, bool) {
 	if t.Literal != "" {
 		end := tk.i + len(t.Literal)
 		if end > len(tk.text) {
@@ -165,16 +184,26 @@ func (tk *Reader) match(t *TokenDef) (*Token, bool) {
 	return nil, false
 }
 
-func (tk *Reader) skipWhitespace() {
+func (tk *reader) skipWhitespace() {
 	v := whitespace.FindString(tk.text[tk.i:])
 	tk.i += len(v)
 }
 
-func (tk *Reader) Reset() {
+func (tk *reader) Reset() {
 	tk.i = 0
 }
 
 // NewReader tokenizes text using immutable, compiled token definitions.
-func NewReader(definitions []*TokenDef, text string) *Reader {
-	return &Reader{tokens: definitions, text: text}
+func NewReader(definitions []*TokenDef, text string) ReaderPeeker {
+	return &reader{tokens: definitions, text: text}
+}
+
+// SourceLine returns the full source line containing a token's byte offset.
+func (tk *reader) SourceLine(offset int) string {
+	start := strings.LastIndexByte(tk.text[:offset], '\n') + 1
+	end := len(tk.text)
+	if next := strings.IndexByte(tk.text[offset:], '\n'); next >= 0 {
+		end = offset + next
+	}
+	return tk.text[start:end]
 }

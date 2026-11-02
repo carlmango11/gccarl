@@ -81,7 +81,7 @@ func New(r io.Reader, debugParam bool) (*Parser, error) {
 	}, nil
 }
 
-func (p *Parser) Parse(r *tokens.Reader, outDir, packageName string) error {
+func (p *Parser) Parse(r tokens.Reader, outDir, packageName string) error {
 	top := &Node{
 		Key: RuleKey{
 			Rule:   "main",

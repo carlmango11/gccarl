@@ -1,0 +1,67 @@
+package tokens
+
+const tokenDefs = `
+IDEN: [a-zA-Z_][a-zA-Z0-9_]*
+NUM: [0-9]+
+CHAR: \'[^']*\'
+STR: "[^"]*"
+
+NEWLINE: (\r\n|\r|\n)
+
+INT_TYPE: 'int'
+CHAR_TYPE: 'char'
+VOID: 'void'
+STRUCT: 'struct'
+UNSIGNED: 'unsigned'
+
+AMPERSAND: '&'
+ASTERISKS: '*'
+LESS_THAN: '<'
+GTE: '>='
+LTE: '<='
+GREATER_THAN: '>'
+EQUALS: '='
+NOT_EQUALS: '!='
+LPAREN: '('
+RPAREN: ')'
+LBRACE: '{'
+RBRACE: '}'
+COMMA: ','
+SEMI: ';'
+COLON: ':'
+LSQUARE: '['
+RSQUARE: ']'
+PLUSPLUS: '++'
+PLUS: '+'
+MINUS: '-'
+FSLASH: '/'
+BSLASH: '\'
+PERCENT: '%'
+MINUSMINUS: '--'
+EEQUALS: '=='
+FULL_STOP: '.'
+RIGHT_ARROW: '->'
+THREE_FULL_STOPS: '...'
+
+RETURN: 'return'
+BREAK: 'break'
+IF: 'if'
+ELSE: 'else'
+WHILE: 'while'
+FOR: 'for'
+SWITCH: 'switch'
+CASE: 'case'
+CONST: 'const'
+TYPEDEF: 'typedef'
+
+HASH: '#'
+DEFINED: 'defined'
+INCLUDE: 'include'
+ELIF: 'elif'
+END_IF: 'endif'
+IF_DEF: 'ifdef'
+IF_NOT_DEF: 'ifndef'
+DEFINE: 'define'
+UNDEFINE: 'undef'
+SYS_INCLUDE_STR: <[^<>]*>
+`
