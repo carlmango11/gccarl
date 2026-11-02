@@ -3,6 +3,8 @@ package preprocessor
 import (
 	"fmt"
 	"io"
+	"log"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -57,4 +59,22 @@ func TestProcess(t *testing.T) {
 
 		i++
 	}
+}
+
+func TestPrintf(t *testing.T) {
+	r, err := NewReader(nil, "testdata/printf.c")
+	require.NoError(t, err)
+
+	out := &strings.Builder{}
+	for {
+		tk, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+
+		require.NoError(t, err)
+		out.WriteString(tk.Val + " ")
+	}
+
+	log.Printf("out: %v", out.String())
 }

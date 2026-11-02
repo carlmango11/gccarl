@@ -147,8 +147,8 @@ func TestReaderInterface(t *testing.T) {
  var reader tokens.Reader=&tokenReader{token:&tokens.Token{Name:"NUM",Val:"42"}}
  tree,err:=Parse(reader)
  if err!=nil || tree.Main.NUM!="42" {t.Fatalf("custom reader: %v %v",tree,err)}
- _,err=Parse(&tokenReader{token:&tokens.Token{Name:"PLUS",Val:"+"}})
- if err==nil || !strings.Contains(err.Error(),"unexpected token") {t.Fatalf("syntax error: %v",err)}
+ _,err=Parse(&tokenReader{token:&tokens.Token{Name:"PLUS",Val:"+",Offset:237}})
+ if err==nil || !strings.Contains(err.Error(),"unexpected token 1 (\"+\") at byte offset 237;") {t.Fatalf("syntax error: %v",err)}
  failure:=errors.New("reader failed")
  _,err=Parse(&tokenReader{err:failure})
  if !errors.Is(err,failure) {t.Fatalf("reader error: %v",err)}

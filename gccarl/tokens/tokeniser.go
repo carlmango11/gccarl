@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"regexp"
 	"sort"
 	"strings"
@@ -40,6 +41,7 @@ type reader struct {
 	tokens []*TokenDef
 	text   string
 	i      int
+	debug  bool
 }
 
 func New(tokenDef, textR io.Reader) (Reader, error) {
@@ -54,6 +56,10 @@ func New(tokenDef, textR io.Reader) (Reader, error) {
 	}
 
 	return NewReader(tokenDefs, string(text)), nil
+}
+
+func (tk *reader) Debug() {
+	tk.debug = true
 }
 
 // ParseDefinitions compiles the token definitions for reuse across inputs.
@@ -152,6 +158,9 @@ func (tk *reader) Next() (*Token, error) {
 	longest.Offset = tk.i
 	tk.i += len(longest.Val)
 
+	if tk.debug {
+		log.Printf("tk: %v", matches[0])
+	}
 	return matches[0], nil
 }
 

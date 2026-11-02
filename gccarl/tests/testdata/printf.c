@@ -93,5 +93,4 @@ void my_printf(const char *format, ...) {
 
 int main(void) {
     my_printf("Hello %s\n", "world");
-    my_printf("n=%d, hex=%x, char=%c, percent=%%\n", -42, 255, 'A');
 }

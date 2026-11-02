@@ -370,32 +370,34 @@ type Main_MainOption struct {
 type OperatorType string
 
 const (
-	OperatorTypeGte      OperatorType = "gte"
-	OperatorTypeLte      OperatorType = "lte"
-	OperatorTypeMod      OperatorType = "mod"
-	OperatorTypeLess     OperatorType = "less"
-	OperatorTypeEqual    OperatorType = "equal"
-	OperatorTypeNotEqual OperatorType = "not-equal"
-	OperatorTypePlus     OperatorType = "plus"
-	OperatorTypeMinus    OperatorType = "minus"
-	OperatorTypeDivide   OperatorType = "divide"
-	OperatorTypeMultiply OperatorType = "multiply"
-	OperatorTypeAssign   OperatorType = "assign"
+	OperatorTypeGte        OperatorType = "gte"
+	OperatorTypeLte        OperatorType = "lte"
+	OperatorTypeMod        OperatorType = "mod"
+	OperatorTypeLess       OperatorType = "less"
+	OperatorTypeEqual      OperatorType = "equal"
+	OperatorTypeNotEqual   OperatorType = "not-equal"
+	OperatorTypePlus       OperatorType = "plus"
+	OperatorTypeMinus      OperatorType = "minus"
+	OperatorTypeDivide     OperatorType = "divide"
+	OperatorTypeMultiply   OperatorType = "multiply"
+	OperatorTypeAssign     OperatorType = "assign"
+	OperatorTypeAdd_equals OperatorType = "add_equals"
 )
 
 type Operator struct {
-	Type     OperatorType
-	Gte      *Operator_GteOption
-	Lte      *Operator_LteOption
-	Mod      *Operator_ModOption
-	Less     *Operator_LessOption
-	Equal    *Operator_EqualOption
-	NotEqual *Operator_NotEqualOption
-	Plus     *Operator_PlusOption
-	Minus    *Operator_MinusOption
-	Divide   *Operator_DivideOption
-	Multiply *Operator_MultiplyOption
-	Assign   *Operator_AssignOption
+	Type       OperatorType
+	Gte        *Operator_GteOption
+	Lte        *Operator_LteOption
+	Mod        *Operator_ModOption
+	Less       *Operator_LessOption
+	Equal      *Operator_EqualOption
+	NotEqual   *Operator_NotEqualOption
+	Plus       *Operator_PlusOption
+	Minus      *Operator_MinusOption
+	Divide     *Operator_DivideOption
+	Multiply   *Operator_MultiplyOption
+	Assign     *Operator_AssignOption
+	Add_equals *Operator_Add_equalsOption
 }
 type Operator_GteOption struct {
 	GTE GTE
@@ -439,6 +441,10 @@ type Operator_MultiplyOption struct {
 
 type Operator_AssignOption struct {
 	EQUALS EQUALS
+}
+
+type Operator_Add_equalsOption struct {
+	PLUS_EQUALS PLUS_EQUALS
 }
 
 type ParamDefType string
@@ -490,6 +496,27 @@ type ParamsDef struct {
 type ParamsDef_ParamsOption struct {
 	ParamDef      *ParamDef
 	CommaParamDef []*CommaParamDef
+}
+
+type SizeofArgType string
+
+const (
+	SizeofArgTypeTypeArg SizeofArgType = "type-arg"
+	SizeofArgTypeExpr    SizeofArgType = "expr"
+)
+
+type SizeofArg struct {
+	Type    SizeofArgType
+	TypeArg *SizeofArg_TypeArgOption
+	Expr    *SizeofArg_ExprOption
+}
+type SizeofArg_TypeArgOption struct {
+	Type     *Type
+	TypeArgs *TypeArgs
+}
+
+type SizeofArg_ExprOption struct {
+	Expr *Expr
 }
 
 type StatementType string
@@ -606,6 +633,7 @@ type SubExprType string
 const (
 	SubExprTypeValue     SubExprType = "value"
 	SubExprTypeVariable  SubExprType = "variable"
+	SubExprTypeSizeof    SubExprType = "sizeof"
 	SubExprTypeParens    SubExprType = "parens"
 	SubExprTypeDeref     SubExprType = "deref"
 	SubExprTypeAddressOf SubExprType = "address-of"
@@ -616,6 +644,7 @@ type SubExpr struct {
 	Type      SubExprType
 	Value     *SubExpr_ValueOption
 	Variable  *SubExpr_VariableOption
+	Sizeof    *SubExpr_SizeofOption
 	Parens    *SubExpr_ParensOption
 	Deref     *SubExpr_DerefOption
 	AddressOf *SubExpr_AddressOfOption
@@ -628,6 +657,13 @@ type SubExpr_ValueOption struct {
 type SubExpr_VariableOption struct {
 	SubVariableAccess      *SubVariableAccess
 	InnerSubVariableAccess []*InnerSubVariableAccess
+}
+
+type SubExpr_SizeofOption struct {
+	SIZEOF    SIZEOF
+	LPAREN    LPAREN
+	SizeofArg *SizeofArg
+	RPAREN    RPAREN
 }
 
 type SubExpr_ParensOption struct {
@@ -736,6 +772,30 @@ type Type_StructOption struct {
 type Type_ConstOption struct {
 	CONST CONST
 	Type  *Type
+}
+
+type TypeArgsType string
+
+const (
+	TypeArgsTypePointer TypeArgsType = "pointer"
+	TypeArgsTypeArray   TypeArgsType = "array"
+)
+
+type TypeArgs struct {
+	Type    TypeArgsType
+	Pointer *TypeArgs_PointerOption
+	Array   *TypeArgs_ArrayOption
+}
+type TypeArgs_PointerOption struct {
+	ASTERISKS ASTERISKS
+	TypeArgs  *TypeArgs
+}
+
+type TypeArgs_ArrayOption struct {
+	LSQUARE  LSQUARE
+	NUM      NUM
+	RSQUARE  RSQUARE
+	TypeArgs *TypeArgs
 }
 
 type ValueType string
@@ -868,12 +928,14 @@ type NUM string
 type PERCENT string
 type PLUS string
 type PLUSPLUS string
+type PLUS_EQUALS string
 type RBRACE string
 type RETURN string
 type RIGHT_ARROW string
 type RPAREN string
 type RSQUARE string
 type SEMI string
+type SIZEOF string
 type STR string
 type STRUCT string
 type SWITCH string

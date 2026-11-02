@@ -21,7 +21,7 @@ func Parse(reader tokens.Reader) (*Main, error) {
   return nil, fmt.Errorf("unexpected end of input at token %d; expected %s", p.farthest+1, strings.Join(expected, ", "))
  }
  token := p.tokens[p.farthest]
- message := fmt.Sprintf("unexpected token %d (%q); expected %s", p.farthest+1, token.Val, strings.Join(expected, ", "))
+ message := fmt.Sprintf("unexpected token %d (%q) at byte offset %d; expected %s", p.farthest+1, token.Val, token.Offset, strings.Join(expected, ", "))
  if source, ok := reader.(interface { SourceLine(int) string }); ok {
   message += "\n" + source.SourceLine(token.Offset)
  }

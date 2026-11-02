@@ -257,14 +257,14 @@ func fieldNameIndex(typ semantic.Type, names []semantic.FieldName) int {
 	return 0
 }
 
-func (c *Compiler) compileAssign(instrs *Instrs, to, e *semantic.Expr) error {
+func (c *Compiler) compileAssign(instrs *Instrs, to, e *semantic.Expr) (Location, error) {
 	if to.Deref != nil {
 		panic("handle deref")
 	}
 
 	toLoc, err := c.compileExpr(instrs, to)
 	if err != nil {
-		return err
+		return Location{}, err
 	}
 
 	if toLoc.Type != LTOffset {
@@ -273,12 +273,12 @@ func (c *Compiler) compileAssign(instrs *Instrs, to, e *semantic.Expr) error {
 
 	reg, err := c.compileExprToReg(instrs, e)
 	if err != nil {
-		return err
+		return Location{}, err
 	}
 
 	instrs.movFromReg(e.Type.Size(), reg, toLoc.Offset)
 
-	return nil
+	return toLoc, nil
 }
 
 func (c *Compiler) compileExprToReg(instrs *Instrs, e *semantic.Expr) (Register, error) {
@@ -301,8 +301,7 @@ func (c *Compiler) compileExprToReg(instrs *Instrs, e *semantic.Expr) (Register,
 func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr) (Location, error) {
 	switch {
 	case e.Assign != nil:
-		err := c.compileAssign(instrs, e.Assign.To, e.Assign.Expr)
-		return Location{}, err // TODO: return Loc
+		return c.compileAssign(instrs, e.Assign.To, e.Assign.Expr)
 	case e.AddressOf != nil:
 		return c.compileAddressOf(instrs, e.AddressOf)
 	case e.Compare != nil:

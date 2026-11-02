@@ -469,6 +469,8 @@ func (b *builder) toExpr(expr *cparser.Expr) (*Expr, error) {
 
 func (b *builder) fromSubExpr(sub *cparser.SubExpr) (*Expr, error) {
 	switch sub.Type {
+	case cparser.SubExprTypeSizeof:
+		return b.toSizeOf(sub.Sizeof.SizeofArg)
 	case cparser.SubExprTypeFuncCall:
 		fc, err := b.toFuncCall(sub.FuncCall)
 		if err != nil {
@@ -1098,18 +1100,37 @@ func (b *builder) fromOperatorExp(compExpr *cparser.CompExpr_CompExprOption) (*E
 		return nil, err
 	}
 
-	if compExpr.Operator.Type == cparser.OperatorTypeAssign {
+	if compExpr.Operator.Type == cparser.OperatorTypeAssign || compExpr.Operator.Type == cparser.OperatorTypeAdd_equals {
 		if !leftExpr.Writeable() {
 			return nil, fmt.Errorf("cannot assign to expression %v", rightExpr)
 		}
 
-		return &Expr{
-			Type: leftExpr.Type,
-			Assign: &Assign{
-				To:   leftExpr,
-				Expr: rightExpr,
-			},
-		}, nil
+		if compExpr.Operator.Type == cparser.OperatorTypeAssign {
+			return &Expr{
+				Type: leftExpr.Type,
+				Assign: &Assign{
+					To:   leftExpr,
+					Expr: rightExpr,
+				},
+			}, nil
+		}
+
+		if compExpr.Operator.Type == cparser.OperatorTypeAdd_equals {
+			return &Expr{
+				Type: leftExpr.Type,
+				Assign: &Assign{
+					To: leftExpr,
+					Expr: &Expr{
+						Type: leftExpr.Type,
+						Numeric: &NumericOpExpr{
+							Left:  leftExpr,
+							Op:    NumOpAdd,
+							Right: rightExpr,
+						},
+					},
+				},
+			}, nil
+		}
 	}
 
 	op, ok := compareOp[compExpr.Operator.Type]
@@ -1161,6 +1182,18 @@ func (b *builder) processDeclaration(d *cparser.Declaration) error {
 	}
 
 	panic("unreachable")
+}
+
+func (b *builder) toSizeOf(s *cparser.SizeofArg) (*Expr, error) {
+	switch s.Type {
+	case cparser.SizeofArgTypeTypeArg:
+		if s.TypeArg.TypeArgs != nil {
+			panic("impl")
+		}
+
+		b.toType()
+	}
+	panic("impl")
 }
 
 func int32Type() Type {

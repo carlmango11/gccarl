@@ -74,10 +74,19 @@ expr:
 sub-expr:
     value:value
     variable:sub-variable-access inner-sub-variable-access*
+    sizeof:SIZEOF LPAREN sizeof-arg RPAREN
     parens:LPAREN expr RPAREN
     deref:ASTERISKS expr
     address-of:AMPERSAND expr
     func-call:IDEN LPAREN params? RPAREN
+
+sizeof-arg:
+    type-arg:type type-args?
+    expr:expr
+
+type-args:
+    pointer:ASTERISKS type-args?
+    array:LSQUARE NUM RSQUARE type-args?
 
 comp-expr:
     comp-expr:sub-expr operator expr
@@ -96,6 +105,7 @@ operator:
     divide:FSLASH
     multiply:ASTERISKS
     assign:EQUALS
+    add_equals:PLUS_EQUALS
 
 statement:
     dec-assign:dec-assign SEMI

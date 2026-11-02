@@ -121,6 +121,7 @@ func (r *reader) Next() (*tokens.Token, error) {
 		}
 
 		if cTk != nil {
+			log.Printf(">> %v", cTk)
 			return cTk, nil
 		}
 	}
@@ -134,7 +135,6 @@ func (r *reader) nextToken() (*tokens.Token, error) {
 		}
 		return nil, err
 	}
-	log.Printf(">> %v", tk.Val)
 
 	return tk, nil
 }

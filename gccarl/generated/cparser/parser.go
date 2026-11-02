@@ -40,6 +40,7 @@ var TokenDefinitions = []*tokens.TokenDef{
 	{Name: "RSQUARE", Literal: "]"},
 	{Name: "PLUSPLUS", Literal: "++"},
 	{Name: "PLUS", Literal: "+"},
+	{Name: "PLUS_EQUALS", Literal: "+="},
 	{Name: "MINUS", Literal: "-"},
 	{Name: "FSLASH", Literal: "/"},
 	{Name: "BSLASH", Literal: "\\"},
@@ -69,6 +70,7 @@ var TokenDefinitions = []*tokens.TokenDef{
 	{Name: "DEFINE", Literal: "define"},
 	{Name: "UNDEFINE", Literal: "undef"},
 	{Name: "SYS_INCLUDE_STR", Literal: "", Regex: regexp.MustCompile("^(?:<[^<>]*>)")},
+	{Name: "SIZEOF", Literal: "sizeof"},
 }
 
 // Parse consumes reader and constructs a fresh typed AST. The remaining input must match main.
@@ -107,7 +109,7 @@ func Parse(reader tokens.Reader) (*Main, error) {
 		return nil, fmt.Errorf("unexpected end of input at token %d; expected %s", p.farthest+1, strings.Join(expected, ", "))
 	}
 	token := p.tokens[p.farthest]
-	message := fmt.Sprintf("unexpected token %d (%q); expected %s", p.farthest+1, token.Val, strings.Join(expected, ", "))
+	message := fmt.Sprintf("unexpected token %d (%q) at byte offset %d; expected %s", p.farthest+1, token.Val, token.Offset, strings.Join(expected, ", "))
 	if source, ok := reader.(interface{ SourceLine(int) string }); ok {
 		message += "\n" + source.SourceLine(token.Offset)
 	}
@@ -205,12 +207,14 @@ type parseState struct {
 	cacheParamDef               map[int][]parseMatch[*ParamDef]
 	cacheParams                 map[int][]parseMatch[*Params]
 	cacheParamsDef              map[int][]parseMatch[*ParamsDef]
+	cacheSizeofArg              map[int][]parseMatch[*SizeofArg]
 	cacheStatement              map[int][]parseMatch[*Statement]
 	cacheStatementDeclaration   map[int][]parseMatch[*StatementDeclaration]
 	cacheSubExpr                map[int][]parseMatch[*SubExpr]
 	cacheSubVariableAccess      map[int][]parseMatch[*SubVariableAccess]
 	cacheSwitchCases            map[int][]parseMatch[*SwitchCases]
 	cacheType                   map[int][]parseMatch[*Type]
+	cacheTypeArgs               map[int][]parseMatch[*TypeArgs]
 	cacheValue                  map[int][]parseMatch[*Value]
 	cacheVarDec                 map[int][]parseMatch[*VarDec]
 	cacheVarDecColon            map[int][]parseMatch[*VarDecColon]
@@ -795,6 +799,14 @@ func (p *parseState) parseOperator(pos int) []parseMatch[*Operator] {
 			matches = append(matches, parseMatch[*Operator]{value: &Operator{Type: OperatorTypeAssign, Assign: &value}, end: state.end})
 		}
 	}
+	{
+		states := []parseMatch[Operator_Add_equalsOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[PLUS_EQUALS] { return matchToken[PLUS_EQUALS](p, pos, "PLUS_EQUALS") }, func(value *Operator_Add_equalsOption, child PLUS_EQUALS) { value.PLUS_EQUALS = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*Operator]{value: &Operator{Type: OperatorTypeAdd_equals, Add_equals: &value}, end: state.end})
+		}
+	}
 	if p.cacheOperator == nil {
 		p.cacheOperator = map[int][]parseMatch[*Operator]{}
 	}
@@ -869,6 +881,34 @@ func (p *parseState) parseParamsDef(pos int) []parseMatch[*ParamsDef] {
 		p.cacheParamsDef = map[int][]parseMatch[*ParamsDef]{}
 	}
 	p.cacheParamsDef[pos] = matches
+	return matches
+}
+func (p *parseState) parseSizeofArg(pos int) []parseMatch[*SizeofArg] {
+	if matches, ok := p.cacheSizeofArg[pos]; ok {
+		return matches
+	}
+	var matches []parseMatch[*SizeofArg]
+	{
+		states := []parseMatch[SizeofArg_TypeArgOption]{{end: pos}}
+		states = extendMatches(states, p.parseType, func(value *SizeofArg_TypeArgOption, child *Type) { value.Type = child })
+		states = extendMatches(states, optionalMatch(p.parseTypeArgs), func(value *SizeofArg_TypeArgOption, child *TypeArgs) { value.TypeArgs = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*SizeofArg]{value: &SizeofArg{Type: SizeofArgTypeTypeArg, TypeArg: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[SizeofArg_ExprOption]{{end: pos}}
+		states = extendMatches(states, p.parseExpr, func(value *SizeofArg_ExprOption, child *Expr) { value.Expr = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*SizeofArg]{value: &SizeofArg{Type: SizeofArgTypeExpr, Expr: &value}, end: state.end})
+		}
+	}
+	if p.cacheSizeofArg == nil {
+		p.cacheSizeofArg = map[int][]parseMatch[*SizeofArg]{}
+	}
+	p.cacheSizeofArg[pos] = matches
 	return matches
 }
 func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
@@ -1033,6 +1073,17 @@ func (p *parseState) parseSubExpr(pos int) []parseMatch[*SubExpr] {
 		}
 	}
 	{
+		states := []parseMatch[SubExpr_SizeofOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[SIZEOF] { return matchToken[SIZEOF](p, pos, "SIZEOF") }, func(value *SubExpr_SizeofOption, child SIZEOF) { value.SIZEOF = child })
+		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *SubExpr_SizeofOption, child LPAREN) { value.LPAREN = child })
+		states = extendMatches(states, p.parseSizeofArg, func(value *SubExpr_SizeofOption, child *SizeofArg) { value.SizeofArg = child })
+		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *SubExpr_SizeofOption, child RPAREN) { value.RPAREN = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*SubExpr]{value: &SubExpr{Type: SubExprTypeSizeof, Sizeof: &value}, end: state.end})
+		}
+	}
+	{
 		states := []parseMatch[SubExpr_ParensOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *SubExpr_ParensOption, child LPAREN) { value.LPAREN = child })
 		states = extendMatches(states, p.parseExpr, func(value *SubExpr_ParensOption, child *Expr) { value.Expr = child })
@@ -1187,6 +1238,37 @@ func (p *parseState) parseType(pos int) []parseMatch[*Type] {
 		p.cacheType = map[int][]parseMatch[*Type]{}
 	}
 	p.cacheType[pos] = matches
+	return matches
+}
+func (p *parseState) parseTypeArgs(pos int) []parseMatch[*TypeArgs] {
+	if matches, ok := p.cacheTypeArgs[pos]; ok {
+		return matches
+	}
+	var matches []parseMatch[*TypeArgs]
+	{
+		states := []parseMatch[TypeArgs_PointerOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[ASTERISKS] { return matchToken[ASTERISKS](p, pos, "ASTERISKS") }, func(value *TypeArgs_PointerOption, child ASTERISKS) { value.ASTERISKS = child })
+		states = extendMatches(states, optionalMatch(p.parseTypeArgs), func(value *TypeArgs_PointerOption, child *TypeArgs) { value.TypeArgs = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*TypeArgs]{value: &TypeArgs{Type: TypeArgsTypePointer, Pointer: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[TypeArgs_ArrayOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[LSQUARE] { return matchToken[LSQUARE](p, pos, "LSQUARE") }, func(value *TypeArgs_ArrayOption, child LSQUARE) { value.LSQUARE = child })
+		states = extendMatches(states, func(pos int) []parseMatch[NUM] { return matchToken[NUM](p, pos, "NUM") }, func(value *TypeArgs_ArrayOption, child NUM) { value.NUM = child })
+		states = extendMatches(states, func(pos int) []parseMatch[RSQUARE] { return matchToken[RSQUARE](p, pos, "RSQUARE") }, func(value *TypeArgs_ArrayOption, child RSQUARE) { value.RSQUARE = child })
+		states = extendMatches(states, optionalMatch(p.parseTypeArgs), func(value *TypeArgs_ArrayOption, child *TypeArgs) { value.TypeArgs = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*TypeArgs]{value: &TypeArgs{Type: TypeArgsTypeArray, Array: &value}, end: state.end})
+		}
+	}
+	if p.cacheTypeArgs == nil {
+		p.cacheTypeArgs = map[int][]parseMatch[*TypeArgs]{}
+	}
+	p.cacheTypeArgs[pos] = matches
 	return matches
 }
 func (p *parseState) parseValue(pos int) []parseMatch[*Value] {
