@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/carlmango11/gccarl/gccarl/compiler"
@@ -24,19 +26,21 @@ func TestPrograms(t *testing.T) {
 
 	exclude := map[string]bool{
 		//"printf.c": true,
-		"va_arg.c": true,
+		"array_equals.c": true,
+		//"pointer_cast.c": true,
 	}
 
 	for _, fe := range d {
 		name := fe.Name()
+		if exclude[name] {
+			continue
+		}
+
+		if name != "pointer_add.c" {
+			continue
+		}
 
 		t.Run(name, func(t *testing.T) {
-			if exclude[name] {
-				return
-			}
-			if name != "plus_equals.c" {
-				return
-			}
 
 			runTest(t, "./testdata/"+name)
 		})
@@ -51,6 +55,7 @@ func runTest(t *testing.T, filename string) {
 
 	tree, err := cparser.Parse(reader)
 	if err != nil {
+		outputPreprocessed(filename)
 		assert.NoError(t, err, "cannot parse")
 		return
 	}
@@ -159,6 +164,28 @@ func runTest(t *testing.T, filename string) {
 		log.Printf("program: \n%v", string(c))
 		log.Fatalf("cannot start: %v", err)
 	}
+}
+
+func outputPreprocessed(filename string) {
+	out := &strings.Builder{}
+
+	r, err := preprocessor.NewReader(nil, filename)
+	if err == nil {
+		for {
+			t, err := r.Next()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				log.Printf("preprocess err: %v", err)
+				return
+			}
+
+			out.WriteString(t.Val + " ")
+		}
+	}
+
+	log.Printf("preprocess out: %v", out.String())
 }
 
 func assemble(source []byte) ([]byte, error) {

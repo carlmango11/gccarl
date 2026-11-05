@@ -41,7 +41,6 @@ value:
     int:NUM
     str:STR
     char:CHAR
-    cast:LPAREN type RPAREN expr
     comp-lit:LPAREN type array-index-def* RPAREN LBRACE comp-entries? RBRACE
 
 array-entries:
@@ -74,19 +73,20 @@ expr:
 sub-expr:
     value:value
     variable:sub-variable-access inner-sub-variable-access*
-    sizeof:SIZEOF LPAREN sizeof-arg RPAREN
+    sizeof:SIZEOF LPAREN parameterised-type RPAREN
     parens:LPAREN expr RPAREN
     deref:ASTERISKS expr
     address-of:AMPERSAND expr
     func-call:IDEN LPAREN params? RPAREN
+    cast:LPAREN parameterised-type RPAREN expr
 
-sizeof-arg:
-    type-arg:type type-args?
+parameterised-type:
+    type-arg:type type-args
     expr:expr
 
 type-args:
-    pointer:ASTERISKS type-args?
-    array:LSQUARE NUM RSQUARE type-args?
+    pointer:ASTERISKS type-args
+    array:array-index-def*
 
 comp-expr:
     comp-expr:sub-expr operator expr

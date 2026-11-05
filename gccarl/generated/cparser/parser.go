@@ -205,9 +205,9 @@ type parseState struct {
 	cacheMain                   map[int][]parseMatch[*Main]
 	cacheOperator               map[int][]parseMatch[*Operator]
 	cacheParamDef               map[int][]parseMatch[*ParamDef]
+	cacheParameterisedType      map[int][]parseMatch[*ParameterisedType]
 	cacheParams                 map[int][]parseMatch[*Params]
 	cacheParamsDef              map[int][]parseMatch[*ParamsDef]
-	cacheSizeofArg              map[int][]parseMatch[*SizeofArg]
 	cacheStatement              map[int][]parseMatch[*Statement]
 	cacheStatementDeclaration   map[int][]parseMatch[*StatementDeclaration]
 	cacheSubExpr                map[int][]parseMatch[*SubExpr]
@@ -843,6 +843,34 @@ func (p *parseState) parseParamDef(pos int) []parseMatch[*ParamDef] {
 	p.cacheParamDef[pos] = matches
 	return matches
 }
+func (p *parseState) parseParameterisedType(pos int) []parseMatch[*ParameterisedType] {
+	if matches, ok := p.cacheParameterisedType[pos]; ok {
+		return matches
+	}
+	var matches []parseMatch[*ParameterisedType]
+	{
+		states := []parseMatch[ParameterisedType_TypeArgOption]{{end: pos}}
+		states = extendMatches(states, p.parseType, func(value *ParameterisedType_TypeArgOption, child *Type) { value.Type = child })
+		states = extendMatches(states, p.parseTypeArgs, func(value *ParameterisedType_TypeArgOption, child *TypeArgs) { value.TypeArgs = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*ParameterisedType]{value: &ParameterisedType{Type: ParameterisedTypeTypeTypeArg, TypeArg: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[ParameterisedType_ExprOption]{{end: pos}}
+		states = extendMatches(states, p.parseExpr, func(value *ParameterisedType_ExprOption, child *Expr) { value.Expr = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*ParameterisedType]{value: &ParameterisedType{Type: ParameterisedTypeTypeExpr, Expr: &value}, end: state.end})
+		}
+	}
+	if p.cacheParameterisedType == nil {
+		p.cacheParameterisedType = map[int][]parseMatch[*ParameterisedType]{}
+	}
+	p.cacheParameterisedType[pos] = matches
+	return matches
+}
 func (p *parseState) parseParams(pos int) []parseMatch[*Params] {
 	if matches, ok := p.cacheParams[pos]; ok {
 		return matches
@@ -881,34 +909,6 @@ func (p *parseState) parseParamsDef(pos int) []parseMatch[*ParamsDef] {
 		p.cacheParamsDef = map[int][]parseMatch[*ParamsDef]{}
 	}
 	p.cacheParamsDef[pos] = matches
-	return matches
-}
-func (p *parseState) parseSizeofArg(pos int) []parseMatch[*SizeofArg] {
-	if matches, ok := p.cacheSizeofArg[pos]; ok {
-		return matches
-	}
-	var matches []parseMatch[*SizeofArg]
-	{
-		states := []parseMatch[SizeofArg_TypeArgOption]{{end: pos}}
-		states = extendMatches(states, p.parseType, func(value *SizeofArg_TypeArgOption, child *Type) { value.Type = child })
-		states = extendMatches(states, optionalMatch(p.parseTypeArgs), func(value *SizeofArg_TypeArgOption, child *TypeArgs) { value.TypeArgs = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*SizeofArg]{value: &SizeofArg{Type: SizeofArgTypeTypeArg, TypeArg: &value}, end: state.end})
-		}
-	}
-	{
-		states := []parseMatch[SizeofArg_ExprOption]{{end: pos}}
-		states = extendMatches(states, p.parseExpr, func(value *SizeofArg_ExprOption, child *Expr) { value.Expr = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*SizeofArg]{value: &SizeofArg{Type: SizeofArgTypeExpr, Expr: &value}, end: state.end})
-		}
-	}
-	if p.cacheSizeofArg == nil {
-		p.cacheSizeofArg = map[int][]parseMatch[*SizeofArg]{}
-	}
-	p.cacheSizeofArg[pos] = matches
 	return matches
 }
 func (p *parseState) parseStatement(pos int) []parseMatch[*Statement] {
@@ -1076,7 +1076,7 @@ func (p *parseState) parseSubExpr(pos int) []parseMatch[*SubExpr] {
 		states := []parseMatch[SubExpr_SizeofOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[SIZEOF] { return matchToken[SIZEOF](p, pos, "SIZEOF") }, func(value *SubExpr_SizeofOption, child SIZEOF) { value.SIZEOF = child })
 		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *SubExpr_SizeofOption, child LPAREN) { value.LPAREN = child })
-		states = extendMatches(states, p.parseSizeofArg, func(value *SubExpr_SizeofOption, child *SizeofArg) { value.SizeofArg = child })
+		states = extendMatches(states, p.parseParameterisedType, func(value *SubExpr_SizeofOption, child *ParameterisedType) { value.ParameterisedType = child })
 		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *SubExpr_SizeofOption, child RPAREN) { value.RPAREN = child })
 		for _, state := range states {
 			value := state.value
@@ -1120,6 +1120,17 @@ func (p *parseState) parseSubExpr(pos int) []parseMatch[*SubExpr] {
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*SubExpr]{value: &SubExpr{Type: SubExprTypeFuncCall, FuncCall: &value}, end: state.end})
+		}
+	}
+	{
+		states := []parseMatch[SubExpr_CastOption]{{end: pos}}
+		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *SubExpr_CastOption, child LPAREN) { value.LPAREN = child })
+		states = extendMatches(states, p.parseParameterisedType, func(value *SubExpr_CastOption, child *ParameterisedType) { value.ParameterisedType = child })
+		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *SubExpr_CastOption, child RPAREN) { value.RPAREN = child })
+		states = extendMatches(states, p.parseExpr, func(value *SubExpr_CastOption, child *Expr) { value.Expr = child })
+		for _, state := range states {
+			value := state.value
+			matches = append(matches, parseMatch[*SubExpr]{value: &SubExpr{Type: SubExprTypeCast, Cast: &value}, end: state.end})
 		}
 	}
 	if p.cacheSubExpr == nil {
@@ -1248,7 +1259,7 @@ func (p *parseState) parseTypeArgs(pos int) []parseMatch[*TypeArgs] {
 	{
 		states := []parseMatch[TypeArgs_PointerOption]{{end: pos}}
 		states = extendMatches(states, func(pos int) []parseMatch[ASTERISKS] { return matchToken[ASTERISKS](p, pos, "ASTERISKS") }, func(value *TypeArgs_PointerOption, child ASTERISKS) { value.ASTERISKS = child })
-		states = extendMatches(states, optionalMatch(p.parseTypeArgs), func(value *TypeArgs_PointerOption, child *TypeArgs) { value.TypeArgs = child })
+		states = extendMatches(states, p.parseTypeArgs, func(value *TypeArgs_PointerOption, child *TypeArgs) { value.TypeArgs = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*TypeArgs]{value: &TypeArgs{Type: TypeArgsTypePointer, Pointer: &value}, end: state.end})
@@ -1256,10 +1267,7 @@ func (p *parseState) parseTypeArgs(pos int) []parseMatch[*TypeArgs] {
 	}
 	{
 		states := []parseMatch[TypeArgs_ArrayOption]{{end: pos}}
-		states = extendMatches(states, func(pos int) []parseMatch[LSQUARE] { return matchToken[LSQUARE](p, pos, "LSQUARE") }, func(value *TypeArgs_ArrayOption, child LSQUARE) { value.LSQUARE = child })
-		states = extendMatches(states, func(pos int) []parseMatch[NUM] { return matchToken[NUM](p, pos, "NUM") }, func(value *TypeArgs_ArrayOption, child NUM) { value.NUM = child })
-		states = extendMatches(states, func(pos int) []parseMatch[RSQUARE] { return matchToken[RSQUARE](p, pos, "RSQUARE") }, func(value *TypeArgs_ArrayOption, child RSQUARE) { value.RSQUARE = child })
-		states = extendMatches(states, optionalMatch(p.parseTypeArgs), func(value *TypeArgs_ArrayOption, child *TypeArgs) { value.TypeArgs = child })
+		states = extendMatches(states, repeatedMatches(p.parseArrayIndexDef, 0), func(value *TypeArgs_ArrayOption, child []*ArrayIndexDef) { value.ArrayIndexDef = child })
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*TypeArgs]{value: &TypeArgs{Type: TypeArgsTypeArray, Array: &value}, end: state.end})
@@ -1298,17 +1306,6 @@ func (p *parseState) parseValue(pos int) []parseMatch[*Value] {
 		for _, state := range states {
 			value := state.value
 			matches = append(matches, parseMatch[*Value]{value: &Value{Type: ValueTypeChar, Char: &value}, end: state.end})
-		}
-	}
-	{
-		states := []parseMatch[Value_CastOption]{{end: pos}}
-		states = extendMatches(states, func(pos int) []parseMatch[LPAREN] { return matchToken[LPAREN](p, pos, "LPAREN") }, func(value *Value_CastOption, child LPAREN) { value.LPAREN = child })
-		states = extendMatches(states, p.parseType, func(value *Value_CastOption, child *Type) { value.Type = child })
-		states = extendMatches(states, func(pos int) []parseMatch[RPAREN] { return matchToken[RPAREN](p, pos, "RPAREN") }, func(value *Value_CastOption, child RPAREN) { value.RPAREN = child })
-		states = extendMatches(states, p.parseExpr, func(value *Value_CastOption, child *Expr) { value.Expr = child })
-		for _, state := range states {
-			value := state.value
-			matches = append(matches, parseMatch[*Value]{value: &Value{Type: ValueTypeCast, Cast: &value}, end: state.end})
 		}
 	}
 	{

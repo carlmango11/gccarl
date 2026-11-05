@@ -468,6 +468,27 @@ type ParamDef_VariadicOption struct {
 	THREE_FULL_STOPS THREE_FULL_STOPS
 }
 
+type ParameterisedTypeType string
+
+const (
+	ParameterisedTypeTypeTypeArg ParameterisedTypeType = "type-arg"
+	ParameterisedTypeTypeExpr    ParameterisedTypeType = "expr"
+)
+
+type ParameterisedType struct {
+	Type    ParameterisedTypeType
+	TypeArg *ParameterisedType_TypeArgOption
+	Expr    *ParameterisedType_ExprOption
+}
+type ParameterisedType_TypeArgOption struct {
+	Type     *Type
+	TypeArgs *TypeArgs
+}
+
+type ParameterisedType_ExprOption struct {
+	Expr *Expr
+}
+
 type ParamsType string
 
 const (
@@ -496,27 +517,6 @@ type ParamsDef struct {
 type ParamsDef_ParamsOption struct {
 	ParamDef      *ParamDef
 	CommaParamDef []*CommaParamDef
-}
-
-type SizeofArgType string
-
-const (
-	SizeofArgTypeTypeArg SizeofArgType = "type-arg"
-	SizeofArgTypeExpr    SizeofArgType = "expr"
-)
-
-type SizeofArg struct {
-	Type    SizeofArgType
-	TypeArg *SizeofArg_TypeArgOption
-	Expr    *SizeofArg_ExprOption
-}
-type SizeofArg_TypeArgOption struct {
-	Type     *Type
-	TypeArgs *TypeArgs
-}
-
-type SizeofArg_ExprOption struct {
-	Expr *Expr
 }
 
 type StatementType string
@@ -638,6 +638,7 @@ const (
 	SubExprTypeDeref     SubExprType = "deref"
 	SubExprTypeAddressOf SubExprType = "address-of"
 	SubExprTypeFuncCall  SubExprType = "func-call"
+	SubExprTypeCast      SubExprType = "cast"
 )
 
 type SubExpr struct {
@@ -649,6 +650,7 @@ type SubExpr struct {
 	Deref     *SubExpr_DerefOption
 	AddressOf *SubExpr_AddressOfOption
 	FuncCall  *SubExpr_FuncCallOption
+	Cast      *SubExpr_CastOption
 }
 type SubExpr_ValueOption struct {
 	Value *Value
@@ -660,10 +662,10 @@ type SubExpr_VariableOption struct {
 }
 
 type SubExpr_SizeofOption struct {
-	SIZEOF    SIZEOF
-	LPAREN    LPAREN
-	SizeofArg *SizeofArg
-	RPAREN    RPAREN
+	SIZEOF            SIZEOF
+	LPAREN            LPAREN
+	ParameterisedType *ParameterisedType
+	RPAREN            RPAREN
 }
 
 type SubExpr_ParensOption struct {
@@ -687,6 +689,13 @@ type SubExpr_FuncCallOption struct {
 	LPAREN LPAREN
 	Params *Params
 	RPAREN RPAREN
+}
+
+type SubExpr_CastOption struct {
+	LPAREN            LPAREN
+	ParameterisedType *ParameterisedType
+	RPAREN            RPAREN
+	Expr              *Expr
 }
 
 type SubVariableAccessType string
@@ -792,10 +801,7 @@ type TypeArgs_PointerOption struct {
 }
 
 type TypeArgs_ArrayOption struct {
-	LSQUARE  LSQUARE
-	NUM      NUM
-	RSQUARE  RSQUARE
-	TypeArgs *TypeArgs
+	ArrayIndexDef []*ArrayIndexDef
 }
 
 type ValueType string
@@ -804,7 +810,6 @@ const (
 	ValueTypeInt     ValueType = "int"
 	ValueTypeStr     ValueType = "str"
 	ValueTypeChar    ValueType = "char"
-	ValueTypeCast    ValueType = "cast"
 	ValueTypeCompLit ValueType = "comp-lit"
 )
 
@@ -813,7 +818,6 @@ type Value struct {
 	Int     *Value_IntOption
 	Str     *Value_StrOption
 	Char    *Value_CharOption
-	Cast    *Value_CastOption
 	CompLit *Value_CompLitOption
 }
 type Value_IntOption struct {
@@ -826,13 +830,6 @@ type Value_StrOption struct {
 
 type Value_CharOption struct {
 	CHAR CHAR
-}
-
-type Value_CastOption struct {
-	LPAREN LPAREN
-	Type   *Type
-	RPAREN RPAREN
-	Expr   *Expr
 }
 
 type Value_CompLitOption struct {

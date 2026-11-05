@@ -336,6 +336,8 @@ func (c *Compiler) compileExpr(instrs *Instrs, e *semantic.Expr) (Location, erro
 		return c.compileFieldExpr(instrs, e.Field)
 	case e.Index != nil:
 		return c.compileIndexExpr(instrs, e.Index)
+	case e.Cast != nil:
+		return c.compileCast(instrs, e.Cast)
 	}
 
 	panic(fmt.Sprintf("unknown expr type: %+v", e))
@@ -513,31 +515,32 @@ func (c *Compiler) compileCompare(instrs *Instrs, e *semantic.CompareOpExpr) (Lo
 }
 
 func (c *Compiler) compileNumeric(instrs *Instrs, n *semantic.NumericOpExpr) (Location, error) {
-	rightLoc, err := c.compileExpr(instrs, n.Right)
+	leftLoc, err := c.compileExpr(instrs, n.Left)
 	if err != nil {
 		return Location{}, err
 	}
 
-	const rightReg = RegDI
-	result := rightReg
+	const leftReg = RegDI
 
-	instrs.movLocToReg(n.Left.Type.Size(), rightLoc, rightReg)
+	result := leftReg
 
-	leftLoc, err := c.compileExpr(instrs, n.Left)
+	instrs.movLocToReg(n.Left.Type.Size(), leftLoc, leftReg)
+
+	rightLoc, err := c.compileExpr(instrs, n.Right)
 	if err != nil {
 		return Location{}, err
 	}
 
 	switch n.Op {
 	case semantic.NumOpAdd:
-		instrs.add(n.Left.Type.Size(), rightReg, leftLoc)
+		instrs.add(n.Left.Type.Size(), leftReg, rightLoc)
 	case semantic.NumOpSub:
-		instrs.sub(n.Left.Type.Size(), rightReg, leftLoc)
+		instrs.sub(n.Left.Type.Size(), leftReg, rightLoc)
 	case semantic.NumOpMultiply:
 		// todo handle usigned
-		instrs.multiplySigned(n.Left.Type.Size(), rightReg, leftLoc)
+		instrs.multiplySigned(n.Left.Type.Size(), leftReg, rightLoc)
 	case semantic.NumOpDivide, semantic.NumOpMod:
-		instrs.divideSigned(n.Left.Type.Size(), regLocation(rightReg), leftLoc) // todo: don't actually need to copy to reg for this
+		instrs.divideSigned(n.Left.Type.Size(), regLocation(leftReg), rightLoc) // todo: don't actually need to copy to reg for this
 
 		if n.Op == semantic.NumOpMod {
 			result = RegD
@@ -704,6 +707,21 @@ func (c *Compiler) movExprToOffset(instrs *Instrs, typ semantic.Type, loc Locati
 	default:
 		panic("invalid loc type")
 	}
+}
+
+func (c *Compiler) compileCast(instrs *Instrs, cast *semantic.Cast) (Location, error) {
+	loc, err := c.compileExpr(instrs, cast.Expr)
+	if err != nil {
+		return Location{}, err
+	}
+
+	if cast.To.Size() == cast.Expr.Type.Size() {
+		// nothing to do
+		return loc, nil
+	}
+
+	instrs.movLocToReg(cast.To.Size(), loc, RegA)
+	return regLocation(RegA), nil
 }
 
 func typeInstrSize(s semantic.Size) string {

@@ -33,6 +33,7 @@ var numericalOps = map[cparser.OperatorType]NumericOp{
 	cparser.OperatorTypeMultiply: NumOpMultiply,
 	cparser.OperatorTypeDivide:   NumOpDivide,
 	cparser.OperatorTypeMod:      NumOpMod,
+	cparser.OperatorTypeMinus:    NumOpSub, // todo inconsistent naming
 }
 
 func Build(program *cparser.Main) (*Program, error) {
@@ -144,7 +145,12 @@ func (b *builder) toFuncDef(f *cparser.DecDef_FuncDefOption) (*FuncDef, error) {
 }
 
 func (b *builder) declareVar(astType *cparser.Type, v *cparser.VariableDef, isParam bool) (Var, error) {
-	typ, err := b.toType(astType, v, isParam)
+	raw, err := b.varDefToRaw(astType, v)
+	if err != nil {
+		return Var{}, err
+	}
+
+	typ, err := b.toType(raw, isParam)
 	if err != nil {
 		return Var{}, err
 	}
@@ -179,103 +185,6 @@ func varDefName(v *cparser.VariableDef) cparser.IDEN {
 	default:
 		panic(fmt.Sprintf("unhandled variable type %s", v.Type))
 	}
-}
-
-func (b *builder) toType(typ *cparser.Type, v *cparser.VariableDef, isParam bool) (Type, error) {
-	switch v.Type {
-	case cparser.VariableDefTypePointer:
-		sub, err := b.toType(typ, v.Pointer.VariableDef, false) // no need for array decay check anymore
-		if err != nil {
-			return Type{}, err
-		}
-
-		return Type{
-			Kind:    KindPointer,
-			SubType: &sub,
-		}, nil
-	case cparser.VariableDefTypeVariable:
-		return b.toVarType(typ, v.Variable.ArrayIndexDef, isParam)
-	}
-
-	panic("invalid type")
-}
-
-func (b *builder) toVarType(typ *cparser.Type, arrs []*cparser.ArrayIndexDef, isParam bool) (Type, error) {
-	if len(arrs) > 0 {
-		if isParam {
-			// arrays decay to pointers in params
-			return Type{
-				Kind: KindPointer,
-				Prim: astTypeToPrim(typ),
-			}, nil
-		}
-
-		var size int
-		sizeStr := arrs[0].ArrayIndex.NUM
-
-		if sizeStr != "" {
-			var err error
-			size, err = strconv.Atoi(string(sizeStr))
-			if err != nil {
-				panic("invalid size: " + sizeStr)
-			}
-		}
-
-		sub, err := b.toVarType(typ, arrs[1:], false)
-		if err != nil {
-			return Type{}, err
-		}
-
-		return Type{
-			Kind:      KindArray,
-			SubType:   &sub,
-			ArraySize: size,
-		}, nil
-	}
-
-	switch typ.Type {
-	case cparser.TypeTypeStruct:
-		st, ok := b.structType(typ.Struct.IDEN)
-		if !ok {
-			panicf("%v is not defined", typ.Struct.IDEN)
-		}
-
-		return st, nil
-	case cparser.TypeTypeCustom:
-		t, ok := b.customType(typ.Custom.IDEN)
-		if !ok {
-			panicf("%v is not defined", typ.Custom.IDEN)
-		}
-
-		return t, nil
-	}
-
-	return Type{
-		Kind: KindPrimitive,
-		Prim: astTypeToPrim(typ),
-	}, nil
-}
-
-func (b *builder) structType(n cparser.IDEN) (Type, bool) {
-	for i := len(b.scopes) - 1; i >= 0; i-- {
-		s, ok := b.scopes[i].structs[n]
-		if ok {
-			return s, true
-		}
-	}
-
-	return Type{}, false
-}
-
-func (b *builder) customType(n cparser.IDEN) (Type, bool) {
-	for i := len(b.scopes) - 1; i >= 0; i-- {
-		s, ok := b.scopes[i].types[n]
-		if ok {
-			return s, true
-		}
-	}
-
-	return Type{}, false
 }
 
 func (b *builder) getVar(n cparser.IDEN) (Var, error) {
@@ -470,7 +379,7 @@ func (b *builder) toExpr(expr *cparser.Expr) (*Expr, error) {
 func (b *builder) fromSubExpr(sub *cparser.SubExpr) (*Expr, error) {
 	switch sub.Type {
 	case cparser.SubExprTypeSizeof:
-		return b.toSizeOf(sub.Sizeof.SizeofArg)
+		return b.toSizeOf(sub.Sizeof.ParameterisedType)
 	case cparser.SubExprTypeFuncCall:
 		fc, err := b.toFuncCall(sub.FuncCall)
 		if err != nil {
@@ -583,7 +492,43 @@ func (b *builder) fromSubExpr(sub *cparser.SubExpr) (*Expr, error) {
 					Char: unquoted[0],
 				},
 			}, nil
+		default:
+			panic("invalid value expression: " + string(v.Value.Type))
 		}
+	case cparser.SubExprTypeParens:
+		e, err := b.toExpr(sub.Parens.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		return e, nil
+	case cparser.SubExprTypeCast:
+		if sub.Cast.ParameterisedType.Type == cparser.ParameterisedTypeTypeExpr {
+			return nil, fmt.Errorf("cannot cast to expression")
+		}
+
+		raw, err := b.paramTypeToRaw(sub.Cast.ParameterisedType.TypeArg.Type, sub.Cast.ParameterisedType.TypeArg.TypeArgs)
+		if err != nil {
+			return nil, err
+		}
+
+		typ, err := b.toType(raw, false)
+		if err != nil {
+			return nil, err
+		}
+
+		e, err := b.toExpr(sub.Cast.Expr)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Expr{
+			Type: typ,
+			Cast: &Cast{
+				To:   typ,
+				Expr: e,
+			},
+		}, nil
 	}
 
 	panic("invalid sub expression: " + string(sub.Type))
@@ -938,7 +883,12 @@ func (b *builder) toStructDef(td *cparser.Declaration_StructDefOption) error {
 
 		structVars[fieldName] = true
 
-		typ, err := b.toType(t, def, false)
+		raw, err := b.varDefToRaw(t, def)
+		if err != nil {
+			return err
+		}
+
+		typ, err := b.toType(raw, false)
 		if err != nil {
 			return err
 		}
@@ -1100,6 +1050,7 @@ func (b *builder) fromOperatorExp(compExpr *cparser.CompExpr_CompExprOption) (*E
 		return nil, err
 	}
 
+	// TODO: split out
 	if compExpr.Operator.Type == cparser.OperatorTypeAssign || compExpr.Operator.Type == cparser.OperatorTypeAdd_equals {
 		if !leftExpr.Writeable() {
 			return nil, fmt.Errorf("cannot assign to expression %v", rightExpr)
@@ -1152,12 +1103,49 @@ func (b *builder) fromOperatorExp(compExpr *cparser.CompExpr_CompExprOption) (*E
 
 	// todo: check for casts
 
+	lp := leftExpr.Type.Kind == KindPointer
+	rp := rightExpr.Type.Kind == KindPointer
+
+	if lp && rp {
+		return nil, fmt.Errorf("cannot add 2 pointers")
+	}
+
+	numOp := numericalOps[compExpr.Operator.Type]
+
+	if lp || rp {
+		if rp {
+			if numOp != NumOpAdd {
+				return nil, fmt.Errorf("cannot perform %v on pointer", numOp)
+			}
+
+			// add is supported either way so swap them and assume left is the pointer
+			leftExpr, rightExpr = rightExpr, leftExpr
+		}
+
+		// TODO this probably isn't the right place for this
+
+		// pointer arithmetic
+		rightExpr = &Expr{
+			Type: rightExpr.Type,
+			Numeric: &NumericOpExpr{
+				Left: rightExpr,
+				Op:   NumOpMultiply,
+				Right: &Expr{
+					Type: int32Type(),
+					Literal: &Literal{
+						Int32: int32(leftExpr.Type.SubType.Size()), // todo potential errors
+					},
+				},
+			},
+		}
+	}
+
 	return &Expr{
-		Type: rightExpr.Type,
+		Type: leftExpr.Type,
 		Numeric: &NumericOpExpr{
-			Left:  rightExpr,
-			Op:    numericalOps[compExpr.Operator.Type],
-			Right: leftExpr,
+			Left:  leftExpr,
+			Op:    numOp,
+			Right: rightExpr,
 		},
 	}, nil
 }
@@ -1170,7 +1158,12 @@ func (b *builder) processDeclaration(d *cparser.Declaration) error {
 	case cparser.DeclarationTypeStructDef:
 		return b.toStructDef(d.StructDef)
 	case cparser.DeclarationTypeTypedef:
-		typ, err := b.toType(d.Typedef.Type, d.Typedef.VariableDef, false)
+		raw, err := b.varDefToRaw(d.Typedef.Type, d.Typedef.VariableDef)
+		if err != nil {
+			return err
+		}
+
+		typ, err := b.toType(raw, false)
 		if err != nil {
 			return err
 		}
@@ -1184,14 +1177,25 @@ func (b *builder) processDeclaration(d *cparser.Declaration) error {
 	panic("unreachable")
 }
 
-func (b *builder) toSizeOf(s *cparser.SizeofArg) (*Expr, error) {
+func (b *builder) toSizeOf(s *cparser.ParameterisedType) (*Expr, error) {
 	switch s.Type {
-	case cparser.SizeofArgTypeTypeArg:
-		if s.TypeArg.TypeArgs != nil {
-			panic("impl")
+	case cparser.ParameterisedTypeTypeTypeArg:
+		raw, err := b.paramTypeToRaw(s.TypeArg.Type, s.TypeArg.TypeArgs)
+		if err != nil {
+			return nil, err
 		}
 
-		b.toType()
+		typ, err := b.toType(raw, false)
+		if err != nil {
+			return nil, err
+		}
+
+		return &Expr{
+			Type: int32Type(),
+			Literal: &Literal{
+				Int32: int32(typ.Size()), // todo potential error
+			},
+		}, nil
 	}
 	panic("impl")
 }

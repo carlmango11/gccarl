@@ -1,3 +1,6 @@
 void main() {
-    int x = ( * (int  )((args += sizeof(int)) - sizeof(int)));
+    char c = 'C';
+    char *args = &c;
+
+    int x = ( * (int  *)((args += sizeof(int)) - sizeof(int)));
 }
